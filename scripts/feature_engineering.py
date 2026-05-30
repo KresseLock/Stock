@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 feature_engineering.py — 台灣股市特徵工程模組 (TWSE + FinMind 整合版)
 ====================================================
@@ -125,8 +126,8 @@ def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
     low_n  = l.rolling(KD_PERIOD, min_periods=1).min()
     high_n = h.rolling(KD_PERIOD, min_periods=1).max()
     rsv = (c - low_n) / (high_n - low_n + 1e-9) * 100
-    g[f"k{KD_PERIOD}"] = rsv.ewm(com=2, adjust=False).mean()
-    g[f"d{KD_PERIOD}"] = g[f"k{KD_PERIOD}"].ewm(com=2, adjust=False).mean()
+    g["kd_k"] = rsv.ewm(com=2, adjust=False).mean()
+    g["kd_d"] = g["kd_k"].ewm(com=2, adjust=False).mean()
 
     # ATR (真實波幅)
     tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
@@ -251,7 +252,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
     rev_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_monthly_revenue.csv")
     df_rev = _read_csv(rev_path)
     if not df_rev.empty:
-        df_rev["date"]    = pd.to_datetime(df_rev["date"]).dt.strftime("%Y%m%d")
+        df_rev["date"]    = pd.to_datetime(df_rev["date"])
         df_rev["revenue"] = _to_float(df_rev["revenue"])
         df_rev = df_rev[["date", "revenue"]].drop_duplicates("date")
         df_out = pd.merge(df_out, df_rev, on="date", how="outer").sort_values("date")
@@ -261,7 +262,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
     stmt_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_financial_stmt.csv")
     df_stmt = _read_csv(stmt_path)
     if not df_stmt.empty:
-        df_stmt["date"]  = pd.to_datetime(df_stmt["date"]).dt.strftime("%Y%m%d")
+        df_stmt["date"]  = pd.to_datetime(df_stmt["date"])
         df_stmt["value"] = _to_float(df_stmt["value"])
         piv = df_stmt.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
@@ -276,7 +277,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
     bal_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_balance_sheet.csv")
     df_bal = _read_csv(bal_path)
     if not df_bal.empty:
-        df_bal["date"]  = pd.to_datetime(df_bal["date"]).dt.strftime("%Y%m%d")
+        df_bal["date"]  = pd.to_datetime(df_bal["date"])
         df_bal["value"] = _to_float(df_bal["value"])
         piv = df_bal.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
@@ -291,7 +292,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
     cf_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_cashflow.csv")
     df_cf = _read_csv(cf_path)
     if not df_cf.empty:
-        df_cf["date"]  = pd.to_datetime(df_cf["date"]).dt.strftime("%Y%m%d")
+        df_cf["date"]  = pd.to_datetime(df_cf["date"])
         df_cf["value"] = _to_float(df_cf["value"])
         piv = df_cf.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
@@ -306,7 +307,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
     div_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_dividend.csv")
     df_div = _read_csv(div_path)
     if not df_div.empty:
-        df_div["date"]  = pd.to_datetime(df_div["date"]).dt.strftime("%Y%m%d")
+        df_div["date"]  = pd.to_datetime(df_div["date"])
         df_div["value"] = _to_float(df_div["CashEarningsDistribution"]) if "CashEarningsDistribution" in df_div.columns else np.nan
         df_div = df_div[["date", "value"]].dropna().drop_duplicates("date").rename(columns={"value": "cash_dividend"})
         df_out = pd.merge(df_out, df_div, on="date", how="outer").sort_values("date")
@@ -325,12 +326,12 @@ def _load_market_sentiment(date_str: str) -> dict:
     # 1. 讀取期交所外資台指期未平倉淨額
     taifex_path = os.path.join(DATA_DIR, "raw_taifex", f"{date_str}_taifex_inst.csv")
     df_tf = _read_csv(taifex_path)
-    if not df_tf.empty:
-        # 尋找 契約='TXF' 且 身份別包含'外資'
-        txf = df_tf[df_tf["契約"].astype(str).str.contains("TXF", na=False)]
+    if not df_tf.empty and "商品名稱" in df_tf.columns and "身份別" in df_tf.columns and "多空未平倉口數淨額" in df_tf.columns:
+        # 尋找 商品名稱='TXF' 且 身份別包含'外資'
+        txf = df_tf[df_tf["商品名稱"].astype(str).str.contains("TXF", na=False)]
         fini_txf = txf[txf["身份別"].astype(str).str.contains("外資", na=False)]
         if not fini_txf.empty:
-            result["taifex_txf_fini_net_oi"] = _to_float(fini_txf["未平倉淨口數"]).iloc[0]
+            result["taifex_txf_fini_net_oi"] = _to_float(fini_txf["多空未平倉口數淨額"]).iloc[0]
 
     return result
 
@@ -458,11 +459,11 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
                 [sorted(df["stock_id"].unique()), sorted(df["date"].unique())],
                 names=["stock_id", "date"]
             )
-            sh_daily = (sh.set_index(["stock_id", "sh_date"])
+            sh_daily = (sh.rename(columns={"sh_date": "date"})
+                          .set_index(["stock_id", "date"])
                           .reindex(idx)
                           .groupby(level=0).ffill()
-                          .reset_index()
-                          .rename(columns={"date": "date"}))
+                          .reset_index())
             sh_cols = ["stock_id", "date", "big_holder_pct", "small_holder_pct", "holder_hhi"]
             df = pd.merge(df, sh_daily[[c for c in sh_cols if c in sh_daily.columns]], on=["stock_id", "date"], how="left")
 

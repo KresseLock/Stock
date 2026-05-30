@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 inference.py — LightGBM 模型多天期推理 (Day 1 ~ Day 3)
 ====================================================
@@ -47,10 +48,21 @@ def main():
 
     target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     ignore_cols = ["stock_id", "date"] + target_cols
-    numeric_cols = df_latest.select_dtypes(include=[np.number, bool]).columns
-    feature_cols = [c for c in numeric_cols if c not in ignore_cols]
-    
-    X_latest = df_latest[feature_cols]
+
+    # 優先讀取訓練時固定的特徵欄位清單，確保與模型完全一致
+    feature_cols_path = os.path.join(MODEL_DIR, "feature_cols.json")
+    if os.path.exists(feature_cols_path):
+        with open(feature_cols_path, "r", encoding="utf-8") as f:
+            feature_cols = json.load(f)
+        print(f"  特徵欄位來源: models/feature_cols.json ({len(feature_cols)} 欄)")
+    else:
+        # fallback：動態推導 (僅在 feature_cols.json 不存在時使用)
+        print("  [警告] 找不到 feature_cols.json，改用動態推導特徵欄位 (可能與訓練時不一致)")
+        numeric_cols = df_latest.select_dtypes(include=[np.number, bool]).columns
+        feature_cols = [c for c in numeric_cols if c not in ignore_cols]
+
+    # 以固定欄位 reindex，缺少的欄位補 NaN（LightGBM 能處理）
+    X_latest = df_latest.reindex(columns=feature_cols)
     
     results = df_latest[["stock_id"]].copy()
     if "close" in df_latest.columns:
@@ -87,11 +99,22 @@ def main():
             print(f"  [警告] 讀取 best_factors.json 失敗: {e}")
 
     output_lines = []
-    output_lines.append("\n" + "=" * 75)
+    # 讀取股票中文名稱對照表
+    stock_names = {}
+    price_file = os.path.join(BASE_DIR, "data", "raw_price", f"{latest_date.strftime('%Y%m%d')}_price.csv")
+    if os.path.exists(price_file):
+        try:
+            df_price = pd.read_csv(price_file, usecols=["證券代號", "證券名稱"], dtype=str)
+            for _, r in df_price.iterrows():
+                stock_names[r["證券代號"].strip()] = r["證券名稱"].strip()
+        except Exception:
+            pass
+
+    output_lines.append("\n" + "=" * 80)
     output_lines.append(f"  [結果] 未來三天走勢預測 (預測基準日: {latest_date.date()})")
-    output_lines.append("=" * 75)
-    output_lines.append(f"{'排名':<3} | {'股票':<6} | {'收盤價':<8} | {'預測 Day 1':<10} | {'預測 Day 2':<10} | {'預測 Day 3':<10} | {'趨勢分析'}")
-    output_lines.append("-" * 75)
+    output_lines.append("=" * 80)
+    output_lines.append(f"{'排名':<3} | {'股票 (代號+名稱)':<12} | {'收盤價':<6} | {'預測 Day 1':<9} | {'預測 Day 2':<9} | {'預測 Day 3':<9} | {'趨勢分析'}")
+    output_lines.append("-" * 80)
     
     for i, row in enumerate(results.itertuples(), start=1):
         stock_id = row.stock_id
@@ -108,11 +131,16 @@ def main():
         elif d3 > 0: trend = "震盪偏多"
         else: trend = "震盪偏空"
             
-        output_lines.append(f" {i:<3} |  {stock_id:<5} |  {close_price:<7.2f} |  {d1_s:<10} |  {d2_s:<10} |  {d3_s:<10} |  {trend}")
+        cname = stock_names.get(stock_id, "")
+        display_name = f"{stock_id} {cname}"
         
-    output_lines.append("=" * 75)
+        # 由於中文字元對齊問題，使用手動填充全形/半形空白或直接保留足夠寬度
+        # 這裡為求簡單，給予固定長度再配上格式化
+        output_lines.append(f" {i:<3} | {display_name:<16} | {close_price:>6.2f} | {d1_s:>10} | {d2_s:>10} | {d3_s:>10} |  {trend}")
+        
+    output_lines.append("=" * 80)
     output_lines.append(factors_info)
-    output_lines.append("=" * 75)
+    output_lines.append("=" * 80)
     output_lines.append("  [聲明] 模型預測結果僅供量化研究參考，不構成實際投資建議。")
     
     final_output = "\n".join(output_lines)

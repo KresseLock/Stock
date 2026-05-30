@@ -22,12 +22,12 @@ import os
 import sys
 import json
 import datetime
-
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
 import optuna
 import threading
+
 
 _lock = threading.Lock()
 
@@ -96,7 +96,7 @@ BOUNDS = {
 
 # 識別 TA 欄位前綴 (這些欄位每輪都需重新計算)
 _TA_PREFIXES = (
-    "ma_", "boll_", "rsi", "macd", "kd_", "atr", "vol_ma", "vol_ratio",
+    "ma_", "boll_", "rsi", "macd", "kd_k", "kd_d", "atr", "vol_ma", "vol_ratio",
     "ret1", "ret5", "amplitude", "ma_short_over_long"
 )
 
@@ -215,7 +215,7 @@ def compute_chips_features(df: pd.DataFrame, p: dict) -> pd.DataFrame:
 # 非 TA 穩定特徵欄位（每輪不需重新計算，直接從記憶體讀取）
 _STABLE_NON_TA_COLS = [
     "fini_net", "sitc_net", "dealer_net", "inst_net_total",
-    "margin_bal", "short_bal", "offset", "sbl_bal", "sbl_sell",
+    "margin_bal", "short_bal", "sbl_bal", "sbl_sell",
     "big_holder_pct", "small_holder_pct", "holder_hhi",
     "revenue", "EPS", "毛利率", "營業利益率", "稅後淨利率", "ROE", "ROA",
     "TotalAssets", "TotalLiabilities", "Equity",
@@ -223,7 +223,7 @@ _STABLE_NON_TA_COLS = [
     "cash_dividend",
     "PER", "PBR", "dividend_yield", 
     "daytrading_pct", "fini_holding_pct", "margin_quota", "short_quota",
-    "mkt_inst_net", "taifex_txf_fini_net_oi"
+    "taifex_txf_fini_net_oi"
 ]
 
 
