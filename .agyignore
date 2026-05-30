@@ -1,0 +1,30 @@
+# ==========================================
+# 核心開發忽略設定 - 讓 AI Agent 專注於程式碼
+# ==========================================
+
+# 1. 忽略所有爬蟲抓下來的數據 (關鍵！)
+# 這會封鎖整個 data/ 資料夾，AI 絕對讀不到任何 CSV 或 Parquet
+data/
+*.csv
+*.parquet
+*.xlsx
+*.json
+
+# 2. 忽略模型權重與機器學習產出
+models/
+*.pkl
+*.bst
+*.lightgbm
+
+# 3. 忽略 Python 環境與快取 (防干擾)
+venv/
+.antigravitycli/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# 4. 忽略系統日誌與暫存檔
+*.log
+temp/
+.DS_Store
+Thumbs.db

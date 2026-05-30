@@ -1,0 +1,179 @@
+# ==========================================
+# 核心開發與 AI 降噪設定 (優先排除)
+# ==========================================
+
+# 1. 忽略所有數據檔 (防止 AI 讀取大型數據)
+data/
+*.csv
+*.parquet
+*.xlsx
+*.json
+
+# 2. 忽略模型權重與機器學習產出
+models/
+*.pkl
+*.bst
+*.lightgbm
+*.joblib
+*.h5
+*.onnx
+
+# 3. 系統日誌、暫存與環境變數
+*.log
+temp/
+.tmp/
+.DS_Store
+Thumbs.db
+.env
+.envrc
+*.bak
+
+# ==========================================
+# 標準 Python 忽略設定 (GitHub 官方範本)
+# ==========================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+*.lcov
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Package Managers (建議保留 lock 檔以維持環境一致性)
+# Pipfile.lock
+# uv.lock
+# poetry.lock
+# pdm.lock
+
+.pdm-python
+.pdm-build/
+
+# Pixi
+.pixi/*
+!.pixi/config.toml
+
+# PEP 582
+__pypackages__/
+
+# Celery / Redis / RabbitMQ
+celerybeat-schedule*
+celerybeat.pid
+*.rdb
+*.aof
+*.pid
+mnesia/
+rabbitmq/
+rabbitmq-data/
+activemq-data/
+
+# Environments
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.antigravitycli/
+
+# IDE Settings (取消註解可排除特定編輯器設定)
+.spyderproject
+.spyproject
+.ropeproject
+.idea/
+.vscode/
+tempCodeRunnerFile.py
+
+# Static Analysis / Type Checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Cython
+cython_debug/
+
+# AI & Others
+.abstra/
+.pypirc
+marimo/_static/
+marimo/_lsp/
+__marimo__/
+.streamlit/secrets.toml
+/site
