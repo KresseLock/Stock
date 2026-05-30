@@ -85,7 +85,10 @@ def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
     g["vol_ratio5"] = v / (g["vol_ma5"] + 1)
     g["ret1"], g["ret5"] = c.pct_change(1), c.pct_change(5)
     g["amplitude"] = (h - l) / (o + 1e-9)
-    g["next_ret"] = c.pct_change(1).shift(-1)
+    # 預測未來 1, 2, 3 天的累積報酬率
+    g["next_ret_1"] = (c.shift(-1) / c) - 1
+    g["next_ret_2"] = (c.shift(-2) / c) - 1
+    g["next_ret_3"] = (c.shift(-3) / c) - 1
     return g
 
 # ══════════════════════════════════════════════════════
@@ -310,8 +313,8 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
         fm_all = pd.concat(fm_dfs, ignore_index=True)
         df = pd.merge(df, fm_all, on=["stock_id", "date"], how="left")
 
-    # 剔除標籤缺失的最後一天
-    if "next_ret" in df.columns: df = df.dropna(subset=["next_ret"])
+    # 剔除標籤缺失的最後三天(因為需要未來三天的股價才能算標籤)
+    if "next_ret_3" in df.columns: df = df.dropna(subset=["next_ret_1", "next_ret_2", "next_ret_3"])
 
     # 排序與存檔
     id_cols = ["stock_id", "date"]

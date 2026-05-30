@@ -61,6 +61,16 @@ def _already_exists(path: str) -> bool:
 def _save_csv(df: pd.DataFrame, path: str):
     _clean_html(df).to_csv(path, index=False, encoding="utf-8-sig")
 
+def _create_df_safely(rows: list, fields: list) -> pd.DataFrame:
+    if not rows: return pd.DataFrame()
+    num_cols = len(rows[0])
+    fields = list(fields)
+    if len(fields) < num_cols:
+        fields.extend([f"extra_{i}" for i in range(num_cols - len(fields))])
+    elif len(fields) > num_cols:
+        fields = fields[:num_cols]
+    return pd.DataFrame(rows, columns=fields)
+
 def _polite_sleep(lo: float = 1.5, hi: float = 3.0):
     time.sleep(random.uniform(lo, hi))
 
@@ -76,7 +86,9 @@ def _fetch_twse_json(url: str):
         body = r.text.strip()
         if not body or body[0] == "<": return None
         return r.json()
-    except:
+    except KeyboardInterrupt:
+        raise
+    except Exception:
         return None
 
 def crawl_daily_price(date_str: str) -> bool:
@@ -90,10 +102,10 @@ def crawl_daily_price(date_str: str) -> bool:
     if "tables" in data:
         for tbl in data["tables"]:
             if "fields" in tbl and "證券代號" in tbl.get("fields", []):
-                df = pd.DataFrame(tbl["data"], columns=tbl["fields"])
+                df = _create_df_safely(tbl.get("data", []), tbl.get("fields", []))
                 break
     elif "data9" in data:
-        df = pd.DataFrame(data["data9"], columns=data["fields9"])
+        df = _create_df_safely(data["data9"], data.get("fields9", []))
         
     if df is None or df.empty: return False
     _save_csv(df, path)
@@ -105,7 +117,7 @@ def crawl_daily_chips(date_str: str) -> bool:
     url = f"https://www.twse.com.tw/fund/T86?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
     if data and data.get("data"):
-        _save_csv(pd.DataFrame(data["data"], columns=data["fields"]), path)
+        _save_csv(_create_df_safely(data["data"], data.get("fields", [])), path)
         return True
     return False
 
@@ -115,7 +127,7 @@ def crawl_daily_institution_total(date_str: str) -> bool:
     url = f"https://www.twse.com.tw/fund/BFI82U?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
     if data and data.get("data"):
-        _save_csv(pd.DataFrame(data["data"], columns=data["fields"]), path)
+        _save_csv(_create_df_safely(data["data"], data.get("fields", [])), path)
         return True
     return False
 
@@ -126,7 +138,7 @@ def crawl_daily_margin(date_str: str) -> bool:
     data = _fetch_twse_json(url)
     if data and data.get("tables") and len(data["tables"]) >= 2 and data["tables"][1].get("data"):
         tbl = data["tables"][1]
-        _save_csv(pd.DataFrame(tbl["data"], columns=tbl["fields"]), path)
+        _save_csv(_create_df_safely(tbl.get("data", []), tbl.get("fields", [])), path)
         return True
     return False
 
@@ -136,7 +148,7 @@ def crawl_daily_sbl(date_str: str) -> bool:
     url = f"https://www.twse.com.tw/exchangeReport/TWT93U?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
     if data and data.get("data"):
-        _save_csv(pd.DataFrame(data["data"], columns=data["fields"]), path)
+        _save_csv(_create_df_safely(data["data"], data.get("fields", [])), path)
         return True
     return False
 
@@ -147,7 +159,7 @@ def crawl_daily_daytrading(date_str: str) -> bool:
     data = _fetch_twse_json(url)
     if data and data.get("tables") and data["tables"][0].get("data"):
         tbl = data["tables"][0]
-        _save_csv(pd.DataFrame(tbl["data"], columns=tbl["fields"]), path)
+        _save_csv(_create_df_safely(tbl.get("data", []), tbl.get("fields", [])), path)
         return True
     return False
 
@@ -166,13 +178,24 @@ def crawl_weekly_shareholding() -> bool:
             df.to_csv(path, index=False, encoding="utf-8-sig")
             print(f"  [持股分級] {date_str} 下載成功 ({len(df)} 筆)")
         return True
-    except:
+    except KeyboardInterrupt:
+        raise
+    except Exception:
         return False
 
 def _is_holiday(date_obj: datetime.date) -> bool:
-    if tw_cal is None: return False
-    try: return tw_cal.is_holiday(date_obj)
-    except: return False
+    # 內建過濾：如果是星期六(5)或星期日(6)，直接判定為休市
+    if date_obj.weekday() >= 5:
+        return True
+        
+    # 如果有安裝額外的台灣假日套件，則進一步過濾國定假日
+    if tw_cal is not None:
+        try: 
+            return tw_cal.is_holiday(date_obj)
+        except: 
+            return False
+            
+    return False
 
 
 # =====================================================================
@@ -206,7 +229,9 @@ def _fm_get(dataset: str, start_date: str, end_date: str, data_id: str, max_retr
                 data = r.json().get("data", [])
                 if data: return pd.DataFrame(data)
             break
-        except:
+        except KeyboardInterrupt:
+            raise
+        except Exception:
             time.sleep(5)
     return pd.DataFrame()
 
@@ -272,7 +297,7 @@ def download_history_data(start_date_obj: datetime.date, end_date_obj: datetime.
     
     print("\n[啟動] FinMind 基本面資料爬蟲")
     if not FINMIND_TOKEN:
-        print("  ⚠️ 尚未設定 FINMIND_TOKEN.txt，使用免費額度 (300次/小時)。")
+        print("  [注意] 尚未設定 FINMIND_TOKEN.txt，使用免費額度 (300次/小時)。")
 
     for stock_id in target_stocks:
         print(f"  抓取 FinMind {stock_id}...", end=" ")
