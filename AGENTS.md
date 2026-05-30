@@ -42,7 +42,26 @@
 
 ---
 
-## 3. 未來擴展方向與 AI 注意事項
+## 3. 核心設定與快取檔案 (.json)
+為了讓系統能夠延續狀態並避免重複浪費 API Token，專案中有幾個特別被 `Git` 白名單追蹤的核心 `.json` 檔案。未來的 Agent 必須理解這些檔案的功能：
+
+1. **`best_factors.json`**:
+   - 記錄 `optimize_factors.py` 透過 Optuna 找出的最佳技術指標參數 (例如：KD的天數、均線的組合)。
+   - `auto_pipeline.py` 與 `feature_engineering.py` 會自動讀取並套用這些動態參數來生成特徵欄位。
+2. **`stock_categories.json`**:
+   - 記錄台股的產業分類與 ETF 清單 (由 `fetch_categories.py` 生成)。
+   - 爬蟲會依據此清單自動跳過 ETF 的財報抓取任務。
+3. **`feature_cols.json`**:
+   - 記錄模型在 `train.py` 訓練當下所使用的所有特徵欄位名稱。
+   - `inference.py` 推論時會讀取此檔，確保餵給模型的特徵順序與數量與訓練時 100% 一致。
+4. **`data/failed_dates.json`**:
+   - TWSE/TAIFEX 爬蟲的失敗計數器。若某日期抓取失敗超過 3 次，系統會將其判定為「無開市/假補班」，未來執行時會直接略過，避免無窮重試。
+5. **`data/no_finmind_data.json`**:
+   - FinMind 的二次確認快取。若某檔股票連續兩次向 FinMind 請求財報都回傳完全無資料，會被標記為 `confirmed` 並快取 90 天，大幅節省 API Token。
+
+---
+
+## 4. 未來擴展方向與 AI 注意事項
 1. **資料維護**: 若發現特徵檔中缺少某項資料，請優先檢查 `scraper.py` 的跳過機制，並利用 `check_data.py` 將損毀的 CSV 清除。
 2. **參數動態命名**: 在新增技術指標時，請務必與 `optimize_factors.py` 聯動，確保 `feature_engineering.py` 所產生的特徵欄位名稱 (如 `k20`, `rsi18`) 是動態且可被模型讀取的。
 3. **GPU Sentiment (規劃中)**: 未來可引入本地 Llama 模型，分析新聞情緒並將其轉化為情緒因子 (Sentiment Scores) 併入 `features_combined.parquet` 中。
