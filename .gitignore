@@ -3,11 +3,20 @@
 # ==========================================
 
 # 1. 忽略所有數據檔 (防止 AI 讀取大型數據)
-data/
+# 排除所有資料夾內的暫存與特徵檔案，但保留 data 根目錄以便追蹤重要 JSON
+data/raw_*/
+data/features/
 *.csv
 *.parquet
 *.xlsx
 *.json
+
+# 允許追蹤重要的設定與快取 JSON 檔
+!best_factors.json
+!stock_categories.json
+!feature_cols.json
+!data/failed_dates.json
+!data/no_finmind_data.json
 
 # 2. 忽略模型權重與機器學習產出
 models/
