@@ -19,12 +19,18 @@ from scripts.feature_engineering import process_all_history_features
 
 # ── 讀取股票清單 ──────────────────────────────────────
 
-def load_stocks(file_path: str = "Stocks.txt") -> list:
-    if not os.path.exists(file_path):
-        print(f"[警告] 找不到 {file_path}，使用預設股票清單。")
-        return ["2330", "2317", "2454"]
-    with open(file_path, "r", encoding="utf-8") as f:
-        return [line.strip() for line in f if line.strip()]
+def load_stocks() -> list:
+    """透過 auto_pipeline 讀取 TRAIN_INDUSTRIES 與 Stocks.txt 組合的股票清單
+       (因為使用者有 FinMind Token，可以支援大量下載財報)"""
+    try:
+        import auto_pipeline
+        return auto_pipeline._get_training_stocks()
+    except Exception as e:
+        print(f"[警告] 無法讀取產業清單 ({e})，只使用 Stocks.txt。")
+        if not os.path.exists("Stocks.txt"):
+            return ["2330", "2317", "2454"]
+        with open("Stocks.txt", "r", encoding="utf-8") as f:
+            return [line.strip() for line in f if line.strip()]
 
 
 if __name__ == "__main__":
@@ -38,8 +44,12 @@ if __name__ == "__main__":
     end_date       = datetime.date.today()        # 自動抓取今日日期
 
     # ── 股票清單 ─────────────────────────────────────
-    stock_list = load_stocks("Stocks.txt")
-    print(f"目標股票 ({len(stock_list)} 檔): {stock_list}")
+    stock_list = load_stocks()
+    if len(stock_list) <= 20:
+        print(f"下載目標股票 ({len(stock_list)} 檔): {stock_list}")
+    else:
+        print(f"下載目標股票 ({len(stock_list)} 檔): {stock_list[:10]} ... 等")
+    print(f"  (包含 Stocks.txt 以及 auto_pipeline.py 勾選的產業)")
     print()
 
     # ════════════════════════════════════════════════
@@ -61,7 +71,7 @@ if __name__ == "__main__":
     print("=" * 50)
     print("  輸出: data/features/features_combined.parquet")
     print()
-    process_all_history_features(start_date, end_date)
+    process_all_history_features(start_date, end_date, override_target_stocks=stock_list)
     print()
 
     print("=" * 50)

@@ -8,6 +8,7 @@ import sys
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
+import json
 import lightgbm as lgb
 import pandas as pd
 import numpy as np
@@ -28,12 +29,22 @@ def main():
     df = pd.read_parquet(DATA_PATH)
     latest_date = df["date"].max()
     print(f"  最新資料日期: {latest_date.date()}")
-    
-    df_latest = df[df["date"] == latest_date].copy()
+
+    # ── 只對 Stocks.txt 的自選股進行預測 ──────────────────
+    # 訓練時可能使用了數百家公司，但排行榜只顯示您關注的股票
+    watchlist_path = os.path.join(BASE_DIR, "Stocks.txt")
+    if os.path.exists(watchlist_path):
+        with open(watchlist_path, "r", encoding="utf-8") as f:
+            watchlist = [line.strip() for line in f if line.strip()]
+    else:
+        watchlist = sorted(df["stock_id"].unique().tolist())
+    print(f"  自選股清單  : {watchlist} ({len(watchlist)} 檔)")
+
+    df_latest = df[(df["date"] == latest_date) & (df["stock_id"].isin(watchlist))].copy()
     if df_latest.empty:
-        print("[錯誤] 最新日期無資料。")
+        print("[錯誤] 最新日期無自選股資料，請確認 Stocks.txt 與特徵矩陣是否對應。")
         return
-        
+
     target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     ignore_cols = ["stock_id", "date"] + target_cols
     numeric_cols = df_latest.select_dtypes(include=[np.number, bool]).columns
@@ -60,16 +71,32 @@ def main():
     # 以 Day 3 的預測漲跌幅來排序 (看長一點的趨勢)
     results = results.sort_values(by="Day3_pct", ascending=False).reset_index(drop=True)
     
-    print("\n" + "=" * 75)
-    print(f"  [結果] 未來三天走勢預測 (預測基準日: {latest_date.date()})")
-    print("=" * 75)
-    print(f"{'排名':<3} | {'股票':<6} | {'收盤價':<8} | {'預測 Day 1':<10} | {'預測 Day 2':<10} | {'預測 Day 3':<10} | {'趨勢分析'}")
-    print("-" * 75)
+    factors_file = os.path.join(BASE_DIR, "best_factors.json")
+    factors_info = "  [未找到最佳化因子檔，使用系統預設因子參數]"
+    if os.path.exists(factors_file):
+        try:
+            with open(factors_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            params = data.get("best_params_for_run_feature_engineering", {})
+            opt_date = data.get("optimized_at", "未知")
+            lines = [f"  [使用的因子參數 (最佳化時間: {opt_date})]"]
+            for k, v in params.items():
+                lines.append(f"    {k:<20} = {v}")
+            factors_info = "\n".join(lines)
+        except Exception as e:
+            print(f"  [警告] 讀取 best_factors.json 失敗: {e}")
+
+    output_lines = []
+    output_lines.append("\n" + "=" * 75)
+    output_lines.append(f"  [結果] 未來三天走勢預測 (預測基準日: {latest_date.date()})")
+    output_lines.append("=" * 75)
+    output_lines.append(f"{'排名':<3} | {'股票':<6} | {'收盤價':<8} | {'預測 Day 1':<10} | {'預測 Day 2':<10} | {'預測 Day 3':<10} | {'趨勢分析'}")
+    output_lines.append("-" * 75)
     
-    for i, row in results.iterrows():
-        stock_id = row["stock_id"]
-        close_price = row["close"]
-        d1, d2, d3 = row["Day1_pct"], row["Day2_pct"], row["Day3_pct"]
+    for i, row in enumerate(results.itertuples(), start=1):
+        stock_id = row.stock_id
+        close_price = row.close
+        d1, d2, d3 = row.Day1_pct, row.Day2_pct, row.Day3_pct
         
         d1_s = f"+{d1:.2f}%" if d1 > 0 else f"{d1:.2f}%"
         d2_s = f"+{d2:.2f}%" if d2 > 0 else f"{d2:.2f}%"
@@ -81,10 +108,23 @@ def main():
         elif d3 > 0: trend = "震盪偏多"
         else: trend = "震盪偏空"
             
-        print(f" {i+1:<3} |  {stock_id:<5} |  {close_price:<7.2f} |  {d1_s:<10} |  {d2_s:<10} |  {d3_s:<10} |  {trend}")
+        output_lines.append(f" {i:<3} |  {stock_id:<5} |  {close_price:<7.2f} |  {d1_s:<10} |  {d2_s:<10} |  {d3_s:<10} |  {trend}")
         
-    print("=" * 75)
-    print("  [聲明] 模型預測結果僅供量化研究參考，不構成實際投資建議。")
+    output_lines.append("=" * 75)
+    output_lines.append(factors_info)
+    output_lines.append("=" * 75)
+    output_lines.append("  [聲明] 模型預測結果僅供量化研究參考，不構成實際投資建議。")
+    
+    final_output = "\n".join(output_lines)
+    print(final_output)
+    
+    # Save to file
+    pred_dir = os.path.join(BASE_DIR, "predictions")
+    os.makedirs(pred_dir, exist_ok=True)
+    out_file = os.path.join(pred_dir, f"prediction_{latest_date.strftime('%Y%m%d')}.txt")
+    with open(out_file, "w", encoding="utf-8") as f:
+        f.write(final_output)
+    print(f"\n  [儲存] 本次預測結果已存檔至: {out_file}")
 
 if __name__ == "__main__":
     main()

@@ -27,6 +27,9 @@ Thumbs.db
 .env
 .envrc
 *.bak
+predictions/
+sample_data/
+models/
 
 # ==========================================
 # 標準 Python 忽略設定 (GitHub 官方範本)

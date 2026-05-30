@@ -11,13 +11,15 @@ feature_engineering.py — 台灣股市特徵工程模組 (TWSE + FinMind 整合
   D. 持股分級 (TDCC)         — 大戶(百張+)比例、散戶比例、集中度
   E. 基本面與估值 (FinMind)  — 月營收、季報 (EPS/ROE/毛利率)、PER、PBR
   F. 市場情緒                — 當沖比、大盤法人淨買金額
-  G. 標籤                    — 次日漲跌幅 (next_ret)，用於 LightGBM 分類/回歸
+  G. 標籤                    — 未來 N 天報酬率，用於 LightGBM 分類/回歸
+
+注意: 以下模組級別的全域變數可由 run_feature_engineering.py 覆寫，
+      以便從外部靈活調整所有因子參數，無需修改本檔案。
 """
 
 import datetime
 import glob
 import os
-import re
 import warnings
 
 import numpy as np
@@ -30,18 +32,44 @@ DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 FEAT_DIR = os.path.join(DATA_DIR, "features")
 os.makedirs(FEAT_DIR, exist_ok=True)
 
+# ══════════════════════════════════════════════════════
+# 可由外部覆寫的全域參數 (預設值)
+# 實際生效的值由 run_feature_engineering.py 的設定區決定
+# ══════════════════════════════════════════════════════
+
+# 技術指標參數
+MA_WINDOWS      = [5, 10, 20, 60]
+RSI_PERIOD      = 14
+ATR_PERIOD      = 14
+KD_PERIOD       = 9
+MACD_FAST       = 12
+MACD_SLOW       = 26
+MACD_SIGNAL     = 9
+VOL_MA_WINDOW   = 5
+BOLL_WINDOW     = 20
+BOLL_STD_MULT   = 2.0
+
+# 籌碼滾動加總週期
+CHIPS_SUM_WINDOWS = [3, 5, 10]
+
+# 預測天數
+FORECAST_DAYS   = [1, 2, 3]
+
+# 因子模組開關
+ENABLE_CHIPS        = True
+ENABLE_MARGIN       = True
+ENABLE_SHAREHOLDING = True
+ENABLE_FINMIND      = True
+ENABLE_SENTIMENT    = True
+
 
 # ══════════════════════════════════════════════════════
 # 工具函式
 # ══════════════════════════════════════════════════════
 def _to_float(series: pd.Series) -> pd.Series:
-    return (
-        series.astype(str)
-        .str.replace(",", "", regex=False)
-        .str.replace(r"[^\d.\-]", "", regex=True)
-        .replace("", np.nan)
-        .astype(float)
-    )
+    # 移除千分位逗號，其餘交給 pd.to_numeric 處理 (遇到 "--" 或無法轉換的字串會安全地變成 NaN)
+    s = series.astype(str).str.replace(",", "", regex=False)
+    return pd.to_numeric(s, errors="coerce")
 
 def _read_csv(path: str) -> pd.DataFrame:
     if not os.path.exists(path):
@@ -55,41 +83,71 @@ def load_target_stocks(file_path: str = "Stocks.txt") -> list:
     with open(fp, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
+def _is_weekend(date_obj: datetime.date) -> bool:
+    """判斷是否為週六(5)或週日(6)，台股不開盤，直接跳過"""
+    return date_obj.weekday() >= 5
+
+
 # ══════════════════════════════════════════════════════
 # A. 技術面特徵
 # ══════════════════════════════════════════════════════
 def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
     c, h, l, v, o = g["close"], g["high"], g["low"], g["volume"], g["open"]
-    for w in [5, 10, 20, 60]: g[f"ma{w}"] = c.rolling(w, min_periods=1).mean()
-    g["ma5_over_ma20"] = g["ma5"] / (g["ma20"] + 1e-9)
-    std20 = c.rolling(20, min_periods=5).std()
-    g["boll_up"]  = g["ma20"] + 2 * std20
-    g["boll_dn"]  = g["ma20"] - 2 * std20
+
+    # 均線 (由外部參數 MA_WINDOWS 控制)
+    for w in MA_WINDOWS:
+        g[f"ma{w}"] = c.rolling(w, min_periods=1).mean()
+    if len(MA_WINDOWS) >= 2:
+        short, long_ = MA_WINDOWS[0], MA_WINDOWS[2] if len(MA_WINDOWS) > 2 else MA_WINDOWS[-1]
+        g["ma_short_over_long"] = g[f"ma{short}"] / (g[f"ma{long_}"] + 1e-9)
+
+    # 布林通道
+    std_boll = c.rolling(BOLL_WINDOW, min_periods=5).std()
+    g["boll_mid"] = c.rolling(BOLL_WINDOW, min_periods=1).mean()
+    g["boll_up"]  = g["boll_mid"] + BOLL_STD_MULT * std_boll
+    g["boll_dn"]  = g["boll_mid"] - BOLL_STD_MULT * std_boll
     g["boll_pct"] = (c - g["boll_dn"]) / (g["boll_up"] - g["boll_dn"] + 1e-9)
+
+    # RSI
     delta = c.diff()
-    gain  = delta.clip(lower=0).rolling(14, min_periods=1).mean()
-    loss  = (-delta.clip(upper=0)).rolling(14, min_periods=1).mean()
-    g["rsi14"] = 100 - 100 / (1 + gain / (loss + 1e-9))
-    ema12, ema26 = c.ewm(span=12, adjust=False).mean(), c.ewm(span=26, adjust=False).mean()
-    g["macd"] = ema12 - ema26
-    g["macd_sig"] = g["macd"].ewm(span=9, adjust=False).mean()
+    gain  = delta.clip(lower=0).rolling(RSI_PERIOD, min_periods=1).mean()
+    loss  = (-delta.clip(upper=0)).rolling(RSI_PERIOD, min_periods=1).mean()
+    g[f"rsi{RSI_PERIOD}"] = 100 - 100 / (1 + gain / (loss + 1e-9))
+
+    # MACD
+    ema_fast = c.ewm(span=MACD_FAST, adjust=False).mean()
+    ema_slow = c.ewm(span=MACD_SLOW, adjust=False).mean()
+    g["macd"]      = ema_fast - ema_slow
+    g["macd_sig"]  = g["macd"].ewm(span=MACD_SIGNAL, adjust=False).mean()
     g["macd_hist"] = g["macd"] - g["macd_sig"]
-    low9, high9 = l.rolling(9, min_periods=1).min(), h.rolling(9, min_periods=1).max()
-    rsv = (c - low9) / (high9 - low9 + 1e-9) * 100
-    g["k9"] = rsv.ewm(com=2, adjust=False).mean()
-    g["d9"] = g["k9"].ewm(com=2, adjust=False).mean()
+
+    # KD 隨機指標
+    low_n  = l.rolling(KD_PERIOD, min_periods=1).min()
+    high_n = h.rolling(KD_PERIOD, min_periods=1).max()
+    rsv = (c - low_n) / (high_n - low_n + 1e-9) * 100
+    g[f"k{KD_PERIOD}"] = rsv.ewm(com=2, adjust=False).mean()
+    g[f"d{KD_PERIOD}"] = g[f"k{KD_PERIOD}"].ewm(com=2, adjust=False).mean()
+
+    # ATR (真實波幅)
     tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
-    g["atr14"] = tr.rolling(14, min_periods=1).mean()
-    g["atr14_pct"] = g["atr14"] / (c + 1e-9)
-    g["vol_ma5"] = v.rolling(5, min_periods=1).mean()
-    g["vol_ratio5"] = v / (g["vol_ma5"] + 1)
-    g["ret1"], g["ret5"] = c.pct_change(1), c.pct_change(5)
+    g[f"atr{ATR_PERIOD}"]     = tr.rolling(ATR_PERIOD, min_periods=1).mean()
+    g[f"atr{ATR_PERIOD}_pct"] = g[f"atr{ATR_PERIOD}"] / (c + 1e-9)
+
+    # 成交量
+    g[f"vol_ma{VOL_MA_WINDOW}"]    = v.rolling(VOL_MA_WINDOW, min_periods=1).mean()
+    g[f"vol_ratio{VOL_MA_WINDOW}"] = v / (g[f"vol_ma{VOL_MA_WINDOW}"] + 1)
+
+    # 報酬率
+    g["ret1"]      = c.pct_change(1)
+    g["ret5"]      = c.pct_change(5)
     g["amplitude"] = (h - l) / (o + 1e-9)
-    # 預測未來 1, 2, 3 天的累積報酬率
-    g["next_ret_1"] = (c.shift(-1) / c) - 1
-    g["next_ret_2"] = (c.shift(-2) / c) - 1
-    g["next_ret_3"] = (c.shift(-3) / c) - 1
+
+    # 標籤：未來 N 天累積報酬率
+    for day in FORECAST_DAYS:
+        g[f"next_ret_{day}"] = (c.shift(-day) / c) - 1
+
     return g
+
 
 # ══════════════════════════════════════════════════════
 # B. 法人籌碼特徵
@@ -101,7 +159,7 @@ def _load_chips_one_day(date_str: str, target_stocks: list) -> pd.DataFrame:
     df["證券代號"] = df["證券代號"].astype(str).str.strip()
     df = df[df["證券代號"].isin(target_stocks)].copy()
     if df.empty: return pd.DataFrame()
-    col_map = {"證券代號": "stock_id", "外陸資買賣超股數(不含外資自營商)": "fini_net", 
+    col_map = {"證券代號": "stock_id", "外陸資買賣超股數(不含外資自營商)": "fini_net",
                "投信買賣超股數": "sitc_net", "自營商買賣超股數": "dealer_net", "三大法人買賣超股數": "inst_net_total"}
     df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
     for col in ["fini_net", "sitc_net", "dealer_net", "inst_net_total"]:
@@ -117,9 +175,12 @@ def _compute_chips_features(df_chips: pd.DataFrame) -> pd.DataFrame:
         df_chips[f"{col}_streak"] = sign.groupby(df_chips["stock_id"]).transform(
             lambda x: x.groupby((x != x.shift()).cumsum()).cumcount() + 1
         ) * sign
-        for w in [3, 5, 10]:
-            df_chips[f"{col}_sum{w}"] = df_chips.groupby("stock_id")[col].transform(lambda x: x.rolling(w, min_periods=1).sum())
+        for w in CHIPS_SUM_WINDOWS:
+            df_chips[f"{col}_sum{w}"] = df_chips.groupby("stock_id")[col].transform(
+                lambda x: x.rolling(w, min_periods=1).sum()
+            )
     return df_chips
+
 
 # ══════════════════════════════════════════════════════
 # C. 信用交易特徵
@@ -141,13 +202,14 @@ def _load_margin_one_day(date_str: str, target_stocks: list) -> pd.DataFrame:
         for col in ["sbl_bal", "sbl_sell"]:
             if col in df_s.columns: df_s[col] = _to_float(df_s[col])
         df_s = df_s[["stock_id"] + [c for c in ["sbl_bal", "sbl_sell"] if c in df_s.columns]]
-    
+
     if df_m.empty and df_s.empty: return pd.DataFrame()
     elif df_m.empty: df = df_s
     elif df_s.empty: df = df_m
     else: df = pd.merge(df_m, df_s, on="stock_id", how="outer")
     df["date"] = pd.to_datetime(date_str, format="%Y%m%d")
     return df
+
 
 # ══════════════════════════════════════════════════════
 # D. 持股分級特徵
@@ -175,7 +237,8 @@ def _load_shareholding_all() -> pd.DataFrame:
             "small_holder_pct": grp[grp["持股分級"] <= 2]["比例"].sum(),
             "holder_hhi":       ((grp["比例"] / (total_pct + 1e-9)) ** 2).sum(),
         })
-    return detail.groupby(["資料日期", "證券代號"]).apply(_agg).reset_index().rename(columns={"資料日期": "sh_date", "證券代號": "stock_id"})
+    return detail.groupby(["資料日期", "證券代號"]).apply(_agg).reset_index().rename(
+        columns={"資料日期": "sh_date", "證券代號": "stock_id"})
 
 
 # ══════════════════════════════════════════════════════
@@ -183,22 +246,22 @@ def _load_shareholding_all() -> pd.DataFrame:
 # ══════════════════════════════════════════════════════
 def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd.DataFrame:
     df_out = pd.DataFrame({"date": all_dates, "stock_id": stock_id})
-    
-    # 1. 月營收 (Monthly)
+
+    # 1. 月營收
     rev_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_monthly_revenue.csv")
     df_rev = _read_csv(rev_path)
     if not df_rev.empty:
-        df_rev["date"] = pd.to_datetime(df_rev["date"])
+        df_rev["date"]    = pd.to_datetime(df_rev["date"]).dt.strftime("%Y%m%d")
         df_rev["revenue"] = _to_float(df_rev["revenue"])
         df_rev = df_rev[["date", "revenue"]].drop_duplicates("date")
         df_out = pd.merge(df_out, df_rev, on="date", how="outer").sort_values("date")
         df_out["revenue"] = df_out["revenue"].ffill()
-        
-    # 2. 財務報表 (Quarterly)
+
+    # 2. 綜合損益表 (季報)
     stmt_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_financial_stmt.csv")
     df_stmt = _read_csv(stmt_path)
     if not df_stmt.empty:
-        df_stmt["date"] = pd.to_datetime(df_stmt["date"])
+        df_stmt["date"]  = pd.to_datetime(df_stmt["date"]).dt.strftime("%Y%m%d")
         df_stmt["value"] = _to_float(df_stmt["value"])
         piv = df_stmt.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
@@ -208,18 +271,47 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
         df_out = pd.merge(df_out, piv, on="date", how="outer").sort_values("date")
         for c in keep_cols:
             if c != "date": df_out[c] = df_out[c].ffill()
-                
-    # 3. 本益比估值 (Daily)
-    per_path = os.path.join(DATA_DIR, "raw_per", f"{stock_id}_per.csv")
-    df_per = _read_csv(per_path)
-    if not df_per.empty:
-        df_per["date"] = pd.to_datetime(df_per["date"])
-        df_per["PER"] = _to_float(df_per["PER"])
-        df_per["PBR"] = _to_float(df_per["PBR"])
-        df_per["dividend_yield"] = _to_float(df_per["dividend_yield"])
-        df_per = df_per[["date", "PER", "PBR", "dividend_yield"]].drop_duplicates("date")
-        df_out = pd.merge(df_out, df_per, on="date", how="left")
-        
+
+    # 3. 資產負債表 (季報)
+    bal_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_balance_sheet.csv")
+    df_bal = _read_csv(bal_path)
+    if not df_bal.empty:
+        df_bal["date"]  = pd.to_datetime(df_bal["date"]).dt.strftime("%Y%m%d")
+        df_bal["value"] = _to_float(df_bal["value"])
+        piv = df_bal.pivot_table(index="date", columns="type", values="value").reset_index()
+        keep_cols = ["date"]
+        for c in ["TotalAssets", "TotalLiabilities", "Equity"]:
+            if c in piv.columns: keep_cols.append(c)
+        piv = piv[keep_cols]
+        df_out = pd.merge(df_out, piv, on="date", how="outer").sort_values("date")
+        for c in keep_cols:
+            if c != "date": df_out[c] = df_out[c].ffill()
+
+    # 4. 現金流量表 (季報)
+    cf_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_cashflow.csv")
+    df_cf = _read_csv(cf_path)
+    if not df_cf.empty:
+        df_cf["date"]  = pd.to_datetime(df_cf["date"]).dt.strftime("%Y%m%d")
+        df_cf["value"] = _to_float(df_cf["value"])
+        piv = df_cf.pivot_table(index="date", columns="type", values="value").reset_index()
+        keep_cols = ["date"]
+        for c in ["OperatingActivitiesCashFlow", "InvestingActivitiesCashFlow", "FinancingActivitiesCashFlow"]:
+            if c in piv.columns: keep_cols.append(c)
+        piv = piv[keep_cols]
+        df_out = pd.merge(df_out, piv, on="date", how="outer").sort_values("date")
+        for c in keep_cols:
+            if c != "date": df_out[c] = df_out[c].ffill()
+
+    # 5. 股利政策 (年/季)
+    div_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_dividend.csv")
+    df_div = _read_csv(div_path)
+    if not df_div.empty:
+        df_div["date"]  = pd.to_datetime(df_div["date"]).dt.strftime("%Y%m%d")
+        df_div["value"] = _to_float(df_div["CashEarningsDistribution"]) if "CashEarningsDistribution" in df_div.columns else np.nan
+        df_div = df_div[["date", "value"]].dropna().drop_duplicates("date").rename(columns={"value": "cash_dividend"})
+        df_out = pd.merge(df_out, df_div, on="date", how="outer").sort_values("date")
+        df_out["cash_dividend"] = df_out["cash_dividend"].ffill()
+
     df_out = df_out[df_out["date"].isin(all_dates)].copy()
     return df_out
 
@@ -229,18 +321,19 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
 # ══════════════════════════════════════════════════════
 def _load_market_sentiment(date_str: str) -> dict:
     result = {}
-    dt_path = os.path.join(DATA_DIR, "raw_daytrading", f"{date_str}_daytrading.csv")
-    df_dt = _read_csv(dt_path)
-    if not df_dt.empty:
-        pct_col = next((c for c in df_dt.columns if "比重" in c and "股數" in c), None)
-        if pct_col: result["daytrading_pct"] = _to_float(df_dt[pct_col]).iloc[0]
+    
+    # 1. 讀取期交所外資台指期未平倉淨額
+    taifex_path = os.path.join(DATA_DIR, "raw_taifex", f"{date_str}_taifex_inst.csv")
+    df_tf = _read_csv(taifex_path)
+    if not df_tf.empty:
+        # 尋找 契約='TXF' 且 身份別包含'外資'
+        txf = df_tf[df_tf["契約"].astype(str).str.contains("TXF", na=False)]
+        fini_txf = txf[txf["身份別"].astype(str).str.contains("外資", na=False)]
+        if not fini_txf.empty:
+            result["taifex_txf_fini_net_oi"] = _to_float(fini_txf["未平倉淨口數"]).iloc[0]
 
-    inst_path = os.path.join(DATA_DIR, "raw_chips", f"{date_str}_inst_total.csv")
-    df_inst = _read_csv(inst_path)
-    if not df_inst.empty and "買賣差額" in df_inst.columns:
-        total_row = df_inst[df_inst["單位名稱"].astype(str).str.contains("合計", na=False)]
-        if not total_row.empty: result["mkt_inst_net"] = _to_float(total_row["買賣差額"]).iloc[0]
     return result
+
 
 # ══════════════════════════════════════════════════════
 # 主建置函式
@@ -252,33 +345,93 @@ def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
     df_p = df_p[df_p["證券代號"].isin(target_stocks)].copy()
     if df_p.empty: return None
 
-    df_p = df_p.rename(columns={"證券代號": "stock_id", "開盤價": "open", "最高價": "high", 
+    df_p = df_p.rename(columns={"證券代號": "stock_id", "開盤價": "open", "最高價": "high",
                                 "最低價": "low", "收盤價": "close", "成交股數": "volume"})
     for col in ["open", "high", "low", "close", "volume"]:
         if col in df_p.columns: df_p[col] = _to_float(df_p[col])
     df_p["date"] = pd.to_datetime(date_str, format="%Y%m%d")
 
-    df_c = _load_chips_one_day(date_str, target_stocks)
-    df_m = _load_margin_one_day(date_str, target_stocks)
-    sentiment = _load_market_sentiment(date_str)
-
     merged = df_p
-    if not df_c.empty: merged = pd.merge(merged, df_c.drop(columns=["date"], errors="ignore"), on="stock_id", how="left")
-    if not df_m.empty: merged = pd.merge(merged, df_m.drop(columns=["date"], errors="ignore"), on="stock_id", how="left")
-    for k, v in sentiment.items(): merged[k] = v
+
+    # B. 法人籌碼 (以及外資持股、當沖)
+    if ENABLE_CHIPS:
+        df_c = _load_chips_one_day(date_str, target_stocks)
+        if not df_c.empty:
+            merged = pd.merge(merged, df_c.drop(columns=["date"], errors="ignore"), on="stock_id", how="left")
+            
+        # 讀取當沖
+        df_dt = _read_csv(os.path.join(DATA_DIR, "raw_chips", f"{date_str}_daytrading.csv"))
+        if not df_dt.empty:
+            df_dt["證券代號"] = df_dt["證券代號"].astype(str).str.strip()
+            df_dt = df_dt[df_dt["證券代號"].isin(target_stocks)][["證券代號", "當日沖銷交易成交股數"]]
+            df_dt = df_dt.rename(columns={"證券代號": "stock_id", "當日沖銷交易成交股數": "daytrading_vol"})
+            df_dt["daytrading_vol"] = _to_float(df_dt["daytrading_vol"])
+            merged = pd.merge(merged, df_dt, on="stock_id", how="left")
+            if "volume" in merged.columns:
+                merged["daytrading_pct"] = merged["daytrading_vol"] / (merged["volume"] + 1e-9)
+
+        # 讀取外資持股
+        df_fh = _read_csv(os.path.join(DATA_DIR, "raw_chips", f"{date_str}_fini_holding.csv"))
+        if not df_fh.empty:
+            df_fh["證券代號"] = df_fh["證券代號"].astype(str).str.strip()
+            df_fh = df_fh[df_fh["證券代號"].isin(target_stocks)][["證券代號", "外資及陸資投資持股率"]]
+            df_fh = df_fh.rename(columns={"證券代號": "stock_id", "外資及陸資投資持股率": "fini_holding_pct"})
+            df_fh["fini_holding_pct"] = _to_float(df_fh["fini_holding_pct"])
+            merged = pd.merge(merged, df_fh, on="stock_id", how="left")
+
+    # C. 信用交易 (以及信用管制)
+    if ENABLE_MARGIN:
+        df_m = _load_margin_one_day(date_str, target_stocks)
+        if not df_m.empty:
+            merged = pd.merge(merged, df_m.drop(columns=["date"], errors="ignore"), on="stock_id", how="left")
+            
+        # 讀取信用限額
+        df_cl = _read_csv(os.path.join(DATA_DIR, "raw_margin", f"{date_str}_credit_limit.csv"))
+        if not df_cl.empty:
+            df_cl["證券代號"] = df_cl["證券代號"].astype(str).str.strip()
+            df_cl = df_cl[df_cl["證券代號"].isin(target_stocks)][["證券代號", "融資限額", "融券限額"]]
+            df_cl = df_cl.rename(columns={"證券代號": "stock_id", "融資限額": "margin_quota", "融券限額": "short_quota"})
+            df_cl["margin_quota"] = _to_float(df_cl["margin_quota"])
+            df_cl["short_quota"]  = _to_float(df_cl["short_quota"])
+            merged = pd.merge(merged, df_cl, on="stock_id", how="left")
+
+    # TWSE 官方版 PER/PBR
+    df_per = _read_csv(os.path.join(DATA_DIR, "raw_twse_per", f"{date_str}_twse_per.csv"))
+    if not df_per.empty:
+        df_per["證券代號"] = df_per["證券代號"].astype(str).str.strip()
+        df_per = df_per[df_per["證券代號"].isin(target_stocks)][["證券代號", "本益比", "股價淨值比", "殖利率(%)"]]
+        df_per = df_per.rename(columns={"證券代號": "stock_id", "本益比": "PER", "股價淨值比": "PBR", "殖利率(%)": "dividend_yield"})
+        for c in ["PER", "PBR", "dividend_yield"]:
+            df_per[c] = _to_float(df_per[c])
+        merged = pd.merge(merged, df_per, on="stock_id", how="left")
+
+    # F. 市場情緒 (大盤級)
+    if ENABLE_SENTIMENT:
+        sentiment = _load_market_sentiment(date_str)
+        for k, v in sentiment.items():
+            merged[k] = v
+
     return merged
 
-def process_all_history_features(start_date_obj: datetime.date, end_date_obj: datetime.date):
+
+def process_all_history_features(start_date_obj: datetime.date, end_date_obj: datetime.date, override_target_stocks: list = None):
     output_path = os.path.join(FEAT_DIR, "features_combined.parquet")
-    target_stocks = load_target_stocks()
+    
+    if override_target_stocks is not None:
+        target_stocks = override_target_stocks
+    else:
+        target_stocks = load_target_stocks()
+        
     print(f"  目標股票: {len(target_stocks)} 檔")
 
-    # Step 1: 逐日建立截面
+    # Step 1: 逐日建立截面 (自動跳過週六週日)
     delta = datetime.timedelta(days=1)
     curr, all_dfs = start_date_obj, []
     while curr <= end_date_obj:
-        day_df = build_features(curr.strftime("%Y%m%d"), target_stocks)
-        if day_df is not None and not day_df.empty: all_dfs.append(day_df)
+        if not _is_weekend(curr):
+            day_df = build_features(curr.strftime("%Y%m%d"), target_stocks)
+            if day_df is not None and not day_df.empty:
+                all_dfs.append(day_df)
         curr += delta
 
     if not all_dfs:
@@ -288,38 +441,51 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     df = pd.concat(all_dfs, ignore_index=True)
     df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
 
-    # Step 2: 技術面與籌碼衍生特徵
-    print("  計算技術面與連續買賣超特徵...")
+    # Step 2: 技術面 (A) + 法人籌碼衍生特徵 (B)
+    print("  計算技術面特徵...")
     df = df.groupby("stock_id", group_keys=False).apply(_compute_ta)
-    if "fini_net" in df.columns: df = _compute_chips_features(df)
+    if ENABLE_CHIPS and "fini_net" in df.columns:
+        print("  計算籌碼連續買賣超特徵...")
+        df = _compute_chips_features(df)
 
-    # Step 3: 合入持股分級 (週更, ffill)
-    sh = _load_shareholding_all()
-    if not sh.empty:
-        print("  合入持股分級資料...")
-        sh = sh[sh["stock_id"].isin(target_stocks)].copy()
-        idx = pd.MultiIndex.from_product([sorted(df["stock_id"].unique()), sorted(df["date"].unique())], names=["stock_id", "date"])
-        sh_daily = sh.set_index(["stock_id", "sh_date"]).reindex(idx).groupby(level=0).ffill().reset_index().rename(columns={"date": "date"})
-        sh_cols = ["stock_id","date","big_holder_pct","small_holder_pct","holder_hhi"]
-        df = pd.merge(df, sh_daily[[c for c in sh_cols if c in sh_daily.columns]], on=["stock_id","date"], how="left")
+    # Step 3: 持股分級 (D, 週更, ffill)
+    if ENABLE_SHAREHOLDING:
+        sh = _load_shareholding_all()
+        if not sh.empty:
+            print("  合入持股分級資料...")
+            sh = sh[sh["stock_id"].isin(target_stocks)].copy()
+            idx = pd.MultiIndex.from_product(
+                [sorted(df["stock_id"].unique()), sorted(df["date"].unique())],
+                names=["stock_id", "date"]
+            )
+            sh_daily = (sh.set_index(["stock_id", "sh_date"])
+                          .reindex(idx)
+                          .groupby(level=0).ffill()
+                          .reset_index()
+                          .rename(columns={"date": "date"}))
+            sh_cols = ["stock_id", "date", "big_holder_pct", "small_holder_pct", "holder_hhi"]
+            df = pd.merge(df, sh_daily[[c for c in sh_cols if c in sh_daily.columns]], on=["stock_id", "date"], how="left")
 
-    # Step 4: 合入 FinMind 基本面與估值 (月/季更 ffill, 日更 join)
-    print("  合入 FinMind 財報與估值特徵...")
-    fm_dfs = []
-    for stock_id in target_stocks:
-        stock_dates = df[df["stock_id"] == stock_id]["date"]
-        fm_dfs.append(_load_finmind_fundamentals(stock_id, stock_dates))
-    if fm_dfs:
-        fm_all = pd.concat(fm_dfs, ignore_index=True)
-        df = pd.merge(df, fm_all, on=["stock_id", "date"], how="left")
+    # Step 4: FinMind 基本面 (E, 月/季更 ffill)
+    if ENABLE_FINMIND:
+        print("  合入 FinMind 財報與估值特徵...")
+        fm_dfs = []
+        for stock_id in target_stocks:
+            stock_dates = df[df["stock_id"] == stock_id]["date"]
+            fm_dfs.append(_load_finmind_fundamentals(stock_id, stock_dates))
+        if fm_dfs:
+            fm_all = pd.concat(fm_dfs, ignore_index=True)
+            df = pd.merge(df, fm_all, on=["stock_id", "date"], how="left")
 
-    # 剔除標籤缺失的最後三天(因為需要未來三天的股價才能算標籤)
-    if "next_ret_3" in df.columns: df = df.dropna(subset=["next_ret_1", "next_ret_2", "next_ret_3"])
+    # 剔除標籤缺失的最後 N 天
+    label_cols = [f"next_ret_{d}" for d in FORECAST_DAYS if f"next_ret_{d}" in df.columns]
+    if label_cols:
+        df = df.dropna(subset=label_cols)
 
     # 排序與存檔
     id_cols = ["stock_id", "date"]
     df = df[id_cols + [c for c in df.columns if c not in id_cols]]
     df.to_parquet(output_path, engine="pyarrow", index=False)
-    
+
     print(f"  特徵矩陣建置完成！共 {df.shape[0]} 筆樣本，{df.shape[1]-2} 個特徵欄位。")
     print(f"  存至: {output_path}")
