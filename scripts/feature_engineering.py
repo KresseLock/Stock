@@ -75,7 +75,10 @@ def _to_float(series: pd.Series) -> pd.Series:
 def _read_csv(path: str) -> pd.DataFrame:
     if not os.path.exists(path):
         return pd.DataFrame()
-    return pd.read_csv(path, encoding="utf-8-sig", dtype=str)
+    try:
+        return pd.read_csv(path, encoding="utf-8-sig", dtype=str)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
 
 def load_target_stocks(file_path: str = "Stocks.txt") -> list:
     fp = os.path.join(BASE_DIR, "..", file_path)

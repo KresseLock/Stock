@@ -42,7 +42,20 @@
 
 ---
 
-## 3. 核心設定與快取檔案 (.json)
+## 3. 資料目錄結構與核心快取檔案 (Data & Cache)
+
+系統會將爬蟲抓下來的原始資料分類儲存於 `data/` 目錄下的各個子資料夾中。了解這些資料夾的內容對於後續除錯與特徵工程的串接至關重要：
+
+### 📂 `data/` 目錄結構
+- **`raw_price/`**: 每日大盤與個股的收盤行情、成交量、開高低收 (`*_price.csv`，來自 TWSE `MI_INDEX`)。這是判定當天是否有開市的核心基準。
+- **`raw_chips/`**: 籌碼與交易面資料。包含三大法人買賣超 (`*_chips.csv`，來自 `T86`)、當沖交易統計 (`*_daytrading.csv`，來自 `TWTB4U`)、外資持股比例 (`*_fini_holding.csv`，來自 `CT152816`)。
+- **`raw_margin/`**: 信用交易與借券資料。包含融資融券餘額 (`*_margin.csv`，來自 `MI_MARGN`)、借券餘額 (`*_sbl.csv`，來自 `TWT93U`)、信用額度總量管制 (`*_credit_limit.csv`，來自 `TWT38U`)。
+- **`raw_twse_per/`**: 官方公佈的個股本益比、殖利率及股價淨值比 (`*_twse_per.csv`，來自 `BWIBBU_d`)。
+- **`raw_taifex/`**: 期交所期貨資料。包含外資等三大法人台指期未平倉口數 (`*_taifex_inst.csv`)，用作大盤的多空情緒指標。
+- **`raw_shareholding/`**: 集保戶股權分散表 (`*_shareholding.csv`)。每週更新，用於追蹤大戶與散戶的持股流向。
+- **`raw_financial/`**: 來自 FinMind 的基本面財報資料。包含月營收、綜合損益表、資產負債表、現金流量表及歷年股利。
+
+### ⚙️ 核心設定與快取檔案 (.json)
 為了讓系統能夠延續狀態並避免重複浪費 API Token，專案中有幾個特別被 `Git` 白名單追蹤的核心 `.json` 檔案。未來的 Agent 必須理解這些檔案的功能：
 
 1. **`best_factors.json`**:

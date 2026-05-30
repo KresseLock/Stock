@@ -42,8 +42,8 @@ def main():
             stock_name = item.get("stock_name", "")
             industry = item.get("industry_category", "未分類")
             
-            # 只保留純數字的股票代碼 (一般股4碼，ETF/創新板可能到5-6碼)
-            if stock_id.isdigit() and 4 <= len(stock_id) <= 6:
+            # 只保留英數混合的股票代碼 (一般股4碼，ETF/特別股可能到5-6碼，例如 00403A, 00981A)
+            if stock_id.isalnum() and 4 <= len(stock_id) <= 6:
                 categories[industry][stock_id] = stock_name
                 
         # 移除空的或是無效的分類

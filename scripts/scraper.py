@@ -161,12 +161,24 @@ def _polite_sleep(lo: float = 1.5, hi: float = 3.0):
 # =====================================================================
 
 def _fetch_twse_json(url: str):
+    """
+    回傳:
+      dict  = API 正常且有內容
+      "NO_DATA" = API 正常但明確無資料
+      None  = 網路/解析錯誤
+    """
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         if r.status_code != 200: return None
         body = r.text.strip()
         if not body or body[0] == "<": return None
-        return r.json()
+        data = r.json()
+        
+        stat = data.get("stat", "")
+        if "很抱歉" in stat or "沒有" in stat:
+            return "NO_DATA"
+            
+        return data
     except KeyboardInterrupt:
         raise
     except Exception:
@@ -177,7 +189,7 @@ def crawl_daily_price(date_str: str) -> bool:
     if _already_exists(path): return True
     url = f"https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date={date_str}&type=ALL"
     data = _fetch_twse_json(url)
-    if not data: return False
+    if data is None or data == "NO_DATA": return False
     df = None
     if "tables" in data:
         for tbl in data["tables"]:
@@ -195,21 +207,34 @@ def crawl_daily_chips(date_str: str) -> bool:
     if _already_exists(path): return True
     url = f"https://www.twse.com.tw/fund/T86?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
-    if data and data.get("data"):
-        _save_csv(_create_df_safely(data["data"], data.get("fields", [])), path)
+    if data is None:
+        return False
+    if data == "NO_DATA":
+        _save_csv(pd.DataFrame(), path)
         return True
-    return False
+        
+    df = _create_df_safely(data.get("data", []), data.get("fields", []))
+    _save_csv(df, path)
+    return True
 
 def crawl_daily_margin(date_str: str) -> bool:
     path = os.path.join(DATA_DIR, "raw_margin", f"{date_str}_margin.csv")
     if _already_exists(path): return True
     url = f"https://www.twse.com.tw/exchangeReport/MI_MARGN?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
-    if data and data.get("tables") and len(data["tables"]) >= 2 and data["tables"][1].get("data"):
-        tbl = data["tables"][1]
-        _save_csv(_create_df_safely(tbl.get("data", []), tbl.get("fields", [])), path)
+    if data is None:
+        return False
+    if data == "NO_DATA":
+        _save_csv(pd.DataFrame(), path)
         return True
-    return False
+        
+    if data.get("tables") and len(data["tables"]) >= 2 and data["tables"][1].get("fields"):
+        tbl = data["tables"][1]
+        df = _create_df_safely(tbl.get("data", []), tbl.get("fields", []))
+    else:
+        df = pd.DataFrame()
+    _save_csv(df, path)
+    return True
 
 def crawl_daily_sbl(date_str: str) -> bool:
     # ✅ 正確路徑：raw_margin
@@ -217,24 +242,35 @@ def crawl_daily_sbl(date_str: str) -> bool:
     if _already_exists(path): return True
     url = f"https://www.twse.com.tw/exchangeReport/TWT93U?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
-    if data and data.get("data"):
-        _save_csv(_create_df_safely(data["data"], data.get("fields", [])), path)
+    if data is None:
+        return False
+    if data == "NO_DATA":
+        _save_csv(pd.DataFrame(), path)
         return True
-    return False
+        
+    df = _create_df_safely(data.get("data", []), data.get("fields", []))
+    _save_csv(df, path)
+    return True
 
 def crawl_daily_twse_per(date_str: str) -> bool:
     path = os.path.join(DATA_DIR, "raw_twse_per", f"{date_str}_twse_per.csv")
     if _already_exists(path): return True
     url = f"https://www.twse.com.tw/exchangeReport/BWIBBU_d?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
-    if data and data.get("data"):
-        _save_csv(_create_df_safely(data["data"], data.get("fields", [])), path)
+    if data is None:
+        return False
+    if data == "NO_DATA":
+        _save_csv(pd.DataFrame(), path)
         return True
-    elif data and data.get("tables") and data["tables"][0].get("data"):
+        
+    df = pd.DataFrame()
+    if data.get("data"):
+        df = _create_df_safely(data["data"], data.get("fields", []))
+    elif data.get("tables") and data["tables"][0].get("fields"):
         tbl = data["tables"][0]
-        _save_csv(_create_df_safely(tbl.get("data", []), tbl.get("fields", [])), path)
-        return True
-    return False
+        df = _create_df_safely(tbl.get("data", []), tbl.get("fields", []))
+    _save_csv(df, path)
+    return True
 
 def crawl_daily_daytrading(date_str: str) -> bool:
     # ✅ 正確路徑：raw_chips
@@ -242,30 +278,57 @@ def crawl_daily_daytrading(date_str: str) -> bool:
     if _already_exists(path): return True
     url = f"https://www.twse.com.tw/exchangeReport/TWTB4U?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
-    if data and data.get("data"):
-        _save_csv(_create_df_safely(data["data"], data.get("fields", [])), path)
+    if data is None:
+        return False
+    if data == "NO_DATA":
+        _save_csv(pd.DataFrame(), path)
         return True
-    return False
+        
+    df = pd.DataFrame()
+    if data.get("data"):
+        df = _create_df_safely(data["data"], data.get("fields", []))
+    elif data.get("tables"):
+        for tbl in data["tables"]:
+            if tbl.get("data"):
+                df = _create_df_safely(tbl["data"], tbl.get("fields", []))
+                break
+        else:
+            for tbl in reversed(data["tables"]):
+                if tbl.get("fields"):
+                    df = _create_df_safely([], tbl["fields"])
+                    break
+    _save_csv(df, path)
+    return True
 
 def crawl_daily_fini_holding(date_str: str) -> bool:
     path = os.path.join(DATA_DIR, "raw_chips", f"{date_str}_fini_holding.csv")
     if _already_exists(path): return True
     url = f"https://www.twse.com.tw/fund/CT152816?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
-    if data and data.get("data"):
-        _save_csv(_create_df_safely(data["data"], data.get("fields", [])), path)
+    if data is None:
+        return False
+    if data == "NO_DATA":
+        _save_csv(pd.DataFrame(), path)
         return True
-    return False
+        
+    df = _create_df_safely(data.get("data", []), data.get("fields", []))
+    _save_csv(df, path)
+    return True
 
 def crawl_daily_credit_limit(date_str: str) -> bool:
     path = os.path.join(DATA_DIR, "raw_margin", f"{date_str}_credit_limit.csv")
     if _already_exists(path): return True
     url = f"https://www.twse.com.tw/exchangeReport/TWT38U?response=json&date={date_str}&selectType=ALL"
     data = _fetch_twse_json(url)
-    if data and data.get("data"):
-        _save_csv(_create_df_safely(data["data"], data.get("fields", [])), path)
+    if data is None:
+        return False
+    if data == "NO_DATA":
+        _save_csv(pd.DataFrame(), path)
         return True
-    return False
+        
+    df = _create_df_safely(data.get("data", []), data.get("fields", []))
+    _save_csv(df, path)
+    return True
 
 def crawl_daily_taifex_inst(date_str: str) -> bool:
     path = os.path.join(DATA_DIR, "raw_taifex", f"{date_str}_taifex_inst.csv")
@@ -282,7 +345,8 @@ def crawl_daily_taifex_inst(date_str: str) -> bool:
         except UnicodeDecodeError:
             text = r.content.decode("big5", errors="ignore")
         if "查無資料" in text or len(text.strip()) < 50:
-            return False
+            _save_csv(pd.DataFrame(), path)
+            return True
         df = pd.read_csv(io.StringIO(text))
         _save_csv(df, path)
         return True
@@ -353,14 +417,12 @@ def _fm_get(dataset: str, start_date: str, end_date: str, data_id: str, max_retr
             r = requests.get(FM_BASE_URL, params=params, timeout=30)
 
             if r.status_code in (429, 402):
-                if attempt == 0:
-                    wait = 60
-                    print(f"    [FinMind] 觸發限速 (狀態碼 {r.status_code})，短暫等待 {wait} 秒...")
-                else:
-                    wait = 3605
-                    resume_time = datetime.datetime.now() + datetime.timedelta(seconds=wait)
-                    print(f"    [FinMind] 確認已達 API 額度上限！預計於 {resume_time.strftime('%H:%M:%S')} 自動喚醒...")
-                time.sleep(wait)
+                # 免費帳號每小時 600 次，429/402 都是「本小時額度耗盡」
+                # 等 1 小時後額度自動重置，繼續重試
+                resume_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+                print(f"\n    [FinMind] 觸發限速 (狀態碼 {r.status_code})，每小時額度已用盡。")
+                print(f"    [FinMind] 預計於 {resume_time.strftime('%H:%M:%S')} 額度重置，自動繼續...")
+                time.sleep(3600)
                 continue
 
             if r.status_code == 200:
@@ -494,21 +556,52 @@ def download_history_data(start_date_obj: datetime.date, end_date_obj: datetime.
             curr += delta
             continue
 
+        # price 已存在代表這天有開市，只需補抓缺失的子項目，不用重新打 price API
+        if _already_exists(files_required[0]):
+            missing_names = [
+                p.split(os.sep)[-1] for p in files_required[1:]
+                if not _already_exists(p)
+            ]
+            print(f"  [補抓] {d_str} 補齊缺失: {missing_names}")
+            results = [
+                crawl_daily_chips(d_str),
+                crawl_daily_margin(d_str),
+                crawl_daily_sbl(d_str),
+                crawl_daily_twse_per(d_str),
+                crawl_daily_taifex_inst(d_str),
+                crawl_daily_daytrading(d_str),
+                crawl_daily_fini_holding(d_str),
+                crawl_daily_credit_limit(d_str),
+            ]
+            if all(results):
+                downloaded_days += 1
+            else:
+                print(f"    [警告] {d_str} 部分補抓失敗，下次重試")
+            _polite_sleep()
+            curr += delta
+            continue
+
         print(f"  [下載] 官方日報 {d_str}...", end=" ")
         if crawl_daily_price(d_str):
-            crawl_daily_chips(d_str)
-            crawl_daily_margin(d_str)
-            crawl_daily_sbl(d_str)
-            crawl_daily_twse_per(d_str)
-            crawl_daily_taifex_inst(d_str)
-            crawl_daily_daytrading(d_str)
-            crawl_daily_fini_holding(d_str)
-            crawl_daily_credit_limit(d_str)
-            downloaded_days += 1
+            results = [
+                crawl_daily_chips(d_str),
+                crawl_daily_margin(d_str),
+                crawl_daily_sbl(d_str),
+                crawl_daily_twse_per(d_str),
+                crawl_daily_taifex_inst(d_str),
+                crawl_daily_daytrading(d_str),
+                crawl_daily_fini_holding(d_str),
+                crawl_daily_credit_limit(d_str),
+            ]
+            if all(results):
+                downloaded_days += 1
+                print("OK")
+            else:
+                print("部分失敗 (下次補抓)")
+                
             if d_str in fail_log:
                 del fail_log[d_str]
                 _save_fail_log(fail_log)
-            print("OK")
             _polite_sleep()
         else:
             fail_log[d_str] = fail_log.get(d_str, 0) + 1
@@ -536,26 +629,34 @@ def download_history_data(start_date_obj: datetime.date, end_date_obj: datetime.
 
     no_data_cache = _load_no_data_cache()
 
-    for stock_id in target_stocks:
+    total         = len(target_stocks)
+    skipped_etf   = 0
+    skipped_cache  = 0
+    updated       = 0
+    partial_miss  = 0
+    errors_total  = 0
+
+    for idx, stock_id in enumerate(target_stocks, 1):
+        # 進度列（覆寫同一行，不刷屏）
+        print(f"  FinMind 進度: {idx}/{total} ({stock_id})          ", end="\r", flush=True)
+
         # ETF 沒有財報
         if stock_id in ETF_SET:
-            print(f"  抓取 FinMind {stock_id}... 略過 (ETF)")
+            skipped_etf += 1
             continue
 
         # 已二次確認無財報
         if _is_confirmed_no_data(no_data_cache, stock_id):
-            print(f"  抓取 FinMind {stock_id}... 略過 (確認無財報，{_NO_DATA_RECHECK_DAYS}天後重新確認)")
+            skipped_cache += 1
             continue
 
-        print(f"  抓取 FinMind {stock_id}...", end=" ", flush=True)
         results = []
-
         datasets = [
-            ("營收", "TaiwanStockMonthRevenue",         f"{stock_id}_monthly_revenue.csv"),
-            ("損益表", "TaiwanStockFinancialStatements", f"{stock_id}_financial_stmt.csv"),
-            ("資產表", "TaiwanStockBalanceSheet",        f"{stock_id}_balance_sheet.csv"),
-            ("現金流", "TaiwanStockCashFlowsStatement",  f"{stock_id}_cashflow.csv"),
-            ("股利",   "TaiwanStockDividend",            f"{stock_id}_dividend.csv"),
+            ("營收",   "TaiwanStockMonthRevenue",        f"{stock_id}_monthly_revenue.csv"),
+            ("損益表", "TaiwanStockFinancialStatements",  f"{stock_id}_financial_stmt.csv"),
+            ("資產表", "TaiwanStockBalanceSheet",         f"{stock_id}_balance_sheet.csv"),
+            ("現金流", "TaiwanStockCashFlowsStatement",   f"{stock_id}_cashflow.csv"),
+            ("股利",   "TaiwanStockDividend",             f"{stock_id}_dividend.csv"),
         ]
         for label, dataset, fname in datasets:
             path = os.path.join(DATA_DIR, "raw_financial", fname)
@@ -564,25 +665,35 @@ def download_history_data(start_date_obj: datetime.date, end_date_obj: datetime.
 
         errors  = [name for name, ok in results if ok is False]
         no_data = [name for name, ok in results if ok is None]
+        updated_items = [name for name, ok in results if ok is True]
 
         if errors:
-            # 有錯誤時重置 pending 紀錄，避免錯誤被誤認為無資料
             if stock_id in no_data_cache and no_data_cache[stock_id].get("status") == "pending":
                 _reset_no_data(no_data_cache, stock_id)
-            print(f"抓取失敗: {errors}")
+            errors_total += 1
+            print(f"  [錯誤] FinMind {stock_id} 抓取失敗: {errors}                    ")
         elif no_data:
             if len(no_data) == len(results):
-                # 全部 5 項都是 None（無任何 False）→ 觸發二次確認
                 status = _record_no_data(no_data_cache, stock_id)
                 if status == "pending":
-                    print(f"OK (全部無資料，待下次執行二次確認後才快取)")
+                    print(f"  [首次無資料] FinMind {stock_id} → 待下次二次確認後快取      ")
                 else:
-                    print(f"OK (二次確認無財報，已快取，{_NO_DATA_RECHECK_DAYS}天後重新確認)")
+                    print(f"  [確認無財報] FinMind {stock_id} → 已快取，{_NO_DATA_RECHECK_DAYS}天後重新確認")
+                skipped_cache += 1
             else:
-                print(f"OK (部分無資料: {no_data})")
+                partial_miss += 1
         else:
-            # 有資料時清除可能殘留的無資料紀錄
+            # 有任何一項是真的新抓到資料（不是 12h 快取），才印更新訊息
             _reset_no_data(no_data_cache, stock_id)
-            print("OK")
+            # 判斷是否有真正新寫入的檔案（檔案在 60 秒內被修改）
+            any_new = any(
+                os.path.exists(os.path.join(DATA_DIR, "raw_financial", fname))
+                and time.time() - os.path.getmtime(os.path.join(DATA_DIR, "raw_financial", fname)) < 60
+                for _, _, fname in datasets
+            )
+            if any_new:
+                updated += 1
+                print(f"  [更新] FinMind {stock_id} 新資料已寫入                         ")
 
-    print("  FinMind 爬蟲完成。")
+    # 清除進度列，印摘要
+    print(f"  FinMind 爬蟲完成。(略過ETF: {skipped_etf} | 略過快取: {skipped_cache} | 新更新: {updated} | 部分缺項: {partial_miss} | 錯誤: {errors_total})")
