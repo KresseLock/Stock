@@ -34,8 +34,8 @@ if __name__ == "__main__":
     print()
 
     # ── 時間區間設定 ─────────────────────────────────
-    start_date     = datetime.date(2020, 1, 1)    # 歷史回溯起點 (建議至少 5 年)
-    end_date       = datetime.date(2026, 5, 30)   # 今日
+    start_date     = datetime.date(2024, 1, 1)    # 歷史回溯起點 (建議至少 5 年)
+    end_date       = datetime.date.today()        # 自動抓取今日日期
 
     # ── 股票清單 ─────────────────────────────────────
     stock_list = load_stocks("Stocks.txt")
