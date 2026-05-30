@@ -22,6 +22,7 @@
   - **特色**: 具備嚴格的 9 檔案歷史跳過機制、12小時快取、FinMind 兩次確認空資料防呆機制 (`no_finmind_data.json`)，以及失敗略過機制 (`failed_dates.json`)。
 - **`main.py`**: **歷史資料爬蟲入口腳本**。負責呼叫 `scraper.py` 執行全市場歷史股價與基本面資料的抓取。
 - **`fetch_categories.py`**: 抓取並更新台股產業分類及 ETF 清單至 `stock_categories.json`。
+- **`patch_finmind.py`**: **FinMind 針對性補抓工具**。這是一個輕量級腳本，當您發現特定幾檔股票的財報資料有缺漏或需要緊急更新時，可以修改腳本內的代號（如 2049, 4931）進行單獨強制補抓，無需重新執行整個市場的爬蟲。
 - **`scripts/check_data.py`**: **資料完整性修復工具**。掃描已下載的 FinMind 財報 CSV，自動刪除空檔或缺少核心欄位 (`date`, `revenue`, `type`, `value` 等) 的異常檔案，讓爬蟲下次自動回補。
 
 ### 🧬 特徵工程 (Feature Engineering)
