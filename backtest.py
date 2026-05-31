@@ -85,7 +85,6 @@ def run_backtest(backtest_date_str):
         X_valid = train_clean[train_clean["date"] >= split_date][feature_cols]
         y_valid = train_clean[train_clean["date"] >= split_date][label_col].astype(int)
 
-        # 訓練模型 (改為分類模型)
         model = lgb.LGBMClassifier(
             n_estimators=300,
             learning_rate=0.03,
@@ -97,7 +96,8 @@ def run_backtest(backtest_date_str):
             n_jobs=-1,
             verbose=-1,
             objective="multiclass",
-            num_class=3
+            num_class=3,
+            class_weight="balanced"
         )
         
         print(f"訓練 Day {days_ahead} 模型中... ", end="", flush=True)
@@ -229,8 +229,52 @@ def run_backtest(backtest_date_str):
                 print(f" {i:<3} | {disp_name:<16} | {close_p:>6.2f} | {p1_s:>10} | {r1_s:>8} | {p2_s:>10} | {r2_s:>8} | {p3_s:>10} | {r3_s:>8}")
             print("=" * 105)
 
+    # ── 新增: 印出當日全市場真正的 Top 10 強勢股 (以 Day 1 為主) ──
+    print()
+    print("=========================================================================================================")
+    print(f"  當日全市場嚴選 Top-10 飆股清單 (以 Day 1 分數排序) - 基準日: {backtest_date_str}")
+    print("=========================================================================================================")
+    print(f"{'排名':<4} | {'股票 (代號+名稱)':<15} | {'收盤價':<7} | {'D1多空分數':<11} | {'Day1真實':<8} | {'D2多空分數':<11} | {'Day2真實':<8} | {'D3多空分數':<11} | {'Day3真實':<8}")
+    print("-" * 105)
+    
+    # 簡單輔助函數取名字
+    def get_stock_name(sid, date_str):
+        price_file = os.path.join(BASE_DIR, "data", "raw_price", f"{date_str}_price.csv")
+        if os.path.exists(price_file):
+            try:
+                df_p = pd.read_csv(price_file, usecols=["證券代號", "證券名稱"], dtype=str)
+                name = df_p[df_p["證券代號"].str.strip() == sid]["證券名稱"].values
+                return name[0].strip() if len(name) > 0 else ""
+            except: pass
+        return ""
 
+    top10_market = df_eval.sort_values(["pred_1"], ascending=False).head(10)
+    for i, (_, row) in enumerate(top10_market.iterrows(), 1):
+        sid = str(row['stock_id'])
+        name = get_stock_name(sid, backtest_date_str)
+        stock_display = f"{sid} {name}"
+        c = row.get('close', 0.0)
+        
+        p1 = row.get('pred_1', np.nan)
+        p2 = row.get('pred_2', np.nan)
+        p3 = row.get('pred_3', np.nan)
+        r1 = row.get('next_ret_1', np.nan)
+        r2 = row.get('next_ret_2', np.nan)
+        r3 = row.get('next_ret_3', np.nan)
+        
+        p1_str = f"{p1*100:>+8.1f}%" if pd.notna(p1) else f"{'--':>9}"
+        p2_str = f"{p2*100:>+8.1f}%" if pd.notna(p2) else f"{'--':>9}"
+        p3_str = f"{p3*100:>+8.1f}%" if pd.notna(p3) else f"{'--':>9}"
+        r1_str = f"{r1*100:>+7.1f}%" if pd.notna(r1) else f"{'--':>8}"
+        r2_str = f"{r2*100:>+7.1f}%" if pd.notna(r2) else f"{'--':>8}"
+        r3_str = f"{r3*100:>+7.1f}%" if pd.notna(r3) else f"{'--':>8}"
+        
+        print(f" {i:<3} | {stock_display:<14} | {c:>7.2f} | {p1_str:<12} | {r1_str:<9} | {p2_str:<12} | {r2_str:<9} | {p3_str:<12} | {r3_str:<9}")
+    print("=========================================================================================================")
+    
 if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("用法: python backtest.py <YYYYMMDD>")
     parser = argparse.ArgumentParser(description="時光機回測工具")
     parser.add_argument("date", type=str, help="欲進行預測的基準日期 (格式: YYYYMMDD 或 YYYY-MM-DD)")
     args = parser.parse_args()

@@ -1,7 +1,7 @@
 """
 scraper.py — 台灣股市多源資料爬蟲 (整合 TWSE + TAIFEX + FinMind)
 ====================================================
-資料來源分流 (T+1/T+2 量化藍圖): 
+資料來源分流 (T+1/T+2 量化藍圖):
   1. 台灣證券交易所 (TWSE) [免費每日]：價量、籌碼、資券、借券、本益比、當沖、外資持股、信用管制
   2. 台灣期貨交易所 (TAIFEX) [免費每日]：外資台指期未平倉 (大盤多空指標)
   3. 集保中心 (TDCC) [免費每週]：大戶持股分級
@@ -19,10 +19,10 @@ scraper.py — 台灣股市多源資料爬蟲 (整合 TWSE + TAIFEX + FinMind)
 skip_dates.json 說明:
   key 格式: "{dataset}_{YYYYMMDD}"
   reason:
-    "market_closed"    - price API 確認當天休市 (颱風假/補假等)，整天所有 dataset 同步標記
-    "no_data"          - 該 dataset 明確回傳無資料 (例如當沖制度實施前)
-    "unexpected_format"- API 有回應但格式不符預期，暫時跳過等格式確認後可手動清除
-    "empty_response"   - API 有回應但資料為空
+    "market_closed"     - price API 確認當天休市 (颱風假/補假等)，整天所有 dataset 同步標記
+    "no_data"           - 該 dataset 明確回傳無資料 (例如當沖制度實施前)
+    "unexpected_format" - API 有回應但格式不符預期，可手動清除後重試
+    "empty_response"    - API 有回應但資料為空
 """
 
 import datetime
@@ -32,6 +32,7 @@ import os
 import random
 import time
 import warnings
+
 import pandas as pd
 import requests
 
@@ -52,7 +53,7 @@ DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 DIRS = [
     "raw_price", "raw_chips", "raw_margin",
     "raw_twse_per", "raw_taifex", "raw_shareholding",
-    "raw_financial"
+    "raw_financial",
 ]
 for folder in DIRS:
     os.makedirs(os.path.join(DATA_DIR, folder), exist_ok=True)
@@ -67,6 +68,7 @@ _SUB_DATASETS = _ALL_DATASETS[1:]  # price 以外的 8 個
 # ── ETF 清單 ──────────────────────────────────────────
 _CATEGORIES_PATH = os.path.join(BASE_DIR, "..", "stock_categories.json")
 
+
 def _load_etf_set() -> set:
     try:
         with open(_CATEGORIES_PATH, "r", encoding="utf-8") as f:
@@ -75,11 +77,13 @@ def _load_etf_set() -> set:
     except Exception:
         return set()
 
+
 ETF_SET = _load_etf_set()
 
 # ── 無財報股票快取 ────────────────────────────────────
 _NO_DATA_PATH         = os.path.join(DATA_DIR, "no_finmind_data.json")
 _NO_DATA_RECHECK_DAYS = 90
+
 
 def _load_no_data_cache() -> dict:
     if os.path.exists(_NO_DATA_PATH):
@@ -90,9 +94,11 @@ def _load_no_data_cache() -> dict:
             pass
     return {}
 
+
 def _save_no_data_cache(cache: dict):
     with open(_NO_DATA_PATH, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
+
 
 def _is_confirmed_no_data(cache: dict, stock_id: str) -> bool:
     entry = cache.get(stock_id)
@@ -100,6 +106,7 @@ def _is_confirmed_no_data(cache: dict, stock_id: str) -> bool:
         return False
     confirmed_date = datetime.date.fromisoformat(entry["confirmed_date"])
     return (datetime.date.today() - confirmed_date).days < _NO_DATA_RECHECK_DAYS
+
 
 def _record_no_data(cache: dict, stock_id: str) -> str:
     """回傳 'pending' 或 'confirmed'"""
@@ -114,14 +121,36 @@ def _record_no_data(cache: dict, stock_id: str) -> str:
         _save_no_data_cache(cache)
         return "pending"
 
+
 def _reset_no_data(cache: dict, stock_id: str):
     if stock_id in cache:
         del cache[stock_id]
         _save_no_data_cache(cache)
 
+
+# ── 局部缺失資料快取 (個別報表) ─────────────────────
+MISSING_FM_PATH = os.path.join(DATA_DIR, "missing_fm_datasets.json")
+
+
+def _load_missing_fm() -> dict:
+    if os.path.exists(MISSING_FM_PATH):
+        try:
+            with open(MISSING_FM_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_missing_fm(cache: dict):
+    with open(MISSING_FM_PATH, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
+
 # ── 失敗日期計數 ──────────────────────────────────────
 FAIL_LOG_PATH    = os.path.join(DATA_DIR, "failed_dates.json")
 SKIP_AFTER_FAILS = 3
+
 
 def _load_fail_log() -> dict:
     if os.path.exists(FAIL_LOG_PATH):
@@ -132,6 +161,7 @@ def _load_fail_log() -> dict:
             pass
     return {}
 
+
 def _save_fail_log(log: dict):
     with open(FAIL_LOG_PATH, "w", encoding="utf-8") as f:
         json.dump(log, f, ensure_ascii=False, indent=2)
@@ -139,6 +169,7 @@ def _save_fail_log(log: dict):
 
 # ── Skip Dates 快取 (取代空白 CSV) ──────────────────
 SKIP_DATES_PATH = os.path.join(DATA_DIR, "skip_dates.json")
+
 
 def _load_skip_dates() -> dict:
     if os.path.exists(SKIP_DATES_PATH):
@@ -149,18 +180,20 @@ def _load_skip_dates() -> dict:
             pass
     return {}
 
+
 def _save_skip_dates(skip: dict):
     with open(SKIP_DATES_PATH, "w", encoding="utf-8") as f:
         json.dump(skip, f, ensure_ascii=False, indent=2)
 
+
 def _mark_skip_date(skip: dict, dataset: str, date_str: str, reason: str = "no_data"):
-    """標記單一 dataset 的日期，並立即寫檔。
-    若需要批次標記多個 dataset，請使用 _mark_skip_dates_batch 以減少寫檔次數。"""
+    """標記單一 dataset 的日期，並立即寫檔。"""
     skip[f"{dataset}_{date_str}"] = {
         "reason": reason,
-        "confirmed_at": datetime.date.today().isoformat()
+        "confirmed_at": datetime.date.today().isoformat(),
     }
     _save_skip_dates(skip)
+
 
 def _mark_skip_dates_batch(skip: dict, datasets: list, date_str: str, reason: str = "no_data"):
     """批次標記多個 dataset 的同一天，只寫一次檔。"""
@@ -169,32 +202,43 @@ def _mark_skip_dates_batch(skip: dict, datasets: list, date_str: str, reason: st
         skip[f"{ds}_{date_str}"] = {"reason": reason, "confirmed_at": today}
     _save_skip_dates(skip)
 
+
 def _is_skip_date(skip: dict, dataset: str, date_str: str) -> bool:
     return f"{dataset}_{date_str}" in skip
+
 
 def _is_market_closed(skip: dict, date_str: str) -> bool:
     """price 被確認為休市日（market_closed）才回傳 True，其他 reason 不算。"""
     entry = skip.get(f"price_{date_str}", {})
     return entry.get("reason") == "market_closed"
 
+
 # ── 共用 Headers & 工具 ──────────────────────────────
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+    ),
     "Accept": "application/json, text/javascript, */*; q=0.01",
     "X-Requested-With": "XMLHttpRequest",
 }
 
+
 def _clean_html(df: pd.DataFrame) -> pd.DataFrame:
     return df.replace(r"<[^>]+>", "", regex=True)
+
 
 def _already_exists(path: str) -> bool:
     return os.path.exists(path) and os.path.getsize(path) > 0
 
+
 def _save_csv(df: pd.DataFrame, path: str):
     _clean_html(df).to_csv(path, index=False, encoding="utf-8-sig")
 
+
 def _create_df_safely(rows: list, fields: list) -> pd.DataFrame:
-    if not rows: return pd.DataFrame()
+    if not rows:
+        return pd.DataFrame()
     num_cols = max(len(r) for r in rows)
     fields = list(fields)
     if len(fields) < num_cols:
@@ -203,6 +247,7 @@ def _create_df_safely(rows: list, fields: list) -> pd.DataFrame:
         fields = fields[:num_cols]
     padded_rows = [r + [None] * (num_cols - len(r)) for r in rows]
     return pd.DataFrame(padded_rows, columns=fields)
+
 
 def _polite_sleep(lo: float = 1.5, hi: float = 3.0):
     time.sleep(random.uniform(lo, hi))
@@ -250,27 +295,33 @@ def _fetch_twse_json(url: str):
 
 def crawl_daily_price(date_str: str, skip: dict) -> str:
     """
-    三態回傳 (字串，語意比 bool 更清晰):
-      "exists"       - 檔案已存在，不需要動作
-      "market_closed"- API 確認當天休市，已寫入 skip
-      "ok"           - 成功下載並存檔
-      "error"        - 網路錯誤或解析失敗，應計入 fail_log
+    三態回傳 (字串):
+      "exists"        - 檔案已存在，不需要動作
+      "market_closed" - API 確認當天休市，已寫入 skip
+      "ok"            - 成功下載並存檔
+      "skip"          - 有 skip 記錄但 reason 不是 market_closed
+      "error"         - 網路錯誤或解析失敗，應計入 fail_log
     """
     path = os.path.join(DATA_DIR, "raw_price", f"{date_str}_price.csv")
     if _already_exists(path):
         return "exists"
-    if _is_skip_date(skip, "price", date_str):
-        # 已在 skip 中；若是 market_closed 主迴圈會提前攔截，此處只做防呆
-        return "exists"
 
-    url = f"https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date={date_str}&type=ALL"
+    if _is_skip_date(skip, "price", date_str):
+        entry = skip.get(f"price_{date_str}", {})
+        if entry.get("reason") == "market_closed":
+            return "market_closed"
+        return "skip"
+
+    url = (
+        f"https://www.twse.com.tw/exchangeReport/MI_INDEX"
+        f"?response=json&date={date_str}&type=ALL"
+    )
     data = _fetch_twse_json(url)
 
     if data is None:
         return "error"
 
     if data == "NO_DATA":
-        # 批次標記整天所有 dataset，只寫一次檔
         _mark_skip_dates_batch(skip, _ALL_DATASETS, date_str, reason="market_closed")
         return "market_closed"
 
@@ -316,7 +367,10 @@ def crawl_daily_margin(date_str: str, skip: dict) -> bool:
     if _already_exists(path): return True
     if _is_skip_date(skip, "margin", date_str): return True
 
-    url = f"https://www.twse.com.tw/exchangeReport/MI_MARGN?response=json&date={date_str}&selectType=ALL"
+    url = (
+        f"https://www.twse.com.tw/exchangeReport/MI_MARGN"
+        f"?response=json&date={date_str}&selectType=ALL"
+    )
     data = _fetch_twse_json(url)
     if data is None:
         return False
@@ -335,7 +389,6 @@ def crawl_daily_margin(date_str: str, skip: dict) -> bool:
         df = _create_df_safely(data["data"], data.get("fields", []))
 
     if df.empty:
-        # 格式完全不符才標記，避免誤殺有資料的日期
         _mark_skip_date(skip, "margin", date_str, reason="unexpected_format")
         return True
     _save_csv(df, path)
@@ -347,7 +400,10 @@ def crawl_daily_sbl(date_str: str, skip: dict) -> bool:
     if _already_exists(path): return True
     if _is_skip_date(skip, "sbl", date_str): return True
 
-    url = f"https://www.twse.com.tw/exchangeReport/TWT93U?response=json&date={date_str}&selectType=ALL"
+    url = (
+        f"https://www.twse.com.tw/exchangeReport/TWT93U"
+        f"?response=json&date={date_str}&selectType=ALL"
+    )
     data = _fetch_twse_json(url)
     if data is None:
         return False
@@ -368,7 +424,10 @@ def crawl_daily_twse_per(date_str: str, skip: dict) -> bool:
     if _already_exists(path): return True
     if _is_skip_date(skip, "twse_per", date_str): return True
 
-    url = f"https://www.twse.com.tw/exchangeReport/BWIBBU_d?response=json&date={date_str}&selectType=ALL"
+    url = (
+        f"https://www.twse.com.tw/exchangeReport/BWIBBU_d"
+        f"?response=json&date={date_str}&selectType=ALL"
+    )
     data = _fetch_twse_json(url)
     if data is None:
         return False
@@ -380,7 +439,10 @@ def crawl_daily_twse_per(date_str: str, skip: dict) -> bool:
     if data.get("data"):
         df = _create_df_safely(data["data"], data.get("fields", []))
     elif data.get("tables") and data["tables"][0].get("fields"):
-        df = _create_df_safely(data["tables"][0].get("data", []), data["tables"][0].get("fields", []))
+        df = _create_df_safely(
+            data["tables"][0].get("data", []),
+            data["tables"][0].get("fields", []),
+        )
 
     if df.empty:
         _mark_skip_date(skip, "twse_per", date_str, reason="unexpected_format")
@@ -394,7 +456,10 @@ def crawl_daily_daytrading(date_str: str, skip: dict) -> bool:
     if _already_exists(path): return True
     if _is_skip_date(skip, "daytrading", date_str): return True
 
-    url = f"https://www.twse.com.tw/exchangeReport/TWTB4U?response=json&date={date_str}&selectType=ALL"
+    url = (
+        f"https://www.twse.com.tw/exchangeReport/TWTB4U"
+        f"?response=json&date={date_str}&selectType=ALL"
+    )
     data = _fetch_twse_json(url)
     if data is None:
         return False
@@ -423,7 +488,10 @@ def crawl_daily_fini_holding(date_str: str, skip: dict) -> bool:
     if _already_exists(path): return True
     if _is_skip_date(skip, "fini_holding", date_str): return True
 
-    url = f"https://www.twse.com.tw/fund/MI_QFIIS?response=json&date={date_str}&selectType=ALL"
+    url = (
+        f"https://www.twse.com.tw/fund/MI_QFIIS"
+        f"?response=json&date={date_str}&selectType=ALL"
+    )
     data = _fetch_twse_json(url)
     if data is None:
         return False
@@ -444,7 +512,10 @@ def crawl_daily_credit_limit(date_str: str, skip: dict) -> bool:
     if _already_exists(path): return True
     if _is_skip_date(skip, "credit_limit", date_str): return True
 
-    url = f"https://www.twse.com.tw/exchangeReport/TWT38U?response=json&date={date_str}&selectType=ALL"
+    url = (
+        f"https://www.twse.com.tw/exchangeReport/TWT38U"
+        f"?response=json&date={date_str}&selectType=ALL"
+    )
     data = _fetch_twse_json(url)
     if data is None:
         return False
@@ -465,10 +536,19 @@ def crawl_daily_taifex_inst(date_str: str, skip: dict) -> bool:
     if _already_exists(path): return True
     if _is_skip_date(skip, "taifex_inst", date_str): return True
 
-    dt = datetime.datetime.strptime(date_str, "%Y%m%d")
-    query_date = dt.strftime("%Y/%m/%d")
+    # 支援 20260531 / 2026-05-31 / 2026/05/31 三種格式輸入
+    try:
+        clean_date = date_str.replace("-", "").replace("/", "")
+        query_date = datetime.datetime.strptime(clean_date, "%Y%m%d").strftime("%Y/%m/%d")
+    except Exception:
+        query_date = date_str
+
     url = "https://www.taifex.com.tw/cht/3/futContractsDateDown"
-    payload = {"queryStartDate": query_date, "queryEndDate": query_date, "commodityId": "TXF"}
+    payload = {
+        "queryStartDate": query_date,
+        "queryEndDate":   query_date,
+        "commodityId":    "TXF",
+    }
     try:
         r = requests.post(url, data=payload, headers=HEADERS, timeout=15)
         if r.status_code != 200:
@@ -479,8 +559,12 @@ def crawl_daily_taifex_inst(date_str: str, skip: dict) -> bool:
             text = r.content.decode("big5", errors="ignore")
 
         # 期交所只保留近 3 年，太舊的日期回傳 HTML 或「查無資料」
-        if ("查無資料" in text or len(text.strip()) < 50
-                or "<html" in text.lower() or "<!doctype" in text.lower()):
+        if (
+            "查無資料" in text
+            or len(text.strip()) < 50
+            or "<html" in text.lower()
+            or "<!doctype" in text.lower()
+        ):
             _mark_skip_date(skip, "taifex_inst", date_str, reason="no_data")
             return True
 
@@ -491,7 +575,7 @@ def crawl_daily_taifex_inst(date_str: str, skip: dict) -> bool:
         _save_csv(df, path)
         return True
     except Exception as e:
-        print(f"    [期交所] {date_str} 抓取失敗: {e}")
+        print(f"    [期交所] {date_str} 抓取失敗: {type(e).__name__} - {e}")
         return False
 
 
@@ -519,7 +603,7 @@ def crawl_weekly_shareholding() -> bool:
     except KeyboardInterrupt:
         raise
     except Exception as e:
-        print(f"  [警告] 持股分級下載失敗: {e}")
+        print(f"  [警告] 持股分級下載失敗: {type(e).__name__} - {e}")
         return False
 
 
@@ -536,7 +620,7 @@ def _is_holiday(date_obj: datetime.date) -> bool:
 # 模組 2: FinMind 個股財報 (需 Token, 具備自動休眠與三態回傳)
 # =====================================================================
 
-def _get_finmind_token():
+def _get_finmind_token() -> str:
     token_path = os.path.join(BASE_DIR, "..", "FINMIND_TOKEN.txt")
     if os.path.exists(token_path):
         with open(token_path, "r", encoding="utf-8") as f:
@@ -545,11 +629,18 @@ def _get_finmind_token():
                 return t
     return os.environ.get("FINMIND_TOKEN", "")
 
+
 FINMIND_TOKEN = _get_finmind_token()
-FM_BASE_URL = "https://api.finmindtrade.com/api/v4/data"
+FM_BASE_URL   = "https://api.finmindtrade.com/api/v4/data"
 
 
-def _fm_get(dataset: str, start_date: str, end_date: str, data_id: str, max_retry: int = 5):
+def _fm_get(
+    dataset:   str,
+    start_date: str,
+    end_date:   str,
+    data_id:   str,
+    max_retry: int = 5,
+):
     params = {
         "dataset":    dataset,
         "start_date": start_date,
@@ -559,15 +650,18 @@ def _fm_get(dataset: str, start_date: str, end_date: str, data_id: str, max_retr
     if FINMIND_TOKEN:
         params["token"] = FINMIND_TOKEN
 
-    for attempt in range(max_retry):
+    attempt = 0
+    while attempt < max_retry:
         try:
             r = requests.get(FM_BASE_URL, params=params, timeout=30)
 
             if r.status_code in (429, 402):
+                # 免費帳號每小時 600 次；429/402 = 額度耗盡，等待 1 小時重置
                 resume_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
                 print(f"\n    [FinMind] 觸發限速 (狀態碼 {r.status_code})，每小時額度已用盡。")
                 print(f"    [FinMind] 預計於 {resume_time.strftime('%H:%M:%S')} 額度重置，自動繼續...")
                 time.sleep(3600)
+                # 限速不扣重試次數，繼續等待
                 continue
 
             if r.status_code == 200:
@@ -578,58 +672,80 @@ def _fm_get(dataset: str, start_date: str, end_date: str, data_id: str, max_retr
 
             print(f"    [FinMind] 異常狀態碼 {r.status_code}，稍後重試...")
             time.sleep(5)
+            attempt += 1
 
         except KeyboardInterrupt:
             print("\n[系統] 收到中斷指令，強制結束爬蟲。")
             raise
         except Exception as e:
-            print(f"    [FinMind] 網路異常: {e}")
+            print(f"    [FinMind] 網路異常: {type(e).__name__} - {e}")
             time.sleep(5)
+            attempt += 1
 
     return None
 
 
-def _crawl_fm_dataset(dataset_name: str, stock_id: str, start_date: str, end_date: str, output_path: str):
+def _crawl_fm_dataset(
+    dataset_name: str,
+    stock_id:     str,
+    start_date:   str,
+    end_date:     str,
+    output_path:  str,
+    missing_cache: dict,
+):
     """
     三態回傳:
-      True  = 成功（有資料 或 歷史資料已是最新）
-      False = API/網路錯誤
-      None  = 200 OK 但完全無資料（從未有過任何紀錄）
+      True       = 成功（有資料 或 歷史資料已是最新）
+      False      = API/網路錯誤
+      "skipped"  = 12 小時快取 或 missing_fm_cache 快取，跳過
+      None       = 200 OK 但完全無資料（從未有過任何紀錄）
 
-    12 小時快取: 檔案已存在且 12 小時內已查過 → 直接回傳 True，不打 API。
-    增量更新: 從既有資料的最後一筆日期 +1 天開始抓，避免重複下載。
     注意: CSV 存的是 FinMind 原始日期（未做 look-ahead 推移），
           推移只在 feature_engineering.py 讀取時才做，
           確保增量更新的日期邊界與 API 查詢參數一致。
     """
     DATE_COL_CANDIDATES = ["date", "revenue_date", "calendarDate", "period"]
 
+    # ── missing_fm_cache 個別快取：90 天內跳過 ─────────────
+    cache_key = f"{stock_id}_{dataset_name}"
+    if cache_key in missing_cache:
+        try:
+            last_check = datetime.date.fromisoformat(missing_cache[cache_key])
+            if (datetime.date.today() - last_check).days < _NO_DATA_RECHECK_DAYS:
+                return "skipped"
+        except Exception:
+            pass
+
     try:
         if _already_exists(output_path):
-            # 12 小時內已確認過，跳過
+            # ── 12 小時快取：檔案新鮮，不打 API ─────────────
             if time.time() - os.path.getmtime(output_path) < 43200:
-                return True
+                return "skipped"
 
+            # ── 增量更新：從上次最後一筆 +1 天開始 ──────────
             existing = pd.read_csv(output_path, encoding="utf-8-sig")
             date_col = next((c for c in DATE_COL_CANDIDATES if c in existing.columns), None)
             if date_col and not existing.empty:
-                last_date = pd.to_datetime(existing[date_col]).max()
+                last_date  = pd.to_datetime(existing[date_col]).max()
                 start_date = (last_date + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
                 if start_date > end_date:
+                    # 已是最新，更新時間戳避免下次重複讀 CSV
                     os.utime(output_path, (time.time(), time.time()))
-                    return True
+                    return "skipped"
 
         df = _fm_get(dataset_name, start_date, end_date, stock_id)
 
         if df is None:
-            return False
+            return False  # 伺服器異常或網路斷線
 
         if df.empty:
             if _already_exists(output_path):
+                # 有歷史資料，只是目前沒有新資料
                 os.utime(output_path, (time.time(), time.time()))
-                return True
-            return None
+                return "skipped"
+            return None  # 從未有任何資料
 
+        # ── 合併舊資料並去重 ─────────────────────────────
         if os.path.exists(output_path):
             old_df = pd.read_csv(output_path, encoding="utf-8-sig")
             df = pd.concat([old_df, df], ignore_index=True)
@@ -649,7 +765,7 @@ def _crawl_fm_dataset(dataset_name: str, stock_id: str, start_date: str, end_dat
         return True
 
     except Exception as e:
-        print(f"\n    [錯誤] {dataset_name} / {stock_id} 發生例外: {e}")
+        print(f"\n    [錯誤] {dataset_name} / {stock_id} 發生例外: {type(e).__name__} - {e}")
         return False
 
 
@@ -659,8 +775,8 @@ def _crawl_fm_dataset(dataset_name: str, stock_id: str, start_date: str, end_dat
 
 def download_history_data(
     start_date_obj: datetime.date,
-    end_date_obj: datetime.date,
-    target_stocks: list = None,
+    end_date_obj:   datetime.date,
+    target_stocks:  list = None,
 ):
     delta = datetime.timedelta(days=1)
 
@@ -691,8 +807,6 @@ def download_history_data(
             continue
 
         # ── price API 已確認當天休市 (颱風假/補假等) ───────
-        # crawl_daily_price 回傳 "market_closed" 時會批次寫入所有 dataset，
-        # 因此這裡判斷後可以直接跳過整天，不需要再打任何子資料 API。
         if _is_market_closed(skip_dates, d_str):
             skipped_days += 1
             curr += delta
@@ -719,7 +833,7 @@ def download_history_data(
             curr += delta
             continue
 
-        # ── price 已完成（有檔案），補抓缺失的子資料 ────────
+        # ── price 已完成（有檔案或已 skip），補抓缺失子資料 ─
         price_ds, price_path = files_required[0]
         if _done(price_ds, price_path):
             missing_names = [
@@ -752,7 +866,7 @@ def download_history_data(
         price_result = crawl_daily_price(d_str, skip_dates)
 
         if price_result == "market_closed":
-            # 批次 skip 已在 crawl_daily_price 內完成，直接跳過
+            # 批次 skip 已在 crawl_daily_price 內完成
             print("休市")
             skipped_days += 1
             curr += delta
@@ -764,9 +878,20 @@ def download_history_data(
             count     = fail_log[d_str]
             remaining = SKIP_AFTER_FAILS - count
             if remaining > 0:
-                print(f"\n    [警告] {d_str} 股價抓取失敗 (第 {count} 次，再失敗 {remaining} 次後永久略過)")
+                print(
+                    f"\n    [警告] {d_str} 股價抓取失敗 "
+                    f"(第 {count} 次，再失敗 {remaining} 次後永久略過)"
+                )
             else:
                 print(f"\n    [略過] {d_str} 累計失敗 {count} 次，列入永久略過名單")
+            _polite_sleep()
+            curr += delta
+            continue
+
+        if price_result == "skip":
+            # 有 skip 記錄但 reason 不是 market_closed（例如 empty_response）
+            skipped_days += 1  # ← 修正：納入統計，避免天數對不上
+            _polite_sleep()
             curr += delta
             continue
 
@@ -813,14 +938,15 @@ def download_history_data(
     if not FINMIND_TOKEN:
         print("  [注意] 尚未設定 FINMIND_TOKEN.txt，將使用免費額度。")
 
-    no_data_cache = _load_no_data_cache()
+    no_data_cache    = _load_no_data_cache()
+    missing_fm_cache = _load_missing_fm()   # ← 迴圈外只讀一次，減少磁碟 I/O
 
-    total        = len(target_stocks)
-    skipped_etf  = 0
+    total         = len(target_stocks)
+    skipped_etf   = 0
     skipped_cache = 0
-    updated      = 0
-    partial_miss = 0
-    errors_total = 0
+    updated       = 0
+    partial_miss  = 0
+    errors_total  = 0
 
     for idx, stock_id in enumerate(target_stocks, 1):
         print(f"  FinMind 進度: {idx}/{total} ({stock_id})          ", end="\r", flush=True)
@@ -843,42 +969,54 @@ def download_history_data(
         ]
         for label, dataset, fname in datasets:
             path = os.path.join(DATA_DIR, "raw_financial", fname)
-            results.append((label, _crawl_fm_dataset(dataset, stock_id, start_str, end_str, path)))
-            _polite_sleep(1, 2)
+            res  = _crawl_fm_dataset(dataset, stock_id, start_str, end_str, path, missing_fm_cache)
+            results.append((label, res))
+            if res != "skipped":
+                _polite_sleep(1, 2)
 
-        errors   = [name for name, ok in results if ok is False]
-        no_data  = [name for name, ok in results if ok is None]
+        errors  = [name for name, ok in results if ok is False]
+        no_data = [name for name, ok in results if ok is None]
 
         if errors:
             if stock_id in no_data_cache and no_data_cache[stock_id].get("status") == "pending":
                 _reset_no_data(no_data_cache, stock_id)
             errors_total += 1
             print(f"  [錯誤] FinMind {stock_id} 抓取失敗: {errors}                    ")
+
         elif no_data:
             if len(no_data) == len(results):
+                # 5 張表全無 → 兩階段確認後快取
                 status = _record_no_data(no_data_cache, stock_id)
                 if status == "pending":
                     print(f"  [首次無資料] FinMind {stock_id} → 待下次二次確認後快取      ")
                 else:
-                    print(f"  [確認無財報] FinMind {stock_id} → 已快取，{_NO_DATA_RECHECK_DAYS}天後重新確認")
+                    print(
+                        f"  [確認無財報] FinMind {stock_id} → "
+                        f"已快取，{_NO_DATA_RECHECK_DAYS} 天後重新確認"
+                    )
                 skipped_cache += 1
             else:
+                # 局部缺失 → 寫入 missing_fm_cache，90 天內跳過該 dataset
+                # 注：若 FinMind 之後補上資料，需等 90 天後才會重抓
                 partial_miss += 1
+                for label in no_data:
+                    ds_api_name = next(ds for l, ds, _ in datasets if l == label)
+                    missing_fm_cache[f"{stock_id}_{ds_api_name}"] = (
+                        datetime.date.today().isoformat()
+                    )
+                _save_missing_fm(missing_fm_cache)
+                print(f"  [局部缺漏] FinMind {stock_id} 缺 {no_data} → 已加入快取       ")
+
         else:
             _reset_no_data(no_data_cache, stock_id)
-            any_new = any(
-                os.path.exists(os.path.join(DATA_DIR, "raw_financial", fname))
-                and time.time() - os.path.getmtime(
-                    os.path.join(DATA_DIR, "raw_financial", fname)) < 60
-                for _, _, fname in datasets
-            )
+            any_new = any(ok is True for _, ok in results)
             if any_new:
                 updated += 1
                 print(f"  [更新] FinMind {stock_id} 新資料已寫入                         ")
 
     print(
         f"  FinMind 爬蟲完成。"
-        f"(略過ETF: {skipped_etf}"
+        f" (略過ETF: {skipped_etf}"
         f" | 略過快取: {skipped_cache}"
         f" | 新更新: {updated}"
         f" | 部分缺項: {partial_miss}"

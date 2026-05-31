@@ -21926,5 +21926,13 @@
   "credit_limit_20260529": {
     "reason": "no_data",
     "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20220509": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20250703": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
   }
 }
