@@ -67,16 +67,18 @@
 2. **`stock_categories.json`**:
    - 記錄台股的產業分類與 ETF 清單 (由 `fetch_categories.py` 生成)。
    - 爬蟲會依據此清單自動跳過 ETF 的財報抓取任務。
-3. **`feature_cols.json`**:
+3. **`models/feature_cols.json`**:
    - 記錄模型在 `train.py` 訓練當下所使用的所有特徵欄位名稱。
    - `inference.py` 推論時會讀取此檔，確保餵給模型的特徵順序與數量與訓練時 100% 一致。
 4. **`data/failed_dates.json`**:
    - TWSE/TAIFEX 爬蟲的失敗計數器。若某日期抓取失敗超過 3 次，系統會將其判定為「無開市/假補班」，未來執行時會直接略過，避免無窮重試。
 5. **`data/no_finmind_data.json`**:
-   - FinMind 的二次確認快取。若某檔股票連續兩次向 FinMind 請求財報都回傳完全無資料，會被標記為 `confirmed` 並快取 90 天，大幅節省 API Token。
+   - FinMind 的「整檔股票空值」快取。若某檔股票 5 張財報表向 FinMind 請求都回傳完全無資料，會被標記並進行兩階段確認，最終快取 90 天，大幅節省 API Token。
 6. **`data/skip_dates.json`**:
    - 官方爬蟲 (TWSE/TAIFEX) 的跳過快取機制，取代了早期儲存空 CSV 的做法。
    - 紀錄每個資料集 (如 `chips`, `margin`) 確定無資料或格式異常的日期，避免日後重複請求 API，並清楚註記了 `reason` (如 `market_closed`, `no_data`, `unexpected_format`, `empty_response`) 以供除錯。
+7. **`data/missing_fm_datasets.json`**:
+   - FinMind 的「局部財報缺漏」快取。若某檔股票只有部分財報 (例如剛上市缺股利) 無資料，會記錄個別缺漏的表單，90 天內直接略過該表單的下載，補足了 `no_finmind_data.json` 只能全有全無的限制。
 
 ---
 
