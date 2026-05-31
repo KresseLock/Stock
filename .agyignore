@@ -15,6 +15,7 @@ data/
 !feature_cols.json
 !data/failed_dates.json
 !data/no_finmind_data.json
+!data/skip_dates.json
 
 # ==========================================
 # ★ AI 學習特許區 (白名單)

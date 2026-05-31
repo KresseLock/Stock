@@ -17,6 +17,7 @@ data/features/
 !feature_cols.json
 !data/failed_dates.json
 !data/no_finmind_data.json
+!data/skip_dates.json
 
 # 2. 忽略模型權重與機器學習產出
 models/

@@ -172,7 +172,7 @@ def _load_chips_one_day(date_str: str, target_stocks: list) -> pd.DataFrame:
     return df[["stock_id", "date"] + [c for c in ["fini_net", "sitc_net", "dealer_net", "inst_net_total"] if c in df.columns]]
 
 def _compute_chips_features(df_chips: pd.DataFrame) -> pd.DataFrame:
-    df_chips = df_chips.sort_values(["stock_id", "date"])
+    df_chips = df_chips.sort_values(["stock_id", "date"]).reset_index(drop=True)
     for col in ["fini_net", "sitc_net", "dealer_net", "inst_net_total"]:
         if col not in df_chips.columns: continue
         sign_col = f"{col}_sign"
@@ -402,10 +402,19 @@ def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
         df_fh = _read_csv(os.path.join(DATA_DIR, "raw_chips", f"{date_str}_fini_holding.csv"))
         if not df_fh.empty:
             df_fh["證券代號"] = df_fh["證券代號"].astype(str).str.strip()
-            df_fh = df_fh[df_fh["證券代號"].isin(target_stocks)][["證券代號", "外資及陸資投資持股率"]]
-            df_fh = df_fh.rename(columns={"證券代號": "stock_id", "外資及陸資投資持股率": "fini_holding_pct"})
-            df_fh["fini_holding_pct"] = _to_float(df_fh["fini_holding_pct"])
-            merged = pd.merge(merged, df_fh, on="stock_id", how="left")
+            
+            # 支援舊版 CT152816 與新版 MI_QFIIS 的欄位名稱
+            col_name = "外資及陸資投資持股率"
+            if "全體外資及陸資持股比率" in df_fh.columns:
+                col_name = "全體外資及陸資持股比率"
+                
+            if col_name in df_fh.columns:
+                df_fh = df_fh[df_fh["證券代號"].isin(target_stocks)][["證券代號", col_name]]
+                df_fh = df_fh.rename(columns={"證券代號": "stock_id", col_name: "fini_holding_pct"})
+                df_fh["fini_holding_pct"] = _to_float(df_fh["fini_holding_pct"])
+                merged = pd.merge(merged, df_fh, on="stock_id", how="left")
+            else:
+                print(f"  [警告] fini_holding_pct 欄位找不到，現有欄位: {df_fh.columns.tolist()}")
 
     # C. 信用交易 (以及信用管制)
     if ENABLE_MARGIN:
@@ -482,17 +491,14 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
         if not sh.empty:
             print("  合入持股分級資料...")
             sh = sh[sh["stock_id"].isin(target_stocks)].copy()
-            idx = pd.MultiIndex.from_product(
-                [sorted(df["stock_id"].unique()), sorted(df["date"].unique())],
-                names=["stock_id", "date"]
-            )
-            sh_daily = (sh.rename(columns={"sh_date": "date"})
-                          .set_index(["stock_id", "date"])
-                          .reindex(idx)
-                          .groupby(level=0).ffill()
-                          .reset_index())
-            sh_cols = ["stock_id", "date", "big_holder_pct", "small_holder_pct", "holder_hhi"]
-            df = pd.merge(df, sh_daily[[c for c in sh_cols if c in sh_daily.columns]], on=["stock_id", "date"], how="left")
+            # 使用 pd.merge + ffill 避免 MultiIndex 產生超大稀疏矩陣
+            base_dates = df[["stock_id", "date"]].drop_duplicates()
+            sh = sh.rename(columns={"sh_date": "date"})
+            sh_daily = pd.merge(base_dates, sh, on=["stock_id", "date"], how="left")
+            sh_daily = sh_daily.sort_values(["stock_id", "date"])
+            cols_to_fill = ["big_holder_pct", "small_holder_pct", "holder_hhi"]
+            sh_daily[cols_to_fill] = sh_daily.groupby("stock_id")[cols_to_fill].ffill()
+            df = pd.merge(df, sh_daily[["stock_id", "date"] + [c for c in cols_to_fill if c in sh_daily.columns]], on=["stock_id", "date"], how="left")
 
     # Step 4: FinMind 基本面 (E, 月/季更 ffill)
     if ENABLE_FINMIND:

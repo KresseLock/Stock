@@ -20,9 +20,9 @@ import traceback
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
-PASS = "✅ PASS"
-FAIL = "❌ FAIL"
-WARN = "⚠️  WARN"
+PASS = " PASS"
+FAIL = " FAIL"
+WARN = "  WARN"
 
 results = []
 
@@ -322,7 +322,7 @@ def test_parquet_integrity():
         
     msg = f"parquet 正常，{len(df):,} 筆，{len(df.columns)} 欄"
     if warnings:
-        msg += f" (⚠️ 警告: 缺少 {warnings}，可能爬蟲跳過歷史下載)"
+        msg += f" ( 警告: 缺少 {warnings}，可能爬蟲跳過歷史下載)"
         
     assert len(df) > 1000, f"資料筆數過少: {len(df)}"
     return msg
@@ -384,7 +384,7 @@ log_path = os.path.join(BASE_DIR, "test_pipeline.log")
 with open(log_path, "w", encoding="utf-8") as f:
     f.write(log_content + "\n")
 
-print(f"\n  📝 測試報告已完整匯出至: {log_path}\n")
+print(f"\n   測試報告已完整匯出至: {log_path}\n")
 
 if failed > 0:
     sys.exit(1)

@@ -119,5 +119,67 @@ def check_and_clean_finmind_data():
         print("恭喜！所有現存的 FinMind 資料欄位皆完好無損，不需重抓！")
     print("==================================================")
 
+def check_and_clean_twse_data():
+    twse_dirs = ["raw_price", "raw_chips", "raw_margin", "raw_twse_per", "raw_taifex"]
+    deleted_count = 0
+    checked_count = 0
+
+    print("==================================================")
+    print("  啟動 證交所/期交所 歷史資料完整性檢查與修復工具")
+    print("==================================================")
+    
+    for d in twse_dirs:
+        dir_path = os.path.join(DATA_DIR, d)
+        if not os.path.exists(dir_path):
+            continue
+            
+        all_files = glob.glob(os.path.join(dir_path, "*.csv"))
+        for file_path in all_files:
+            filename = os.path.basename(file_path)
+            checked_count += 1
+            
+            try:
+                size = os.path.getsize(file_path)
+                if size <= 3:
+                    print(f"[異常] {d}/{filename} 檔案大小極小(<=3 bytes) -> 刪除舊版空檔標記！")
+                    os.remove(file_path)
+                    deleted_count += 1
+                    continue
+                    
+                df = pd.read_csv(file_path, encoding="utf-8-sig", dtype=str)
+                
+                if df.empty:
+                    print(f"[異常] {d}/{filename} 裡面沒有任何數據 (空表) -> 刪除舊版空檔標記！")
+                    os.remove(file_path)
+                    deleted_count += 1
+                    continue
+                    
+                # 簡單防呆：判斷是否是不小心存成了 HTML 錯誤頁面 (通常欄位數量極少且沒有預期的證券代號)
+                cols = list(df.columns)
+                if len(cols) == 1 and ("html" in cols[0].lower() or "很抱歉" in cols[0]):
+                    print(f"[異常] {d}/{filename} 疑似存成錯誤網頁內容 -> 刪除檔案！")
+                    os.remove(file_path)
+                    deleted_count += 1
+                    continue
+                    
+            except Exception as e:
+                if os.path.getsize(file_path) <= 3:
+                    print(f"[異常] {d}/{filename} 檔案大小極小無法讀取 -> 刪除舊版空檔標記！")
+                    os.remove(file_path)
+                    deleted_count += 1
+                    continue
+                else:
+                    print(f"[損毀] {d}/{filename} 無法讀取 ({e}) -> 刪除檔案！")
+                    os.remove(file_path)
+                    deleted_count += 1
+                    continue
+                
+    print("\n==================================================")
+    print(f"證交所資料檢查完畢！")
+    print(f"共檢查 {checked_count} 個官方 CSV 檔案。")
+    print(f"共發現並刪除 {deleted_count} 個異常/舊版空檔檔案。")
+    print("==================================================\n")
+
 if __name__ == "__main__":
     check_and_clean_finmind_data()
+    check_and_clean_twse_data()

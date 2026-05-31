@@ -74,6 +74,9 @@
    - TWSE/TAIFEX 爬蟲的失敗計數器。若某日期抓取失敗超過 3 次，系統會將其判定為「無開市/假補班」，未來執行時會直接略過，避免無窮重試。
 5. **`data/no_finmind_data.json`**:
    - FinMind 的二次確認快取。若某檔股票連續兩次向 FinMind 請求財報都回傳完全無資料，會被標記為 `confirmed` 並快取 90 天，大幅節省 API Token。
+6. **`data/skip_dates.json`**:
+   - 官方爬蟲 (TWSE/TAIFEX) 的跳過快取機制，取代了早期儲存空 CSV 的做法。
+   - 紀錄每個資料集 (如 `chips`, `margin`) 確定無資料或格式異常的日期，避免日後重複請求 API，並清楚註記了 `reason` (如 `market_closed`, `no_data`, `unexpected_format`, `empty_response`) 以供除錯。
 
 ---
 

@@ -1,0 +1,4058 @@
+{
+  "fini_holding_20200102": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200102": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200103": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200103": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200107": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200107": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200109": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200109": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200109": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200109": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200110": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200110": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200110": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200110": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200113": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200114": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200114": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200114": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200114": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200115": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200116": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200116": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200116": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200116": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200117": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200117": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200117": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200117": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200120": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200130": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200130": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200130": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200130": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200131": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200131": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200131": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200131": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200203": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200203": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200203": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200203": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200204": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200204": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200204": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200204": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200205": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200205": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200205": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200205": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200206": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200206": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200206": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200206": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200207": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200207": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200207": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200207": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200210": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200210": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200210": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200210": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200211": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200211": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200211": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200211": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200212": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200212": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200212": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200212": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200213": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200213": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200213": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200213": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200214": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200214": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200214": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200214": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200217": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200217": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200217": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200217": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200218": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200219": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200219": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200219": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200219": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200220": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200220": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200220": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200220": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200221": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200224": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200224": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200224": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200224": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200225": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200226": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200226": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200226": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200226": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200227": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200227": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200227": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200227": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200302": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200302": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200302": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200302": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200303": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200303": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200303": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200303": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200304": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200304": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200304": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200304": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200305": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200305": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200305": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200305": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200306": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200306": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200306": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200306": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200309": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200309": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200309": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200309": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200310": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200310": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200310": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200310": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200311": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200311": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200311": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200311": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200312": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200312": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200312": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200312": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200313": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200313": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200313": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200313": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200316": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200316": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200316": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200316": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200317": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200317": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200317": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200317": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200318": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200318": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200318": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200318": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200319": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200319": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200319": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200319": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200320": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200320": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200320": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200320": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200323": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200323": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200323": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200323": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200324": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200324": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200324": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200324": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200325": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200325": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200325": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200325": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200326": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200326": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200326": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200326": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200327": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200327": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200327": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200327": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200330": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200330": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200330": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200330": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200331": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200331": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200331": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200331": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200401": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200401": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200401": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200401": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200406": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200406": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200406": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200406": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200407": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200407": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200407": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200407": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200408": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200408": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200408": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200408": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200409": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200409": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200409": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200409": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200410": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200410": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200410": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200410": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200413": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200413": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200413": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200413": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200414": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200414": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200414": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200414": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200415": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200415": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200415": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200415": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200416": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200416": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200416": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200416": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200417": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200417": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200417": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200417": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200420": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200420": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200420": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200420": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200421": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200421": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200421": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200421": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200422": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200422": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200422": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200422": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200423": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200423": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200423": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200423": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200424": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200424": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200424": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200424": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200427": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200427": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200427": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200427": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200428": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200428": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200428": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200428": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200429": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200429": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200429": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200429": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200430": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200430": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200430": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200430": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200504": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200504": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200504": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200504": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200505": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200505": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200505": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200505": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200506": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200506": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200506": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200506": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200507": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200507": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200507": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200507": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200508": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200508": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200508": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200508": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200511": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200511": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200511": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200511": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200512": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200512": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200512": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200512": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200513": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200513": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200513": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200513": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200514": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200514": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200514": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200514": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200515": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200515": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200515": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200515": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200518": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200518": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200518": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200518": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200519": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200519": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200519": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200519": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200520": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200520": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200520": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200520": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200521": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200521": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200521": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200521": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200522": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200522": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200522": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200522": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200525": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200525": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200525": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200525": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200526": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200526": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200526": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200526": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200527": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200527": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200527": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200527": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200528": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200528": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200528": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200528": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200529": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200529": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200529": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200529": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200601": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200601": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200601": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200601": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200602": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200602": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200602": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200602": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200603": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200603": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200603": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200603": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200604": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200604": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200604": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200604": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200605": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200605": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200605": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200605": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200608": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200608": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200608": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200608": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200609": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200609": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200609": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200609": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200610": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200610": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200610": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200610": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200611": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200611": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200611": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200611": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200612": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200612": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200612": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200612": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200615": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200615": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200615": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200615": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200616": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200616": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200616": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200616": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200617": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200617": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200617": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200617": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200618": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200618": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200618": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200618": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200619": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200619": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200619": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200619": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200622": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200622": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200622": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200622": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200623": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200623": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200623": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200623": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200624": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200624": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200624": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200624": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200629": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200629": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200629": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200629": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200630": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200630": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200630": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200630": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200701": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200701": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200701": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200701": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200702": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200702": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200702": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200702": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200703": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200703": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200703": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200703": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200706": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200706": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200706": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200706": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200707": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200707": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200707": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200707": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200708": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200708": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200708": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200708": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200709": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200709": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200709": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200709": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200710": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200710": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200710": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200710": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200713": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200713": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200713": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200713": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200714": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200714": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200714": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200714": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200715": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200715": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200715": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200715": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200716": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200716": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200716": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200716": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200717": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200717": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200717": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200717": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200720": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200720": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200720": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200720": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200721": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200721": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200721": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200721": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200722": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200722": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200722": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200722": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200723": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200723": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200723": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200723": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200724": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200724": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200724": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200724": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200727": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200727": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200727": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200727": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200728": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200728": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200728": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200728": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200729": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200729": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200729": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200729": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200730": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200730": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200730": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200730": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200731": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200731": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200731": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200731": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200803": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200803": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200803": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200803": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200804": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200804": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200804": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200804": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200805": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200805": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200805": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200805": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200806": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200806": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200806": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200806": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200807": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200807": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200807": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200807": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200810": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200810": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200810": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200810": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200811": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200811": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200811": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200811": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200812": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200812": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200812": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200812": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200813": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200813": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200813": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200813": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200814": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200814": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200814": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200814": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200817": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200817": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200817": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200817": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200818": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200818": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200818": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200818": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200819": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200819": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200819": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200819": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200820": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200820": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200820": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200820": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200821": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200821": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200821": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200821": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200824": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200824": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200824": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200824": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200825": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200825": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200825": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200825": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200826": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200826": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200826": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200826": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200827": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200827": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200827": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200827": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200828": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200828": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200828": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200828": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200831": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200831": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200831": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200831": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200901": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200901": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200901": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200901": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200902": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200902": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200902": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200902": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200903": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200903": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200903": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200903": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200904": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200904": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200904": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200904": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200907": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200907": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200907": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200907": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200908": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200908": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200908": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200908": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200909": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200909": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200909": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200909": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200910": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200910": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200910": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200910": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200911": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200911": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200911": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200911": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200914": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200914": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200914": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200914": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200915": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200915": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200915": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200915": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200916": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200916": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200916": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200916": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200917": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200917": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200917": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200917": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200918": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200918": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200918": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200918": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200921": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200921": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200921": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200921": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200922": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200922": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200922": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200922": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200923": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200923": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200923": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200923": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200924": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200924": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200924": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200924": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200925": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200925": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200925": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200925": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200928": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200928": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200928": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200928": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200929": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200929": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200929": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200929": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20200930": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20200930": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20200930": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20200930": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201005": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201005": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201005": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201005": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201006": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201006": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201006": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201006": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201007": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201007": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201007": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201007": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201008": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201008": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201008": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201008": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201012": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201012": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201012": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201012": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201013": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201013": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201013": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201013": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201014": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201014": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201014": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201014": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201015": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201015": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201015": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201015": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201016": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201016": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201016": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201016": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201019": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201019": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201019": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201019": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201020": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201020": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201020": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201020": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201021": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201021": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201021": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201021": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201022": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201022": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201022": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201022": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201023": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201023": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201023": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201023": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201026": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201026": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201026": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201026": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201027": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201027": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201027": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201027": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201028": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201028": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201028": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201028": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201029": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201029": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201029": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201029": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201030": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201030": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201030": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201030": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201102": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201102": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201102": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201102": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201103": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201103": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201103": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201103": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201104": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201104": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201104": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201104": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201105": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201105": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201105": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201105": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201106": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201109": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201109": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201109": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201109": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201110": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201110": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201110": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201110": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201111": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201111": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201111": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201111": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201112": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201112": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201112": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201112": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201113": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201116": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201116": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201116": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201116": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201117": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201117": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201117": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201117": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201118": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201118": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201118": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201118": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201119": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201119": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201119": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201119": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201120": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201123": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201123": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201123": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201123": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201124": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201124": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201124": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201124": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201125": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201125": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201125": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201125": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201126": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201126": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201126": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201126": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201127": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201127": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201127": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201127": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201130": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201130": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201130": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201130": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201201": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201201": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201201": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201201": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201202": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201202": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201202": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201202": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201203": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201203": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201203": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201203": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201204": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201204": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201204": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201204": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201207": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201207": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201207": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201207": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201208": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201208": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201208": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201208": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201209": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201209": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201209": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201209": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201210": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201210": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201210": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201210": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201211": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201211": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201211": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201211": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201214": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201214": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201214": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201214": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201215": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201215": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201215": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201215": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201216": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201216": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201216": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201216": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201217": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201217": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201217": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201217": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201218": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201221": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201222": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201222": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201222": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201222": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201223": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201223": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201223": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201223": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201224": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201224": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201224": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201224": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201225": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201228": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201228": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201228": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201228": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201229": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201229": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201229": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201229": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201230": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201230": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201230": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201230": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20201231": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20201231": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20201231": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20201231": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210104": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210104": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210104": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210104": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210105": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210105": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210105": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210105": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210106": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210107": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210107": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210107": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210107": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210108": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210111": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210111": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210111": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210111": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210112": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210112": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210112": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210112": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210113": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210114": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210114": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210114": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210114": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210115": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "taifex_inst_20210118": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "daytrading_20210118": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210118": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210118": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  }
+}
