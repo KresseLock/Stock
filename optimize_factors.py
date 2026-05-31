@@ -51,6 +51,12 @@ BACKTEST_DATE  = "20250801"
 # - Random Search: 需要 10000~100000 輪才能媲美
 MAX_ITERATIONS = 400
 
+# 提早結束條件：連續 N 輪未找到更好的參數則提早結束 (None 或 0 代表不提早結束)
+EARLY_STOPPING_ROUNDS = None
+
+# 執行緒數量 (預設最多 4 核，避免 OOM)
+N_JOBS = min(os.cpu_count() or 1, 4)
+
 # 預測哪幾天的勝率作為評分基準
 FORECAST_DAYS  = [1, 2, 3]
 
@@ -94,22 +100,31 @@ BOUNDS = {
 # ║                 核心邏輯區                            ║
 # ╚══════════════════════════════════════════════════════╝
 
+import re
+
 # 識別 TA 欄位前綴 (這些欄位每輪都需重新計算)
 _TA_PREFIXES = (
-    "ma_", "boll_", "rsi", "macd", "kd_k", "kd_d", "atr", "vol_ma", "vol_ratio",
-    "ret1", "ret5", "amplitude", "ma_short_over_long"
+    "boll_", "rsi", "macd", "atr", "vol_ma", "vol_ratio",
+    "ret1", "ret5", "amplitude"
 )
+_KD_PATTERN = re.compile(r'^[kd]\d+$')
+_MA_PATTERN = re.compile(r'^ma\d+$')
 
 def _is_ta_col(col: str) -> bool:
+    if _KD_PATTERN.match(col): return True
+    if _MA_PATTERN.match(col): return True
+    if col == "ma_short_over_long": return True
     return any(col.startswith(p) for p in _TA_PREFIXES)
 
 
 def _decode_params(trial) -> dict:
     """從 optuna trial 解碼出真正的參數值（將偏移量轉為絕對值）"""
-    ma_short   = trial.suggest_int("ma_short",        *BOUNDS["ma_short"])
-    ma_mid1    = ma_short + trial.suggest_int("ma_mid1_offset",  *BOUNDS["ma_mid1_offset"])
-    ma_mid2    = ma_mid1  + trial.suggest_int("ma_mid2_offset",  *BOUNDS["ma_mid2_offset"])
-    ma_long    = ma_mid2  + trial.suggest_int("ma_long_offset",  *BOUNDS["ma_long_offset"])
+    ma_short = trial.suggest_int("ma_short", *BOUNDS["ma_short"])
+    ma_mid1  = ma_short + trial.suggest_int("ma_mid1_offset", *BOUNDS["ma_mid1_offset"])
+    ma_mid2  = ma_mid1  + trial.suggest_int("ma_mid2_offset", *BOUNDS["ma_mid2_offset"])
+    ma_long  = ma_mid2  + trial.suggest_int("ma_long_offset", *BOUNDS["ma_long_offset"])
+    
+    assert ma_mid1 > ma_short and ma_mid2 > ma_mid1 and ma_long > ma_mid2, "均線週期必須嚴格遞增"
 
     macd_fast  = trial.suggest_int("macd_fast",        *BOUNDS["macd_fast"])
     macd_slow  = macd_fast + trial.suggest_int("macd_slow_offset", *BOUNDS["macd_slow_offset"])
@@ -141,59 +156,64 @@ def _decode_params(trial) -> dict:
 def compute_ta(df: pd.DataFrame, p: dict) -> pd.DataFrame:
     """根據參數 p 從 OHLCV 計算所有 TA 特徵（純記憶體操作）"""
     result_dfs = []
-    for stock_id, g in df.groupby("stock_id"):
-        g = g.sort_values("date").copy()
+    for stock_id, g_orig in df.groupby("stock_id"):
+        g = g_orig.sort_values("date")
         c, h, l, v, o = (g[col].astype(float) for col in ["close","high","low","volume","open"])
 
+        new_features = {}
         # 均線
-        for w, name in [(p["ma_short"],"ma_s"), (p["ma_mid1"],"ma_m1"),
-                        (p["ma_mid2"],"ma_m2"), (p["ma_long"],"ma_l")]:
-            g[name] = c.rolling(w, min_periods=1).mean()
-        g["ma_short_over_long"] = g["ma_s"] / (g["ma_l"] + 1e-9)
+        short, long_ = p["ma_short"], p["ma_long"]
+        for w in [p["ma_short"], p["ma_mid1"], p["ma_mid2"], p["ma_long"]]:
+            new_features[f"ma{w}"] = c.rolling(w, min_periods=1).mean()
+        new_features["ma_short_over_long"] = new_features[f"ma{short}"] / (new_features[f"ma{long_}"] + 1e-9)
 
         # 布林通道
         bm = c.rolling(p["boll_window"], min_periods=1).mean()
         bs = c.rolling(p["boll_window"], min_periods=5).std()
-        g["boll_mid"] = bm
-        g["boll_up"]  = bm + p["boll_std"] * bs
-        g["boll_dn"]  = bm - p["boll_std"] * bs
-        g["boll_pct"] = (c - g["boll_dn"]) / (g["boll_up"] - g["boll_dn"] + 1e-9)
+        new_features["boll_mid"] = bm
+        new_features["boll_up"]  = bm + p["boll_std"] * bs
+        new_features["boll_dn"]  = bm - p["boll_std"] * bs
+        new_features["boll_pct"] = (c - new_features["boll_dn"]) / (new_features["boll_up"] - new_features["boll_dn"] + 1e-9)
 
         # RSI
         delta = c.diff()
         gain  = delta.clip(lower=0).rolling(p["rsi_period"], min_periods=1).mean()
         loss  = (-delta.clip(upper=0)).rolling(p["rsi_period"], min_periods=1).mean()
-        g["rsi"] = 100 - 100 / (1 + gain / (loss + 1e-9))
+        new_features[f"rsi{p['rsi_period']}"] = 100 - 100 / (1 + gain / (loss + 1e-9))
 
         # MACD
         ef = c.ewm(span=p["macd_fast"],   adjust=False).mean()
         es = c.ewm(span=p["macd_slow"],   adjust=False).mean()
-        g["macd"]      = ef - es
-        g["macd_sig"]  = g["macd"].ewm(span=p["macd_signal"], adjust=False).mean()
-        g["macd_hist"] = g["macd"] - g["macd_sig"]
+        macd = ef - es
+        macd_sig  = macd.ewm(span=p["macd_signal"], adjust=False).mean()
+        new_features["macd"]      = macd
+        new_features["macd_sig"]  = macd_sig
+        new_features["macd_hist"] = macd - macd_sig
 
         # KD
         ln = l.rolling(p["kd_period"], min_periods=1).min()
         hn = h.rolling(p["kd_period"], min_periods=1).max()
         rsv = (c - ln) / (hn - ln + 1e-9) * 100
-        g["kd_k"] = rsv.ewm(com=2, adjust=False).mean()
-        g["kd_d"] = g["kd_k"].ewm(com=2, adjust=False).mean()
+        k_col = f"k{p['kd_period']}"
+        d_col = f"d{p['kd_period']}"
+        new_features[k_col] = rsv.ewm(com=2, adjust=False).mean()
+        new_features[d_col] = new_features[k_col].ewm(com=2, adjust=False).mean()
 
         # ATR
         tr = pd.concat([h-l, (h-c.shift()).abs(), (l-c.shift()).abs()], axis=1).max(axis=1)
-        g["atr"]     = tr.rolling(p["atr_period"], min_periods=1).mean()
-        g["atr_pct"] = g["atr"] / (c + 1e-9)
+        new_features[f"atr{p['atr_period']}"]     = tr.rolling(p["atr_period"], min_periods=1).mean()
+        new_features[f"atr{p['atr_period']}_pct"] = new_features[f"atr{p['atr_period']}"] / (c + 1e-9)
 
         # 成交量
-        g["vol_ma"]    = v.rolling(p["vol_ma"], min_periods=1).mean()
-        g["vol_ratio"] = v / (g["vol_ma"] + 1)
+        new_features[f"vol_ma{p['vol_ma']}"]    = v.rolling(p["vol_ma"], min_periods=1).mean()
+        new_features[f"vol_ratio{p['vol_ma']}"] = v / (new_features[f"vol_ma{p['vol_ma']}"] + 1)
 
         # 報酬率
-        g["ret1"]      = c.pct_change(1)
-        g["ret5"]      = c.pct_change(5)
-        g["amplitude"] = (h - l) / (o + 1e-9)
+        new_features["ret1"]      = c.pct_change(1)
+        new_features["ret5"]      = c.pct_change(5)
+        new_features["amplitude"] = (h - l) / (o + 1e-9)
 
-        result_dfs.append(g)
+        result_dfs.append(g.assign(**new_features))
 
     return pd.concat(result_dfs, ignore_index=True)
 
@@ -203,9 +223,11 @@ def compute_chips_features(df: pd.DataFrame, p: dict) -> pd.DataFrame:
     df = df.sort_values(["stock_id", "date"]).copy()
     for col in ["fini_net", "sitc_net", "dealer_net", "inst_net_total"]:
         if col not in df.columns: continue
-        sign = np.sign(df.groupby("stock_id")[col].transform(lambda x: x))
-        df[f"{col}_streak"] = sign.groupby(df["stock_id"]).transform(
-            lambda x: x.groupby((x != x.shift()).cumsum()).cumcount() + 1) * sign
+        sign_col = f"{col}_sign"
+        df[sign_col] = np.sign(df[col])
+        df[f"{col}_streak"] = df.groupby("stock_id")[sign_col].transform(
+            lambda x: x.groupby((x != x.shift()).cumsum()).cumcount() + 1) * df[sign_col]
+        df.drop(columns=[sign_col], inplace=True)
         for w in [p["chips_w1"], p["chips_w2"], p["chips_w3"]]:
             df[f"{col}_sum{w}"] = df.groupby("stock_id")[col].transform(
                 lambda x: x.rolling(w, min_periods=1).sum())
@@ -217,9 +239,9 @@ _STABLE_NON_TA_COLS = [
     "fini_net", "sitc_net", "dealer_net", "inst_net_total",
     "margin_bal", "short_bal", "sbl_bal", "sbl_sell",
     "big_holder_pct", "small_holder_pct", "holder_hhi",
-    "revenue", "EPS", "毛利率", "營業利益率", "稅後淨利率", "ROE", "ROA",
-    "TotalAssets", "TotalLiabilities", "Equity",
-    "OperatingActivitiesCashFlow", "InvestingActivitiesCashFlow", "FinancingActivitiesCashFlow",
+    "revenue", "EPS", "GrossProfit", "OperatingIncome", "IncomeAfterTaxes", "Revenue",
+    "TotalAssets", "Liabilities", "Equity",
+    "CashFlowsFromOperatingActivities", "CashProvidedByInvestingActivities", "CashFlowsProvidedFromFinancingActivities",
     "cash_dividend",
     "PER", "PBR", "dividend_yield", 
     "daytrading_pct", "fini_holding_pct", "margin_quota", "short_quota",
@@ -319,8 +341,17 @@ def print_progress(study, trial):
                   f"本輪={val:.1f}%  最佳={best:.1f}%  "
                   f"(RSI={rsi} MA_short={ma_s} MACD={mf}/{mf+(ms_os or 0)} Boll={bw})"
                   f"{tag}", flush=True)
+
+        if EARLY_STOPPING_ROUNDS is not None and EARLY_STOPPING_ROUNDS > 0:
+            best_trial_number = study.best_trial.number
+            current_trial_number = trial.number
+            rounds_without_improvement = current_trial_number - best_trial_number
+            if rounds_without_improvement >= EARLY_STOPPING_ROUNDS:
+                print(f"\n  [提早結束] 連續 {EARLY_STOPPING_ROUNDS} 次未找到更好的參數，觸發 Early Stopping！", flush=True)
+                study.stop()
     except Exception:
         pass
+
 
 
 def main():
@@ -357,7 +388,7 @@ def main():
 
     # ── 步驟 2: 建立 Optuna study 並執行最佳化 ──────────
     print("[2] 啟動 Optuna 貝葉斯最佳化...")
-    print(f"    (並行數: 6，每 50 輪或出現新最佳解時顯示進度)")
+    print(f"    (並行數: {N_JOBS}，每 50 輪或出現新最佳解時顯示進度)")
     print("-" * 65)
 
     best_holder = {"score": -1.0, "params": {}}
@@ -367,7 +398,7 @@ def main():
         direction="maximize",
         sampler=optuna.samplers.TPESampler(
             seed=42,
-            n_startup_trials=40   # ← 6核並行，建議40筆隨機探索
+            n_startup_trials=40
         ),
     )
     try:
@@ -375,7 +406,7 @@ def main():
             objective, 
             n_trials=MAX_ITERATIONS, 
             callbacks=[print_progress],
-            n_jobs=6
+            n_jobs=N_JOBS
         )
     except KeyboardInterrupt:
         print("\n  [中斷] 使用者按下 Ctrl+C，強制結束最佳化執行緒...")
@@ -417,10 +448,10 @@ def main():
     print(f"  歷史最佳平均勝率: {best_score:.2f}%")
     print("=" * 65)
     print()
-    print("  請將以下參數複製到 run_feature_engineering.py 的設定區：")
+    print("請將以下參數複製到 run_feature_engineering.py 的設定區：")
     print()
     for k, v in best_config.items():
-        print(f"  {k:<25} = {v}")
+        print(f"{k:<20} = {v}")
 
     # ── 儲存結果 ────────────────────────────────────────
     result = {

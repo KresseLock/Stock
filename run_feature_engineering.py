@@ -39,20 +39,20 @@ BACKTEST_MODE = False
 BACKTEST_DATE = ""  # 格式: "YYYYMMDD"，留空則執行時提示輸入
 
 # ── 技術指標參數 ────────────────────────────────────────
-MA_WINDOWS           = [6, 13, 36, 112]
-RSI_PERIOD           = 18
-ATR_PERIOD           = 24
-KD_PERIOD            = 20
-MACD_FAST            = 6
-MACD_SLOW            = 28
-MACD_SIGNAL          = 9
-BOLL_WINDOW          = 12
-BOLL_STD_MULT        = 2.76
-VOL_MA_WINDOW        = 3
+MA_WINDOWS           = [9, 20, 32, 52]
+RSI_PERIOD           = 7
+ATR_PERIOD           = 18
+KD_PERIOD            = 15
+MACD_FAST            = 14
+MACD_SLOW            = 38
+MACD_SIGNAL          = 5
+BOLL_WINDOW          = 35
+BOLL_STD_MULT        = 2.49
+VOL_MA_WINDOW        = 8
 
 # ── 籌碼滾動加總週期 ────────────────────────────────────
 # 法人買賣超「滾動加總」的時間視窗（例如：[3,5,10] = 計算近3日、近5日、近10日的買賣超合計）
-CHIPS_SUM_WINDOWS    = [5, 13, 22]
+CHIPS_SUM_WINDOWS    = [6, 15, 21]
 
 # ── 預測天數設定 ────────────────────────────────────────
 # 產生幾天的「未來標籤」供 LightGBM 訓練
@@ -239,12 +239,12 @@ if __name__ == "__main__":
 
                         y_train = train_df[label]
 
-                        # 訓練 LightGBM (快速版，用於回測比對)
+                        # 訓練 LightGBM (參數已與 train.py 對齊)
                         model = lgb.LGBMRegressor(
-                            n_estimators=300, learning_rate=0.05,
-                            max_depth=5, num_leaves=31,
+                            n_estimators=500, learning_rate=0.03,
+                            max_depth=6, num_leaves=31,
                             subsample=0.8, colsample_bytree=0.8,
-                            random_state=42, n_jobs=-1, verbose=-1
+                            random_state=42 + day, n_jobs=-1, verbose=-1
                         )
                         model.fit(X_train, y_train)
                         preds = model.predict(X_test)

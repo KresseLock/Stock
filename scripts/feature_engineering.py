@@ -129,8 +129,8 @@ def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
     low_n  = l.rolling(KD_PERIOD, min_periods=1).min()
     high_n = h.rolling(KD_PERIOD, min_periods=1).max()
     rsv = (c - low_n) / (high_n - low_n + 1e-9) * 100
-    g["kd_k"] = rsv.ewm(com=2, adjust=False).mean()
-    g["kd_d"] = g["kd_k"].ewm(com=2, adjust=False).mean()
+    g[f"k{KD_PERIOD}"] = rsv.ewm(com=2, adjust=False).mean()
+    g[f"d{KD_PERIOD}"] = g[f"k{KD_PERIOD}"].ewm(com=2, adjust=False).mean()
 
     # ATR (真實波幅)
     tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
@@ -175,10 +175,12 @@ def _compute_chips_features(df_chips: pd.DataFrame) -> pd.DataFrame:
     df_chips = df_chips.sort_values(["stock_id", "date"])
     for col in ["fini_net", "sitc_net", "dealer_net", "inst_net_total"]:
         if col not in df_chips.columns: continue
-        sign = np.sign(df_chips.groupby("stock_id")[col].transform(lambda x: x))
-        df_chips[f"{col}_streak"] = sign.groupby(df_chips["stock_id"]).transform(
+        sign_col = f"{col}_sign"
+        df_chips[sign_col] = np.sign(df_chips[col])
+        df_chips[f"{col}_streak"] = df_chips.groupby("stock_id")[sign_col].transform(
             lambda x: x.groupby((x != x.shift()).cumsum()).cumcount() + 1
-        ) * sign
+        ) * df_chips[sign_col]
+        df_chips.drop(columns=[sign_col], inplace=True)
         for w in CHIPS_SUM_WINDOWS:
             df_chips[f"{col}_sum{w}"] = df_chips.groupby("stock_id")[col].transform(
                 lambda x: x.rolling(w, min_periods=1).sum()
@@ -245,77 +247,99 @@ def _load_shareholding_all() -> pd.DataFrame:
         columns={"資料日期": "sh_date", "證券代號": "stock_id"})
 
 
+def _shift_finmind_date(d, rtype):
+    """
+    動態推移財報日期以消除前視偏差 (Look-ahead Bias)。
+    """
+    if rtype == "rev":
+        # FinMind 月營收的 date 為當月 1 號 (如 2020-01-01)，代表去年 12 月的營收。
+        # 該筆資料最晚於 1 月 10 日發布，所以直接推到同月 10 號即可。
+        return pd.Timestamp(year=d.year, month=d.month, day=10)
+    elif rtype == "stmt":
+        if d.month == 3: return pd.Timestamp(year=d.year, month=5, day=15)
+        elif d.month == 6: return pd.Timestamp(year=d.year, month=8, day=14)
+        elif d.month == 9: return pd.Timestamp(year=d.year, month=11, day=14)
+        elif d.month == 12:
+            # 台灣年報(Q4)最晚申報截止日為隔年 3/31。
+            # 雖然部分大型股(如台積電)可能提早在2月甚至1月公告，
+            # 但為了絕對避免前視偏差，此處刻意採用最保守的 3/31 作為邊界，不作提前。
+            return pd.Timestamp(year=d.year+1, month=3, day=31)
+        return d + pd.Timedelta(days=45)
+    return d
+
 # ══════════════════════════════════════════════════════
 # E. 基本面與估值 (FinMind)
 # ══════════════════════════════════════════════════════
 def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd.DataFrame:
-    df_out = pd.DataFrame({"date": all_dates, "stock_id": stock_id})
+    merge_dfs = []
 
     # 1. 月營收
     rev_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_monthly_revenue.csv")
     df_rev = _read_csv(rev_path)
     if not df_rev.empty:
-        df_rev["date"]    = pd.to_datetime(df_rev["date"])
+        df_rev["date"]    = pd.to_datetime(df_rev["date"]).apply(lambda x: _shift_finmind_date(x, "rev"))
         df_rev["revenue"] = _to_float(df_rev["revenue"])
-        df_rev = df_rev[["date", "revenue"]].drop_duplicates("date")
-        df_out = pd.merge(df_out, df_rev, on="date", how="outer").sort_values("date")
-        df_out["revenue"] = df_out["revenue"].ffill()
+        merge_dfs.append(df_rev[["date", "revenue"]].drop_duplicates("date"))
 
     # 2. 綜合損益表 (季報)
     stmt_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_financial_stmt.csv")
     df_stmt = _read_csv(stmt_path)
     if not df_stmt.empty:
-        df_stmt["date"]  = pd.to_datetime(df_stmt["date"])
+        df_stmt["date"]  = pd.to_datetime(df_stmt["date"]).apply(lambda x: _shift_finmind_date(x, "stmt"))
         df_stmt["value"] = _to_float(df_stmt["value"])
         piv = df_stmt.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
-        for c in ["EPS", "毛利率", "營業利益率", "稅後淨利率", "ROE", "ROA"]:
+        for c in ["EPS", "GrossProfit", "OperatingIncome", "IncomeAfterTaxes", "Revenue"]:
             if c in piv.columns: keep_cols.append(c)
-        piv = piv[keep_cols]
-        df_out = pd.merge(df_out, piv, on="date", how="outer").sort_values("date")
-        for c in keep_cols:
-            if c != "date": df_out[c] = df_out[c].ffill()
+        merge_dfs.append(piv[keep_cols])
 
     # 3. 資產負債表 (季報)
     bal_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_balance_sheet.csv")
     df_bal = _read_csv(bal_path)
     if not df_bal.empty:
-        df_bal["date"]  = pd.to_datetime(df_bal["date"])
+        df_bal["date"]  = pd.to_datetime(df_bal["date"]).apply(lambda x: _shift_finmind_date(x, "stmt"))
         df_bal["value"] = _to_float(df_bal["value"])
         piv = df_bal.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
-        for c in ["TotalAssets", "TotalLiabilities", "Equity"]:
+        for c in ["TotalAssets", "Liabilities", "Equity"]:
             if c in piv.columns: keep_cols.append(c)
-        piv = piv[keep_cols]
-        df_out = pd.merge(df_out, piv, on="date", how="outer").sort_values("date")
-        for c in keep_cols:
-            if c != "date": df_out[c] = df_out[c].ffill()
+        merge_dfs.append(piv[keep_cols])
 
     # 4. 現金流量表 (季報)
     cf_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_cashflow.csv")
     df_cf = _read_csv(cf_path)
     if not df_cf.empty:
-        df_cf["date"]  = pd.to_datetime(df_cf["date"])
+        df_cf["date"]  = pd.to_datetime(df_cf["date"]).apply(lambda x: _shift_finmind_date(x, "stmt"))
         df_cf["value"] = _to_float(df_cf["value"])
         piv = df_cf.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
-        for c in ["OperatingActivitiesCashFlow", "InvestingActivitiesCashFlow", "FinancingActivitiesCashFlow"]:
+        for c in ["CashFlowsFromOperatingActivities", "CashProvidedByInvestingActivities", "CashFlowsProvidedFromFinancingActivities"]:
             if c in piv.columns: keep_cols.append(c)
-        piv = piv[keep_cols]
-        df_out = pd.merge(df_out, piv, on="date", how="outer").sort_values("date")
-        for c in keep_cols:
-            if c != "date": df_out[c] = df_out[c].ffill()
+        merge_dfs.append(piv[keep_cols])
 
     # 5. 股利政策 (年/季)
     div_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_dividend.csv")
     df_div = _read_csv(div_path)
     if not df_div.empty:
+        # 注：股利(cash_dividend)通常來自宣告日或除權息日，FinMind 提供之 date 多為已知發布日
+        # 若為決議年度，後續除息日也多半於當年 6~8 月前發生，因此不強制推移，直接使用其 date。
         df_div["date"]  = pd.to_datetime(df_div["date"])
         df_div["value"] = _to_float(df_div["CashEarningsDistribution"]) if "CashEarningsDistribution" in df_div.columns else np.nan
         df_div = df_div[["date", "value"]].dropna().drop_duplicates("date").rename(columns={"value": "cash_dividend"})
-        df_out = pd.merge(df_out, df_div, on="date", how="outer").sort_values("date")
-        df_out["cash_dividend"] = df_out["cash_dividend"].ffill()
+        merge_dfs.append(df_div)
 
+    if not merge_dfs:
+        return pd.DataFrame({"date": all_dates, "stock_id": stock_id})
+
+    # 先組合所有可能的日期 (交易日 + 財報發布日)，再一次性 merge 與 ffill
+    all_report_dates = pd.concat([mdf["date"] for mdf in merge_dfs]).drop_duplicates()
+    full_dates = pd.DatetimeIndex(sorted(set(all_dates) | set(all_report_dates)))
+    df_out = pd.DataFrame({"date": full_dates, "stock_id": stock_id})
+
+    for mdf in merge_dfs:
+        df_out = pd.merge(df_out, mdf, on="date", how="left")
+
+    df_out = df_out.sort_values("date").ffill()
     df_out = df_out[df_out["date"].isin(all_dates)].copy()
     return df_out
 

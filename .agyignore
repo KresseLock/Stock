@@ -9,6 +9,13 @@ data/
 *.xlsx
 *.json
 
+# 允許 AI 讀取重要的設定與快取 JSON 檔
+!best_factors.json
+!stock_categories.json
+!feature_cols.json
+!data/failed_dates.json
+!data/no_finmind_data.json
+
 # ==========================================
 # ★ AI 學習特許區 (白名單)
 # 允許 AI 讀取 sample_data 資料夾內的微型樣本

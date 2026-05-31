@@ -45,6 +45,10 @@ def main():
     if df_latest.empty:
         print("[錯誤] 最新日期無自選股資料，請確認 Stocks.txt 與特徵矩陣是否對應。")
         return
+        
+    missing_in_latest = set(watchlist) - set(df_latest["stock_id"])
+    if missing_in_latest:
+        print(f"  [警告] 以下股票在最新日期無資料，跳過預測: {sorted(missing_in_latest)}")
 
     target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     ignore_cols = ["stock_id", "date"] + target_cols
@@ -61,8 +65,8 @@ def main():
         numeric_cols = df_latest.select_dtypes(include=[np.number, bool]).columns
         feature_cols = [c for c in numeric_cols if c not in ignore_cols]
 
-    # 以固定欄位 reindex，缺少的欄位補 NaN（LightGBM 能處理）
-    X_latest = df_latest.reindex(columns=feature_cols)
+    # 以固定欄位 reindex，缺少的欄位補 NaN（LightGBM 能處理），並統一轉為 float32
+    X_latest = df_latest.reindex(columns=feature_cols).astype(np.float32)
     
     results = df_latest[["stock_id"]].copy()
     if "close" in df_latest.columns:
@@ -105,8 +109,9 @@ def main():
     if os.path.exists(price_file):
         try:
             df_price = pd.read_csv(price_file, usecols=["證券代號", "證券名稱"], dtype=str)
-            for _, r in df_price.iterrows():
-                stock_names[r["證券代號"].strip()] = r["證券名稱"].strip()
+            df_price["證券代號"] = df_price["證券代號"].str.strip()
+            df_price["證券名稱"] = df_price["證券名稱"].str.strip()
+            stock_names = df_price.set_index("證券代號")["證券名稱"].to_dict()
         except Exception:
             pass
 
@@ -128,6 +133,8 @@ def main():
         # 簡單趨勢判定
         if d1 > 0 and d2 > d1 and d3 > d2: trend = "強勢多頭 (連漲)"
         elif d1 < 0 and d2 < d1 and d3 < d2: trend = "強勢空頭 (連跌)"
+        elif d1 > 0 and d3 > 0: trend = "偏多"
+        elif d1 < 0 and d3 < 0: trend = "偏空"
         elif d3 > 0: trend = "震盪偏多"
         else: trend = "震盪偏空"
             

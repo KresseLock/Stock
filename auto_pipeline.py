@@ -42,13 +42,16 @@ RUN_OPTIMIZATION    = True
 FALLBACK_TO_DEFAULT = True
 
 # 最佳化迭代次數 (此處可覆寫 optimize_factors.py 裡的 MAX_ITERATIONS)
-OPTIMIZATION_TRIALS = 400
+OPTIMIZATION_TRIALS = 1000
+
+# 提早結束機制 (Early Stopping)：連續 N 輪未找到更好的解就提早結束 (None=不提早結束)
+EARLY_STOPPING_ROUNDS = 250
 
 # ── 回測切割日期 ────────────────────────────────────────
 # 最佳化使用此日期之「前」的資料訓練，之「後」的資料評估勝率。
 # 建議設為「約一年前」：樣本充足，又能反映近期市場規律。
 # 設為 None 時，程式自動計算為「今日減一年」。
-BACKTEST_DATE = None   # None = 自動設為一年前 | 或填入字串如 "20250101"
+BACKTEST_DATE = "20250801"   # None = 自動設為一年前 | 或填入字串如 "20250101"
 
 # ── 步驟 3 設定：特徵工程時間區間 ──────────────────────
 START_DATE = datetime.date(2020, 1, 1)   # 歷史回溯起點
@@ -155,9 +158,12 @@ def step1_optimize(bt: str):
 
     # 覆寫最佳化模組的設定 (統一由 auto_pipeline.py 控制)
     of_module.MAX_ITERATIONS = OPTIMIZATION_TRIALS
+    of_module.EARLY_STOPPING_ROUNDS = EARLY_STOPPING_ROUNDS
     of_module.BACKTEST_DATE  = bt
     print(f"  [注意] 最佳化期間進度輸出可能因多執行緒而順序不一，屬正常現象")
     print(f"  開始 Optuna 貝葉斯最佳化，共 {OPTIMIZATION_TRIALS} 輪...")
+    if EARLY_STOPPING_ROUNDS:
+        print(f"  (啟用 Early Stopping: 連續 {EARLY_STOPPING_ROUNDS} 輪無進展則提早結束)")
     print(f"  回測切割日期: {bt} (訓練/評估分界點)")
     print(f"  (每 50 輪或出現新最佳解時顯示進度)")
     of_module.main()
@@ -167,7 +173,7 @@ def step2_load_params() -> dict:
     """步驟 2: 讀取最佳參數並套用到特徵工程模組"""
     if not os.path.exists(BEST_FACTORS_PATH):
         if FALLBACK_TO_DEFAULT:
-            print("  [提示] 找不到 best_factors.json，使用預設因子參數繼續。")
+            print("  [提示] 找不到 best_factors.json，將不會覆寫 feature_engineering，直接使用其預設因子參數繼續。")
             return {}
         else:
             raise FileNotFoundError(

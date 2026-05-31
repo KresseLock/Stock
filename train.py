@@ -47,7 +47,8 @@ def train_model(df, feature_cols, target_col, days_ahead):
         subsample=0.8,
         colsample_bytree=0.8,
         random_state=42 + days_ahead,
-        n_jobs=-1
+        n_jobs=-1,
+        verbose=-1
     )
     
     model.fit(
@@ -96,6 +97,9 @@ def main():
     ignore_cols = ["stock_id", "date"] + target_cols
     numeric_cols = df.select_dtypes(include=[np.number, bool]).columns
     feature_cols = [c for c in numeric_cols if c not in ignore_cols]
+    
+    # 統一將特徵轉為 float32，避免 inference.py 推論時因 bool/float 型別不一致報錯
+    df[feature_cols] = df[feature_cols].astype(np.float32)
     
     print(f"  總樣本數: {len(df)}")
     print(f"  特徵數量: {len(feature_cols)}")
