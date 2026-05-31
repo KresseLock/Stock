@@ -4078,5 +4078,13 @@
   "daytrading_20210120": {
     "reason": "unexpected_format",
     "confirmed_at": "2026-05-31"
+  },
+  "fini_holding_20210120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
+  },
+  "credit_limit_20210120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-05-31"
   }
 }
