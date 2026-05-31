@@ -1,0 +1,7 @@
+lightgbm
+numpy
+optuna
+pandas
+requests
+scikit-learn
+taiwan-holidays
