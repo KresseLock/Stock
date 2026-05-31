@@ -25,6 +25,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 
 warnings.filterwarnings("ignore")
 
@@ -62,6 +63,10 @@ ENABLE_MARGIN       = True
 ENABLE_SHAREHOLDING = True
 ENABLE_FINMIND      = True
 ENABLE_SENTIMENT    = True
+
+# 多核心運算設定 (-1 = 使用全部核心)
+N_JOBS              = -1
+
 
 
 # ══════════════════════════════════════════════════════
@@ -473,6 +478,29 @@ def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
     return merged
 
 
+def _transform_levels(g):
+    # 信用交易變化
+    for col in ["margin_bal", "short_bal", "sbl_bal"]:
+        if col in g.columns:
+            g[f"{col}_chg_5d"] = g[col].pct_change(5)
+            g.drop(columns=[col], inplace=True)
+            
+    # 估值指標 Z-score (252天 = 一年)
+    for col in ["PER", "PBR"]:
+        if col in g.columns:
+            g[f"{col}_zscore"] = (g[col] - g[col].rolling(252, min_periods=20).mean()) / (g[col].rolling(252, min_periods=20).std() + 1e-9)
+            g.drop(columns=[col], inplace=True)
+            
+    # 財報成長率 (ffill 後，252天約為 YoY, 21天約為 MoM, 63天約為 QoQ)
+    if "Revenue" in g.columns:
+        g["Revenue_mom"] = g["Revenue"].pct_change(21)
+        g["Revenue_yoy"] = g["Revenue"].pct_change(252)
+    if "EPS" in g.columns:
+        g["EPS_qoq"] = g["EPS"].pct_change(63)
+        g["EPS_yoy"] = g["EPS"].pct_change(252)
+    return g
+
+
 def process_all_history_features(start_date_obj: datetime.date, end_date_obj: datetime.date, override_target_stocks: list = None):
     output_path = os.path.join(FEAT_DIR, "features_combined.parquet")
     
@@ -484,14 +512,19 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     print(f"  目標股票: {len(target_stocks)} 檔")
 
     # Step 1: 逐日建立截面 (自動跳過週六週日)
+    dates_to_process = []
     delta = datetime.timedelta(days=1)
-    curr, all_dfs = start_date_obj, []
+    curr = start_date_obj
     while curr <= end_date_obj:
         if not _is_weekend(curr):
-            day_df = build_features(curr.strftime("%Y%m%d"), target_stocks)
-            if day_df is not None and not day_df.empty:
-                all_dfs.append(day_df)
+            dates_to_process.append(curr.strftime("%Y%m%d"))
         curr += delta
+
+    print(f"  準備處理 {len(dates_to_process)} 個交易日資料，啟動多核心平行處理...")
+    all_dfs = Parallel(n_jobs=N_JOBS)(
+        delayed(build_features)(d, target_stocks) for d in dates_to_process
+    )
+    all_dfs = [df for df in all_dfs if df is not None and not df.empty]
 
     if not all_dfs:
         print("  [錯誤] 找不到任何原始資料，中止。")
@@ -500,9 +533,14 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     df = pd.concat(all_dfs, ignore_index=True)
     df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
 
+    def apply_parallel(df_grouped, func):
+        res = Parallel(n_jobs=N_JOBS)(delayed(func)(group) for _, group in df_grouped)
+        return pd.concat(res, ignore_index=True)
+
     # Step 2: 技術面 (A) + 法人籌碼衍生特徵 (B)
-    print("  計算技術面特徵 (含乖離率)...")
-    df = df.groupby("stock_id", group_keys=False).apply(_compute_ta)
+    print("  計算技術面特徵 (含乖離率)... (多核心運算中)")
+    df = apply_parallel(df.groupby("stock_id"), _compute_ta)
+    df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
     
     print("  計算相對大盤強弱指標 (Cross-Sectional RS)...")
     # 算出每天「全市場」的平均漲跌幅，再拿個股漲跌幅去減，得出相對強弱 (RS)
@@ -548,30 +586,9 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
             df = pd.merge(df, fm_all, on=["stock_id", "date"], how="left")
 
     # Step 5: Convert Level Features to Ratio/Change (避免模型記住股票身份)
-    print("  轉換絕對值特徵為相對比例 (消除 Level Bias)...")
-    def _transform_levels(g):
-        # 信用交易變化
-        for col in ["margin_bal", "short_bal", "sbl_bal"]:
-            if col in g.columns:
-                g[f"{col}_chg_5d"] = g[col].pct_change(5)
-                g.drop(columns=[col], inplace=True)
-                
-        # 估值指標 Z-score (252天 = 一年)
-        for col in ["PER", "PBR"]:
-            if col in g.columns:
-                g[f"{col}_zscore"] = (g[col] - g[col].rolling(252, min_periods=20).mean()) / (g[col].rolling(252, min_periods=20).std() + 1e-9)
-                g.drop(columns=[col], inplace=True)
-                
-        # 財報成長率 (ffill 後，252天約為 YoY, 21天約為 MoM, 63天約為 QoQ)
-        if "Revenue" in g.columns:
-            g["Revenue_mom"] = g["Revenue"].pct_change(21)
-            g["Revenue_yoy"] = g["Revenue"].pct_change(252)
-        if "EPS" in g.columns:
-            g["EPS_qoq"] = g["EPS"].pct_change(63)
-            g["EPS_yoy"] = g["EPS"].pct_change(252)
-        return g
-
-    df = df.groupby("stock_id", group_keys=False).apply(_transform_levels)
+    print("  轉換絕對值特徵為相對比例 (消除 Level Bias)... (多核心運算中)")
+    df = apply_parallel(df.groupby("stock_id"), _transform_levels)
+    df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
     
     # 丟棄其餘的絕對數值財報欄位與額度欄位
     level_cols = ["Revenue", "EPS", "TotalAssets", "Liabilities", "Equity", 

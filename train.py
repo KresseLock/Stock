@@ -17,6 +17,8 @@ import pandas as pd
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
+N_JOBS = -1
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
@@ -52,7 +54,7 @@ def train_model(df, feature_cols, target_col, days_ahead):
         subsample=0.8,
         colsample_bytree=0.8,
         random_state=42 + days_ahead,
-        n_jobs=-1,
+        n_jobs=N_JOBS,
         verbose=-1,
         objective="multiclass",
         num_class=3,

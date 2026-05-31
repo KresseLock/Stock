@@ -33,6 +33,13 @@ sys.path.append(BASE_DIR)
 # ║              一鍵流水線設定區 (請自行調整)            ║
 # ╚══════════════════════════════════════════════════════╝
 
+# ── 電腦資源設定 (多核心運算) ──────────────────────────────
+# -1 代表使用全部核心 (預設最快)
+# 若怕運算時電腦卡頓，可以設定為具體的核心數量 (例如 4 或 8)
+FEAT_N_JOBS       = -1   # 特徵工程平行運算 (影響最鉅)
+TRAIN_N_JOBS      = -1   # LightGBM 訓練模型使用核心數
+OPTUNA_N_JOBS     = 8    # 最佳化時同時啟動的 trial 數量 (建議 2~4 即可，太高會卡死)
+
 # ── 步驟 1 設定：因子最佳化 ─────────────────────────────
 # True  = 每次執行都重新跑貝葉斯最佳化 (耗時數分鐘~數十分鐘)
 # False = 跳過最佳化，直接使用上一次的 best_factors.json
@@ -42,10 +49,10 @@ RUN_OPTIMIZATION    = True
 FALLBACK_TO_DEFAULT = True
 
 # 最佳化迭代次數 (此處可覆寫 optimize_factors.py 裡的 MAX_ITERATIONS)
-OPTIMIZATION_TRIALS = 1000
+OPTIMIZATION_TRIALS = 600
 
 # 提早結束機制 (Early Stopping)：連續 N 輪未找到更好的解就提早結束 (None=不提早結束)
-EARLY_STOPPING_ROUNDS = 250
+EARLY_STOPPING_ROUNDS = 300
 
 # ── 回測切割日期 ────────────────────────────────────────
 # 最佳化使用此日期之「前」的資料訓練，之「後」的資料評估勝率。
@@ -160,6 +167,7 @@ def step1_optimize(bt: str):
     of_module.MAX_ITERATIONS = OPTIMIZATION_TRIALS
     of_module.EARLY_STOPPING_ROUNDS = EARLY_STOPPING_ROUNDS
     of_module.BACKTEST_DATE  = bt
+    of_module.N_JOBS = OPTUNA_N_JOBS
     print(f"  [注意] 最佳化期間進度輸出可能因多執行緒而順序不一，屬正常現象")
     print(f"  開始 Optuna 貝葉斯最佳化，共 {OPTIMIZATION_TRIALS} 輪...")
     if EARLY_STOPPING_ROUNDS:
@@ -222,6 +230,7 @@ def step3_feature_engineering():
         print(f"  清單: {train_stocks[:10]} ... 等 {len(train_stocks)} 檔")
         
     # 直接傳遞 override_target_stocks 給 feature_engineering
+    fe_module.N_JOBS = FEAT_N_JOBS
     process_all_history_features(START_DATE, END_DATE, override_target_stocks=train_stocks)
         
     return train_stocks
@@ -230,6 +239,7 @@ def step3_feature_engineering():
 def step4_train():
     """步驟 4: 訓練 LightGBM 模型"""
     import train as train_module
+    train_module.N_JOBS = TRAIN_N_JOBS
     train_module.main()
 
 

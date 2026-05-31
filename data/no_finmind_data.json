@@ -164,10 +164,26 @@
     "confirmed_date": "2026-05-31"
   },
   "5349": {
+    "status": "confirmed",
+    "confirmed_date": "2026-05-31"
+  },
+  "6119": {
+    "status": "confirmed",
+    "confirmed_date": "2026-05-31"
+  },
+  "6145": {
     "status": "pending",
     "first_seen": "2026-05-31"
   },
-  "6119": {
+  "6255": {
+    "status": "pending",
+    "first_seen": "2026-05-31"
+  },
+  "6286": {
+    "status": "pending",
+    "first_seen": "2026-05-31"
+  },
+  "6422": {
     "status": "pending",
     "first_seen": "2026-05-31"
   }

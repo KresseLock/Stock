@@ -39,20 +39,20 @@ BACKTEST_MODE = False
 BACKTEST_DATE = ""  # 格式: "YYYYMMDD"，留空則執行時提示輸入
 
 # ── 技術指標參數 ────────────────────────────────────────
-MA_WINDOWS           = [7, 8, 25, 76]
-RSI_PERIOD           = 23
-ATR_PERIOD           = 10
-KD_PERIOD            = 8
-MACD_FAST            = 14
-MACD_SLOW            = 25
-MACD_SIGNAL          = 6
-BOLL_WINDOW          = 27
-BOLL_STD_MULT        = 2.46
+MA_WINDOWS           = [6, 14, 39, 76]
+RSI_PERIOD           = 18
+ATR_PERIOD           = 7
+KD_PERIOD            = 6
+MACD_FAST            = 17
+MACD_SLOW            = 42
+MACD_SIGNAL          = 10
+BOLL_WINDOW          = 28
+BOLL_STD_MULT        = 2.49
 VOL_MA_WINDOW        = 4
 
 # ── 籌碼滾動加總週期 ────────────────────────────────────
 # 法人買賣超「滾動加總」的時間視窗（例如：[3,5,10] = 計算近3日、近5日、近10日的買賣超合計）
-CHIPS_SUM_WINDOWS    = [7, 9, 20]
+CHIPS_SUM_WINDOWS    = [4, 13, 18]
 
 # ── 預測天數設定 ────────────────────────────────────────
 # 產生幾天的「未來標籤」供 LightGBM 訓練
@@ -65,6 +65,11 @@ ENABLE_MARGIN       = True   # C. 信用交易 (資券餘額、借券、信用�
 ENABLE_SHAREHOLDING = True   # D. 持股分級 (集保大戶/散戶比例、HHI集中度)
 ENABLE_FINMIND      = True   # E. FinMind 基本面 (月營收/三表季報/股利)
 ENABLE_SENTIMENT    = True   # F. 市場情緒 (期交所外資台指期未平倉淨額)
+
+# ── 多核心平行運算設定 ────────────────────────────────────
+# 設定 -1 為使用全部核心 (建議)，若怕電腦過載可設定為具體數字 (例如 4 或 8)
+N_JOBS              = -1
+
 
 # ╔══════════════════════════════════════════════════════╗
 # ║              以下為程式邏輯，一般不需修改              ║
@@ -125,6 +130,7 @@ fe_module.ENABLE_MARGIN       = ENABLE_MARGIN
 fe_module.ENABLE_SHAREHOLDING = ENABLE_SHAREHOLDING
 fe_module.ENABLE_FINMIND      = ENABLE_FINMIND
 fe_module.ENABLE_SENTIMENT    = ENABLE_SENTIMENT
+fe_module.N_JOBS              = N_JOBS
 
 
 if __name__ == "__main__":
@@ -244,7 +250,7 @@ if __name__ == "__main__":
                             n_estimators=500, learning_rate=0.03,
                             max_depth=6, num_leaves=31,
                             subsample=0.8, colsample_bytree=0.8,
-                            random_state=42 + day, n_jobs=-1, verbose=-1
+                            random_state=42 + day, n_jobs=N_JOBS, verbose=-1
                         )
                         model.fit(X_train, y_train)
                         preds = model.predict(X_test)

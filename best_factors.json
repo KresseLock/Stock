@@ -1,71 +1,71 @@
 {
-  "optimized_at": "2026-05-31 17:38:06",
+  "optimized_at": "2026-05-31 23:21:01",
   "algorithm": "Optuna TPE (Bayesian)",
-  "iterations": 400,
-  "best_score_avg": 21.598639455782315,
+  "iterations": 600,
+  "best_score_avg": 21.655328798185945,
   "backtest_date": "20250801",
   "best_params_for_run_feature_engineering": {
     "MA_WINDOWS": [
-      7,
-      8,
-      25,
+      6,
+      14,
+      39,
       76
     ],
-    "RSI_PERIOD": 23,
-    "ATR_PERIOD": 10,
-    "KD_PERIOD": 8,
-    "MACD_FAST": 14,
-    "MACD_SLOW": 25,
-    "MACD_SIGNAL": 6,
-    "BOLL_WINDOW": 27,
-    "BOLL_STD_MULT": 2.46,
+    "RSI_PERIOD": 18,
+    "ATR_PERIOD": 7,
+    "KD_PERIOD": 6,
+    "MACD_FAST": 17,
+    "MACD_SLOW": 42,
+    "MACD_SIGNAL": 10,
+    "BOLL_WINDOW": 28,
+    "BOLL_STD_MULT": 2.49,
     "VOL_MA_WINDOW": 4,
     "CHIPS_SUM_WINDOWS": [
-      7,
-      9,
-      20
+      4,
+      13,
+      18
     ]
   },
   "top10_trials": [
     {
-      "trial": 185,
-      "score": 21.598639455782315
+      "trial": 242,
+      "score": 21.655328798185945
     },
     {
-      "trial": 226,
-      "score": 21.485260770975056
+      "trial": 250,
+      "score": 21.42857142857143
     },
     {
-      "trial": 239,
-      "score": 21.3718820861678
-    },
-    {
-      "trial": 194,
+      "trial": 410,
       "score": 21.258503401360546
     },
     {
-      "trial": 214,
-      "score": 21.258503401360546
+      "trial": 406,
+      "score": 21.145124716553287
     },
     {
-      "trial": 238,
-      "score": 21.258503401360546
+      "trial": 381,
+      "score": 21.08843537414966
     },
     {
-      "trial": 294,
-      "score": 21.258503401360546
+      "trial": 93,
+      "score": 21.088435374149658
     },
     {
-      "trial": 187,
-      "score": 21.258503401360542
+      "trial": 380,
+      "score": 21.088435374149658
     },
     {
-      "trial": 258,
-      "score": 21.258503401360542
+      "trial": 347,
+      "score": 20.975056689342406
     },
     {
-      "trial": 176,
-      "score": 21.201814058956916
+      "trial": 357,
+      "score": 20.975056689342402
+    },
+    {
+      "trial": 382,
+      "score": 20.975056689342402
     }
   ]
 }
