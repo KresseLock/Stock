@@ -255,7 +255,8 @@ def make_objective(df_base: pd.DataFrame, bt_date: pd.Timestamp,
     建立 Optuna 目標函式（閉包），捕捉 df_base 讓每輪只做記憶體計算。
     best_holder 用來即時更新最佳解以便在 callback 中顯示。
     """
-    label_cols = [f"next_ret_{d}" for d in FORECAST_DAYS]
+    label_cols = [f"label_{d}" for d in FORECAST_DAYS]
+    ret_cols = [f"next_ret_{d}" for d in FORECAST_DAYS]
     ohlcv_cols = ["open", "high", "low", "close", "volume"]
 
     # 預先準備穩定特徵（每輪都用同一份）
@@ -271,14 +272,15 @@ def make_objective(df_base: pd.DataFrame, bt_date: pd.Timestamp,
         # 合併穩定特徵與標籤
         merge_cols = ["stock_id", "date"] + stable_cols_exist
         available_labels = [c for c in label_cols if c in df_base.columns]
+        available_rets = [c for c in ret_cols if c in df_base.columns]
         df_merged = pd.merge(
             df_chips,
-            df_base[merge_cols + available_labels].drop_duplicates(["stock_id","date"]),
+            df_base[merge_cols + available_labels + available_rets].drop_duplicates(["stock_id","date"]),
             on=["stock_id","date"], how="left"
         )
 
         # 切分訓練/測試
-        ignore_cols  = ["stock_id", "date"] + available_labels
+        ignore_cols  = ["stock_id", "date"] + available_labels + available_rets
         numeric_cols = df_merged.select_dtypes(include=[np.number, bool]).columns
         feat_cols    = [c for c in numeric_cols if c not in ignore_cols]
 
@@ -292,21 +294,46 @@ def make_objective(df_base: pd.DataFrame, bt_date: pd.Timestamp,
         day_scores  = []
 
         for day in FORECAST_DAYS:
-            label = f"next_ret_{day}"
+            label = f"label_{day}"
             if label not in df_merged.columns: continue
-            model = lgb.LGBMRegressor(
-                n_estimators=200, learning_rate=0.05, max_depth=4,
+            
+            # 確保標籤是整數類型 (3類)
+            y_train = train_df[label].astype(int)
+            y_test  = test_df[label].astype(int)
+            
+            model = lgb.LGBMClassifier(
+                n_estimators=100, learning_rate=0.03, max_depth=4,
                 num_leaves=15, subsample=0.8, colsample_bytree=0.8,
-                random_state=42, n_jobs=1, verbose=-1
+                random_state=42, n_jobs=1, verbose=-1,
+                class_weight="balanced"
             )
-            model.fit(X_tr, train_df[label])
-            preds  = model.predict(X_te)
-            actual = test_df[label].values
-            valid  = ~np.isnan(actual) & (actual != 0)
-            if valid.any():
-                day_scores.append(
-                    np.mean(np.sign(preds[valid]) == np.sign(actual[valid])) * 100
-                )
+            model.fit(X_tr, y_train)
+            
+            preds_proba = model.predict_proba(X_te)
+            if preds_proba.shape[1] == 3:
+                prob_strong = preds_proba[:, 2]
+                prob_weak   = preds_proba[:, 0]
+            else:
+                prob_strong = preds_proba[:, 1]
+                prob_weak   = 1.0 - prob_strong
+                
+            net_score = prob_strong - prob_weak
+            
+            # 使用測試集進行 Top-K 評估
+            test_day_df = test_df[["date", label]].copy()
+            test_day_df["net_score"] = net_score
+            
+            top_k_num = 3 if len(test_day_df["date"].unique()) > 0 and len(test_day_df) / len(test_day_df["date"].unique()) < 50 else 20
+            
+            daily_pick = (
+                test_day_df
+                .sort_values(["date", "net_score"], ascending=[True, False])
+                .groupby("date")
+                .head(top_k_num)
+            )
+            
+            hit_rate = (daily_pick[label] == 2).mean() * 100
+            day_scores.append(hit_rate)
 
         avg = float(np.mean(day_scores)) if day_scores else 0.0
 

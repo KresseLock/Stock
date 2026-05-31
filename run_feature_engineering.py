@@ -39,20 +39,20 @@ BACKTEST_MODE = False
 BACKTEST_DATE = ""  # 格式: "YYYYMMDD"，留空則執行時提示輸入
 
 # ── 技術指標參數 ────────────────────────────────────────
-MA_WINDOWS           = [9, 20, 32, 52]
-RSI_PERIOD           = 7
-ATR_PERIOD           = 18
-KD_PERIOD            = 15
+MA_WINDOWS           = [7, 8, 25, 76]
+RSI_PERIOD           = 23
+ATR_PERIOD           = 10
+KD_PERIOD            = 8
 MACD_FAST            = 14
-MACD_SLOW            = 38
-MACD_SIGNAL          = 5
-BOLL_WINDOW          = 35
-BOLL_STD_MULT        = 2.49
-VOL_MA_WINDOW        = 8
+MACD_SLOW            = 25
+MACD_SIGNAL          = 6
+BOLL_WINDOW          = 27
+BOLL_STD_MULT        = 2.46
+VOL_MA_WINDOW        = 4
 
 # ── 籌碼滾動加總週期 ────────────────────────────────────
 # 法人買賣超「滾動加總」的時間視窗（例如：[3,5,10] = 計算近3日、近5日、近10日的買賣超合計）
-CHIPS_SUM_WINDOWS    = [6, 15, 21]
+CHIPS_SUM_WINDOWS    = [7, 9, 20]
 
 # ── 預測天數設定 ────────────────────────────────────────
 # 產生幾天的「未來標籤」供 LightGBM 訓練
@@ -89,7 +89,7 @@ def check_local_data_integrity(target_stocks: list):
         
         missing = False
         for p in [rev_path, stmt_path, bal_path, cf_path, div_path]:
-            if not os.path.exists(p):
+            if not (os.path.exists(p) and os.path.getsize(p) > 0):
                 missing = True
                 break
                 

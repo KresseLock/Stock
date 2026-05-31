@@ -39,19 +39,19 @@ os.makedirs(FEAT_DIR, exist_ok=True)
 # ══════════════════════════════════════════════════════
 
 # 技術指標參數
-MA_WINDOWS      = [5, 10, 20, 60]
-RSI_PERIOD      = 14
-ATR_PERIOD      = 14
-KD_PERIOD       = 9
-MACD_FAST       = 12
-MACD_SLOW       = 26
-MACD_SIGNAL     = 9
-VOL_MA_WINDOW   = 5
-BOLL_WINDOW     = 20
-BOLL_STD_MULT   = 2.0
+MA_WINDOWS           = [9, 20, 32, 52]
+RSI_PERIOD           = 7
+ATR_PERIOD           = 18
+KD_PERIOD            = 15
+MACD_FAST            = 14
+MACD_SLOW            = 38
+MACD_SIGNAL          = 5
+BOLL_WINDOW          = 35
+BOLL_STD_MULT        = 2.49
+VOL_MA_WINDOW        = 8
 
 # 籌碼滾動加總週期
-CHIPS_SUM_WINDOWS = [3, 5, 10]
+CHIPS_SUM_WINDOWS    = [6, 15, 21]
 
 # 預測天數
 FORECAST_DAYS   = [1, 2, 3]
@@ -98,9 +98,10 @@ def _is_weekend(date_obj: datetime.date) -> bool:
 def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
     c, h, l, v, o = g["close"], g["high"], g["low"], g["volume"], g["open"]
 
-    # 均線 (由外部參數 MA_WINDOWS 控制)
+    # 均線與乖離率 (由外部參數 MA_WINDOWS 控制)
     for w in MA_WINDOWS:
         g[f"ma{w}"] = c.rolling(w, min_periods=1).mean()
+        g[f"bias{w}"] = (c - g[f"ma{w}"]) / (g[f"ma{w}"] + 1e-9)  # 乖離率 (Bias Ratio)
     if len(MA_WINDOWS) >= 2:
         short, long_ = MA_WINDOWS[0], MA_WINDOWS[2] if len(MA_WINDOWS) > 2 else MA_WINDOWS[-1]
         g["ma_short_over_long"] = g[f"ma{short}"] / (g[f"ma{long_}"] + 1e-9)
@@ -146,9 +147,9 @@ def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
     g["ret5"]      = c.pct_change(5)
     g["amplitude"] = (h - l) / (o + 1e-9)
 
-    # 標籤：未來 N 天累積報酬率
-    for day in FORECAST_DAYS:
-        g[f"next_ret_{day}"] = (c.shift(-day) / c) - 1
+    # 標籤 (預測未來 N 天收益率)
+    for d in FORECAST_DAYS:
+        g[f"next_ret_{d}"] = c.shift(-d) / c - 1
 
     return g
 
@@ -196,18 +197,24 @@ def _load_margin_one_day(date_str: str, target_stocks: list) -> pd.DataFrame:
     if not df_m.empty:
         df_m["代號"] = df_m["代號"].astype(str).str.strip()
         df_m = df_m[df_m["代號"].isin(target_stocks)].copy()
-        df_m = df_m.rename(columns={"代號": "stock_id", "今日餘額": "margin_bal", "今日餘額.1": "short_bal", "資券互抵": "offset"})
-        for col in ["margin_bal", "short_bal", "offset"]:
-            if col in df_m.columns: df_m[col] = _to_float(df_m[col])
-        df_m = df_m[["stock_id"] + [c for c in ["margin_bal", "short_bal", "offset"] if c in df_m.columns]]
+        if df_m.empty:
+            df_m = pd.DataFrame()
+        else:
+            df_m = df_m.rename(columns={"代號": "stock_id", "今日餘額": "margin_bal", "今日餘額.1": "short_bal", "資券互抵": "offset"})
+            for col in ["margin_bal", "short_bal", "offset"]:
+                if col in df_m.columns: df_m[col] = _to_float(df_m[col])
+            df_m = df_m[["stock_id"] + [c for c in ["margin_bal", "short_bal", "offset"] if c in df_m.columns]]
     df_s = _read_csv(os.path.join(DATA_DIR, "raw_margin", f"{date_str}_sbl.csv"))
     if not df_s.empty:
         df_s["代號"] = df_s["代號"].astype(str).str.strip()
         df_s = df_s[df_s["代號"].isin(target_stocks)].copy()
-        df_s = df_s.rename(columns={"代號": "stock_id", "當日餘額": "sbl_bal", "當日賣出": "sbl_sell"})
-        for col in ["sbl_bal", "sbl_sell"]:
-            if col in df_s.columns: df_s[col] = _to_float(df_s[col])
-        df_s = df_s[["stock_id"] + [c for c in ["sbl_bal", "sbl_sell"] if c in df_s.columns]]
+        if df_s.empty:
+            df_s = pd.DataFrame()
+        else:
+            df_s = df_s.rename(columns={"代號": "stock_id", "當日餘額": "sbl_bal", "當日賣出": "sbl_sell"})
+            for col in ["sbl_bal", "sbl_sell"]:
+                if col in df_s.columns: df_s[col] = _to_float(df_s[col])
+            df_s = df_s[["stock_id"] + [c for c in ["sbl_bal", "sbl_sell"] if c in df_s.columns]]
 
     if df_m.empty and df_s.empty: return pd.DataFrame()
     elif df_m.empty: df = df_s
@@ -243,28 +250,29 @@ def _load_shareholding_all() -> pd.DataFrame:
             "small_holder_pct": grp[grp["持股分級"] <= 2]["比例"].sum(),
             "holder_hhi":       ((grp["比例"] / (total_pct + 1e-9)) ** 2).sum(),
         })
-    return detail.groupby(["資料日期", "證券代號"]).apply(_agg).reset_index().rename(
-        columns={"資料日期": "sh_date", "證券代號": "stock_id"})
-
-
+    res = (detail.groupby(["資料日期", "證券代號"])
+                  .apply(_agg, include_groups=False)
+                  .reset_index()
+                  .rename(columns={"資料日期": "sh_date", "證券代號": "stock_id"}))
+    
+    # 集保資料通常為週五發布（最晚週六早），嚴格推移至下一個交易日 (BDay) 生效，避免週末前視偏差
+    res["sh_date"] = res["sh_date"] + pd.tseries.offsets.BDay(1)
+    return res
 def _shift_finmind_date(d, rtype):
     """
     動態推移財報日期以消除前視偏差 (Look-ahead Bias)。
     """
     if rtype == "rev":
-        # FinMind 月營收的 date 為當月 1 號 (如 2020-01-01)，代表去年 12 月的營收。
-        # 該筆資料最晚於 1 月 10 日發布，所以直接推到同月 10 號即可。
-        return pd.Timestamp(year=d.year, month=d.month, day=10)
+        # 很多公司10號晚上公告，嚴格延後到11號避免前視偏差
+        return pd.Timestamp(year=d.year, month=d.month, day=11)
     elif rtype == "stmt":
-        if d.month == 3: return pd.Timestamp(year=d.year, month=5, day=15)
-        elif d.month == 6: return pd.Timestamp(year=d.year, month=8, day=14)
-        elif d.month == 9: return pd.Timestamp(year=d.year, month=11, day=14)
+        if d.month == 3: return pd.Timestamp(year=d.year, month=5, day=16)
+        elif d.month == 6: return pd.Timestamp(year=d.year, month=8, day=15)
+        elif d.month == 9: return pd.Timestamp(year=d.year, month=11, day=15)
         elif d.month == 12:
-            # 台灣年報(Q4)最晚申報截止日為隔年 3/31。
-            # 雖然部分大型股(如台積電)可能提早在2月甚至1月公告，
-            # 但為了絕對避免前視偏差，此處刻意採用最保守的 3/31 作為邊界，不作提前。
-            return pd.Timestamp(year=d.year+1, month=3, day=31)
-        return d + pd.Timedelta(days=45)
+            return pd.Timestamp(year=d.year+1, month=4, day=1)
+        else:
+            return pd.NaT
     return d
 
 # ══════════════════════════════════════════════════════
@@ -286,6 +294,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
     df_stmt = _read_csv(stmt_path)
     if not df_stmt.empty:
         df_stmt["date"]  = pd.to_datetime(df_stmt["date"]).apply(lambda x: _shift_finmind_date(x, "stmt"))
+        df_stmt = df_stmt.dropna(subset=["date"])
         df_stmt["value"] = _to_float(df_stmt["value"])
         piv = df_stmt.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
@@ -298,6 +307,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
     df_bal = _read_csv(bal_path)
     if not df_bal.empty:
         df_bal["date"]  = pd.to_datetime(df_bal["date"]).apply(lambda x: _shift_finmind_date(x, "stmt"))
+        df_bal = df_bal.dropna(subset=["date"])
         df_bal["value"] = _to_float(df_bal["value"])
         piv = df_bal.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
@@ -310,6 +320,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
     df_cf = _read_csv(cf_path)
     if not df_cf.empty:
         df_cf["date"]  = pd.to_datetime(df_cf["date"]).apply(lambda x: _shift_finmind_date(x, "stmt"))
+        df_cf = df_cf.dropna(subset=["date"])
         df_cf["value"] = _to_float(df_cf["value"])
         piv = df_cf.pivot_table(index="date", columns="type", values="value").reset_index()
         keep_cols = ["date"]
@@ -391,12 +402,15 @@ def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
         df_dt = _read_csv(os.path.join(DATA_DIR, "raw_chips", f"{date_str}_daytrading.csv"))
         if not df_dt.empty:
             df_dt["證券代號"] = df_dt["證券代號"].astype(str).str.strip()
-            df_dt = df_dt[df_dt["證券代號"].isin(target_stocks)][["證券代號", "當日沖銷交易成交股數"]]
-            df_dt = df_dt.rename(columns={"證券代號": "stock_id", "當日沖銷交易成交股數": "daytrading_vol"})
-            df_dt["daytrading_vol"] = _to_float(df_dt["daytrading_vol"])
-            merged = pd.merge(merged, df_dt, on="stock_id", how="left")
-            if "volume" in merged.columns:
-                merged["daytrading_pct"] = merged["daytrading_vol"] / (merged["volume"] + 1e-9)
+            if "當日沖銷交易成交股數" not in df_dt.columns:
+                df_dt = pd.DataFrame()
+            else:
+                df_dt = df_dt[df_dt["證券代號"].isin(target_stocks)][["證券代號", "當日沖銷交易成交股數"]]
+                df_dt = df_dt.rename(columns={"證券代號": "stock_id", "當日沖銷交易成交股數": "daytrading_vol"})
+                df_dt["daytrading_vol"] = _to_float(df_dt["daytrading_vol"])
+                merged = pd.merge(merged, df_dt, on="stock_id", how="left")
+                if "volume" in merged.columns:
+                    merged["daytrading_pct"] = merged["daytrading_vol"] / (merged["volume"] + 1e-9)
 
         # 讀取外資持股
         df_fh = _read_csv(os.path.join(DATA_DIR, "raw_chips", f"{date_str}_fini_holding.csv"))
@@ -426,21 +440,29 @@ def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
         df_cl = _read_csv(os.path.join(DATA_DIR, "raw_margin", f"{date_str}_credit_limit.csv"))
         if not df_cl.empty:
             df_cl["證券代號"] = df_cl["證券代號"].astype(str).str.strip()
-            df_cl = df_cl[df_cl["證券代號"].isin(target_stocks)][["證券代號", "融資限額", "融券限額"]]
-            df_cl = df_cl.rename(columns={"證券代號": "stock_id", "融資限額": "margin_quota", "融券限額": "short_quota"})
-            df_cl["margin_quota"] = _to_float(df_cl["margin_quota"])
-            df_cl["short_quota"]  = _to_float(df_cl["short_quota"])
-            merged = pd.merge(merged, df_cl, on="stock_id", how="left")
+            required_cols = ["融資限額", "融券限額"]
+            if not all(c in df_cl.columns for c in required_cols):
+                df_cl = pd.DataFrame()
+            else:
+                df_cl = df_cl[df_cl["證券代號"].isin(target_stocks)][["證券代號"] + required_cols]
+                df_cl = df_cl.rename(columns={"證券代號": "stock_id", "融資限額": "margin_quota", "融券限額": "short_quota"})
+                df_cl["margin_quota"] = _to_float(df_cl["margin_quota"])
+                df_cl["short_quota"]  = _to_float(df_cl["short_quota"])
+                merged = pd.merge(merged, df_cl, on="stock_id", how="left")
 
     # TWSE 官方版 PER/PBR
     df_per = _read_csv(os.path.join(DATA_DIR, "raw_twse_per", f"{date_str}_twse_per.csv"))
     if not df_per.empty:
         df_per["證券代號"] = df_per["證券代號"].astype(str).str.strip()
-        df_per = df_per[df_per["證券代號"].isin(target_stocks)][["證券代號", "本益比", "股價淨值比", "殖利率(%)"]]
-        df_per = df_per.rename(columns={"證券代號": "stock_id", "本益比": "PER", "股價淨值比": "PBR", "殖利率(%)": "dividend_yield"})
-        for c in ["PER", "PBR", "dividend_yield"]:
-            df_per[c] = _to_float(df_per[c])
-        merged = pd.merge(merged, df_per, on="stock_id", how="left")
+        required_cols = ["本益比", "股價淨值比", "殖利率(%)"]
+        if not all(c in df_per.columns for c in required_cols):
+            df_per = pd.DataFrame()
+        else:
+            df_per = df_per[df_per["證券代號"].isin(target_stocks)][["證券代號"] + required_cols]
+            df_per = df_per.rename(columns={"證券代號": "stock_id", "本益比": "PER", "股價淨值比": "PBR", "殖利率(%)": "dividend_yield"})
+            for c in ["PER", "PBR", "dividend_yield"]:
+                df_per[c] = _to_float(df_per[c])
+            merged = pd.merge(merged, df_per, on="stock_id", how="left")
 
     # F. 市場情緒 (大盤級)
     if ENABLE_SENTIMENT:
@@ -479,8 +501,22 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
 
     # Step 2: 技術面 (A) + 法人籌碼衍生特徵 (B)
-    print("  計算技術面特徵...")
+    print("  計算技術面特徵 (含乖離率)...")
     df = df.groupby("stock_id", group_keys=False).apply(_compute_ta)
+    
+    print("  計算相對大盤強弱指標 (Cross-Sectional RS)...")
+    # 算出每天「全市場」的平均漲跌幅，再拿個股漲跌幅去減，得出相對強弱 (RS)
+    df["close_pct"] = df.groupby("stock_id")["close"].pct_change()
+    df["market_mean_pct"] = df.groupby("date")["close_pct"].transform("mean")
+    df["RS_1d"] = df["close_pct"] - df["market_mean_pct"]
+    
+    # 也可以算 5 日的相對強弱
+    df["close_pct_5d"] = df.groupby("stock_id")["close"].pct_change(periods=5)
+    df["market_mean_pct_5d"] = df.groupby("date")["close_pct_5d"].transform("mean")
+    df["RS_5d"] = df["close_pct_5d"] - df["market_mean_pct_5d"]
+    
+    df = df.drop(columns=["close_pct", "market_mean_pct", "close_pct_5d", "market_mean_pct_5d"])
+
     if ENABLE_CHIPS and "fini_net" in df.columns:
         print("  計算籌碼連續買賣超特徵...")
         df = _compute_chips_features(df)
@@ -511,8 +547,55 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
             fm_all = pd.concat(fm_dfs, ignore_index=True)
             df = pd.merge(df, fm_all, on=["stock_id", "date"], how="left")
 
+    # Step 5: Convert Level Features to Ratio/Change (避免模型記住股票身份)
+    print("  轉換絕對值特徵為相對比例 (消除 Level Bias)...")
+    def _transform_levels(g):
+        # 信用交易變化
+        for col in ["margin_bal", "short_bal", "sbl_bal"]:
+            if col in g.columns:
+                g[f"{col}_chg_5d"] = g[col].pct_change(5)
+                g.drop(columns=[col], inplace=True)
+                
+        # 估值指標 Z-score (252天 = 一年)
+        for col in ["PER", "PBR"]:
+            if col in g.columns:
+                g[f"{col}_zscore"] = (g[col] - g[col].rolling(252, min_periods=20).mean()) / (g[col].rolling(252, min_periods=20).std() + 1e-9)
+                g.drop(columns=[col], inplace=True)
+                
+        # 財報成長率 (ffill 後，252天約為 YoY, 21天約為 MoM, 63天約為 QoQ)
+        if "Revenue" in g.columns:
+            g["Revenue_mom"] = g["Revenue"].pct_change(21)
+            g["Revenue_yoy"] = g["Revenue"].pct_change(252)
+        if "EPS" in g.columns:
+            g["EPS_qoq"] = g["EPS"].pct_change(63)
+            g["EPS_yoy"] = g["EPS"].pct_change(252)
+        return g
+
+    df = df.groupby("stock_id", group_keys=False).apply(_transform_levels)
+    
+    # 丟棄其餘的絕對數值財報欄位與額度欄位
+    level_cols = ["Revenue", "EPS", "TotalAssets", "Liabilities", "Equity", 
+                  "GrossProfit", "OperatingIncome", "IncomeAfterTaxes", 
+                  "CashFlowsFromOperatingActivities", "CashProvidedByInvestingActivities", 
+                  "CashFlowsProvidedFromFinancingActivities", "cash_dividend",
+                  "margin_quota", "short_quota"]
+    df = df.drop(columns=[c for c in level_cols if c in df.columns], errors="ignore")
+
+    # Step 6: 產生每日橫截面排序標籤 (Quantile Ranking Label)
+    print("  計算每日橫截面排序標籤 (Quantile Label)...")
+    for d in FORECAST_DAYS:
+        ret_col = f"next_ret_{d}"
+        if ret_col in df.columns:
+            # 每天在橫截面上針對未來的真實報酬做百分位排序
+            rank = df.groupby("date")[ret_col].rank(pct=True)
+            # 前 20% 標為 2 (強勢), 後 20% 標為 0 (弱勢), 中間 1 (中性)
+            df[f"label_{d}"] = np.where(rank >= 0.8, 2, np.where(rank <= 0.2, 0, 1))
+            # 處理原本 ret 為 NaN 的地方，讓 label 也保持 NaN
+            df.loc[df[ret_col].isna(), f"label_{d}"] = np.nan
+
     # 剔除標籤缺失的最後 N 天
     label_cols = [f"next_ret_{d}" for d in FORECAST_DAYS if f"next_ret_{d}" in df.columns]
+    label_cols += [f"label_{d}" for d in FORECAST_DAYS if f"label_{d}" in df.columns]
     if label_cols:
         df = df.dropna(subset=label_cols)
 

@@ -28,49 +28,68 @@ def train_model(df, feature_cols, target_col, days_ahead):
     print(f"  [開始訓練] 預測未來 {days_ahead} 天 (標籤: {target_col})")
     print("="*50)
     
-    # 以日期百分位切割，確保同一天的所有股票都在同一個集合裡 (避免 Data Leakage)
+    # 以日期分位數切割：70% 訓練, 10% 驗證, 20% 測試
     df = df.sort_values("date").reset_index(drop=True)
     unique_dates = sorted(df["date"].unique())
-    split_date = unique_dates[int(len(unique_dates) * 0.8)]
+    n_dates = len(unique_dates)
+    train_end_date = unique_dates[int(n_dates * 0.7)]
+    valid_end_date = unique_dates[int(n_dates * 0.8)]
     
-    train_df = df[df["date"] < split_date]
-    test_df  = df[df["date"] >= split_date]
+    train_df = df[df["date"] < train_end_date]
+    valid_df = df[(df["date"] >= train_end_date) & (df["date"] < valid_end_date)]
+    test_df  = df[df["date"] >= valid_end_date]
     
-    X_train, y_train = train_df[feature_cols], train_df[target_col]
-    X_test, y_test   = test_df[feature_cols],  test_df[target_col]
+    X_train, y_train = train_df[feature_cols], train_df[target_col].astype(int)
+    X_valid, y_valid = valid_df[feature_cols], valid_df[target_col].astype(int)
+    X_test, y_test   = test_df[feature_cols],  test_df[target_col].astype(int)
     
-    model = lgb.LGBMRegressor(
-        n_estimators=500,
+    # 改為分類模型，並降低深度與樹的數量，加入 class_weight="balanced"
+    model = lgb.LGBMClassifier(
+        n_estimators=300,
         learning_rate=0.03,
-        max_depth=6,
-        num_leaves=31,
+        max_depth=4,
+        num_leaves=15,
         subsample=0.8,
         colsample_bytree=0.8,
         random_state=42 + days_ahead,
         n_jobs=-1,
-        verbose=-1
+        verbose=-1,
+        objective="multiclass",
+        num_class=3,
+        class_weight="balanced"
     )
     
     model.fit(
         X_train, y_train,
-        eval_set=[(X_test, y_test)],
-        eval_metric="rmse",
+        eval_set=[(X_valid, y_valid)],
+        eval_metric="multi_logloss",
         callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=False)]
     )
     
-    preds = model.predict(X_test)
-    rmse = np.sqrt(mean_squared_error(y_test, preds))
-    mae = mean_absolute_error(y_test, preds)
+    # 預測「強勢上漲 (Class 2)」的機率
+    preds_proba = model.predict_proba(X_test)
+    if preds_proba.shape[1] == 3:
+        prob_strong = preds_proba[:, 2]
+    else:
+        prob_strong = preds_proba[:, 1] # fallback for binary
+        
+    # 計算 Daily Top-20 Precision (每天挑選機率最高的前 20 檔)
+    test_df = test_df.copy()
+    test_df["prob_strong"] = prob_strong
     
-    y_test_dir = np.sign(y_test)
-    preds_dir = np.sign(preds)
-    valid_idx = y_test_dir != 0
-    dir_acc = np.mean(y_test_dir[valid_idx] == preds_dir[valid_idx]) * 100
+    daily_pick = (
+        test_df
+        .sort_values(["date", "prob_strong"], ascending=[True, False])
+        .groupby("date")
+        .head(20)
+    )
+    win_rate = (daily_pick[target_col] == 2).mean() * 100
     
     print(f"  訓練集: {len(train_df)} 筆 ({train_df['date'].min().date()} ~ {train_df['date'].max().date()})")
+    print(f"  驗證集: {len(valid_df)} 筆 ({valid_df['date'].min().date()} ~ {valid_df['date'].max().date()})")
     print(f"  測試集: {len(test_df)} 筆 ({test_df['date'].min().date()} ~ {test_df['date'].max().date()})")
     print(f"  模型最佳迭代次數: {model.best_iteration_}")
-    print(f"  RMSE: {rmse:.4f} | MAE: {mae:.4f} | 方向勝率: {dir_acc:.2f}%")
+    print(f"  測試集每日 Top-20 強勢股命中率 (Daily Top-K Precision): {win_rate:.2f}%")
     
     model_path = os.path.join(MODEL_DIR, f"lgbm_model_{days_ahead}.txt")
     model.booster_.save_model(model_path)
@@ -87,14 +106,15 @@ def main():
         
     df = pd.read_parquet(DATA_PATH)
     
-    target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
-    for col in target_cols:
+    label_cols = ["label_1", "label_2", "label_3"]
+    ret_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
+    for col in label_cols:
         if col not in df.columns:
             print(f"[錯誤] 缺少標籤欄位 {col}，請重新執行 python run_feature_engineering.py")
             return
             
-    df = df.dropna(subset=target_cols).copy()
-    ignore_cols = ["stock_id", "date"] + target_cols
+    df = df.dropna(subset=label_cols).copy()
+    ignore_cols = ["stock_id", "date"] + label_cols + ret_cols
     numeric_cols = df.select_dtypes(include=[np.number, bool]).columns
     feature_cols = [c for c in numeric_cols if c not in ignore_cols]
     
@@ -111,7 +131,7 @@ def main():
     
     # 分別訓練 3 天的模型
     for days in [1, 2, 3]:
-        train_model(df, feature_cols, f"next_ret_{days}", days)
+        train_model(df, feature_cols, f"label_{days}", days)
 
 if __name__ == "__main__":
     main()

@@ -82,10 +82,20 @@ def main():
             return
         model = lgb.Booster(model_file=model_path)
         preds = model.predict(X_latest)
-        results[f"Day{days}_pct"] = preds * 100
+        if len(preds.shape) == 2 and preds.shape[1] == 3:
+            prob_strong = preds[:, 2] # Class 2 (強勢) 機率
+            prob_weak = preds[:, 0]   # Class 0 (弱勢) 機率
+        else:
+            prob_strong = preds[:, 1] if len(preds.shape) == 2 else preds
+            prob_weak = 1 - prob_strong
+            
+        net_score = prob_strong - prob_weak
         
-    # 以 Day 3 的預測漲跌幅來排序 (看長一點的趨勢)
-    results = results.sort_values(by="Day3_pct", ascending=False).reset_index(drop=True)
+        results[f"Day{days}_net"] = net_score * 100
+        results[f"Day{days}_weak"] = prob_weak * 100
+        
+    # 以 Day 3 的預測多空分數來排序 (看長一點的趨勢)
+    results = results.sort_values(by="Day3_net", ascending=False).reset_index(drop=True)
     
     factors_file = os.path.join(BASE_DIR, "best_factors.json")
     factors_info = "  [未找到最佳化因子檔，使用系統預設因子參數]"
@@ -116,27 +126,28 @@ def main():
             pass
 
     output_lines.append("\n" + "=" * 80)
-    output_lines.append(f"  [結果] 未來三天走勢預測 (預測基準日: {latest_date.date()})")
+    output_lines.append(f"  [結果] 未來三天多空綜合分數預測 (預測基準日: {latest_date.date()})")
     output_lines.append("=" * 80)
-    output_lines.append(f"{'排名':<3} | {'股票 (代號+名稱)':<12} | {'收盤價':<6} | {'預測 Day 1':<9} | {'預測 Day 2':<9} | {'預測 Day 3':<9} | {'趨勢分析'}")
+    output_lines.append(f"{'排名':<3} | {'股票 (代號+名稱)':<12} | {'收盤價':<6} | {'D1多空分數':<9} | {'D2多空分數':<9} | {'D3多空分數':<9} | {'趨勢分析'}")
     output_lines.append("-" * 80)
     
     for i, row in enumerate(results.itertuples(), start=1):
         stock_id = row.stock_id
         close_price = row.close
-        d1, d2, d3 = row.Day1_pct, row.Day2_pct, row.Day3_pct
+        d1, d2, d3 = row.Day1_net, row.Day2_net, row.Day3_net
+        w1, w2, w3 = row.Day1_weak, row.Day2_weak, row.Day3_weak
         
-        d1_s = f"+{d1:.2f}%" if d1 > 0 else f"{d1:.2f}%"
-        d2_s = f"+{d2:.2f}%" if d2 > 0 else f"{d2:.2f}%"
-        d3_s = f"+{d3:.2f}%" if d3 > 0 else f"{d3:.2f}%"
+        d1_s = f"{d1:+.1f}%"
+        d2_s = f"{d2:+.1f}%"
+        d3_s = f"{d3:+.1f}%"
         
-        # 簡單趨勢判定
-        if d1 > 0 and d2 > d1 and d3 > d2: trend = "強勢多頭 (連漲)"
-        elif d1 < 0 and d2 < d1 and d3 < d2: trend = "強勢空頭 (連跌)"
-        elif d1 > 0 and d3 > 0: trend = "偏多"
-        elif d1 < 0 and d3 < 0: trend = "偏空"
-        elif d3 > 0: trend = "震盪偏多"
-        else: trend = "震盪偏空"
+        # 簡單趨勢判定 (基於暴漲機率)
+        if d3 > 50 and d2 > 45 and d1 > 40: trend = "強勢多頭 (發動中)"
+        elif d3 < 10 and d2 < 10 and d1 < 10: trend = "極度弱勢 (空頭)"
+        elif w3 > 40 and w2 > 35: trend = "高風險 (易跌)"
+        elif d3 > d1 and d3 > 15: trend = "偏多 (醞釀中)"
+        elif d3 < d1 and d3 < -10: trend = "偏空 (轉弱)"
+        else: trend = "震盪整理"
             
         cname = stock_names.get(stock_id, "")
         display_name = f"{stock_id} {cname}"
