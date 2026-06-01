@@ -265,7 +265,4 @@ python tests/test_pipeline.py
 ---
 
 ## 📄 授權
-
-本專案採用 [MIT License](https://opensource.org/licenses/MIT) 授權。
-
 **免責聲明**：本系統所有預測結果與回測報告僅供量化研究參考，**不構成任何實際投資建議**。投資涉及風險，請自行審慎評估。
