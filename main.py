@@ -17,11 +17,29 @@ import os
 from scripts.scraper             import download_history_data
 from scripts.feature_engineering import process_all_history_features
 
+# ── 抓取模式設定 ──────────────────────────────────────
+# "limited" : 只抓取 Stocks.txt 以及 auto_pipeline.py (TRAIN_INDUSTRIES) 勾選的產業 (節省 FinMind Token)
+# "all"     : 抓取全市場所有股票 (會消耗極大量 FinMind Token，請確定有足夠額度)
+FINMIND_FETCH_MODE = "limited"
+
 # ── 讀取股票清單 ──────────────────────────────────────
 
-def load_stocks() -> list:
-    """透過 auto_pipeline 讀取 TRAIN_INDUSTRIES 與 Stocks.txt 組合的股票清單
-       (因為使用者有 FinMind Token，可以支援大量下載財報)"""
+def load_stocks(mode="limited") -> list:
+    """讀取股票清單"""
+    if mode == "all":
+        try:
+            import json
+            with open("stock_categories.json", "r", encoding="utf-8") as f:
+                categories = json.load(f)
+            all_stocks = set()
+            for ind_name, stocks_dict in categories.items():
+                for stock_id in stocks_dict.keys():
+                    all_stocks.add(stock_id)
+            return sorted(list(all_stocks))
+        except Exception as e:
+            print(f"[警告] 無法讀取全市場股票 ({e})，退回 limited 模式。")
+            
+    # limited 模式: 透過 auto_pipeline 讀取 TRAIN_INDUSTRIES 與 Stocks.txt
     try:
         import auto_pipeline
         return auto_pipeline._get_training_stocks()
@@ -44,12 +62,15 @@ if __name__ == "__main__":
     end_date       = datetime.date.today()        # 自動抓取今日日期
 
     # ── 股票清單 ─────────────────────────────────────
-    stock_list = load_stocks()
-    if len(stock_list) <= 20:
-        print(f"下載目標股票 ({len(stock_list)} 檔): {stock_list}")
+    stock_list = load_stocks(FINMIND_FETCH_MODE)
+    if FINMIND_FETCH_MODE == "all":
+        print(f"下載目標股票 (全市場模式): 共 {len(stock_list)} 檔")
     else:
-        print(f"下載目標股票 ({len(stock_list)} 檔): {stock_list[:10]} ... 等")
-    print(f"  (包含 Stocks.txt 以及 auto_pipeline.py 勾選的產業)")
+        if len(stock_list) <= 20:
+            print(f"下載目標股票 (限定模式, {len(stock_list)} 檔): {stock_list}")
+        else:
+            print(f"下載目標股票 (限定模式, {len(stock_list)} 檔): {stock_list[:10]} ... 等")
+        print(f"  (來源: Stocks.txt 以及 auto_pipeline.py 中設定為 True 的產業)")
     print()
 
     # ════════════════════════════════════════════════

@@ -21934,5 +21934,41 @@
   "fini_holding_20250703": {
     "reason": "no_data",
     "confirmed_at": "2026-05-31"
+  },
+  "price_20260601": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "chips_20260601": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "twse_per_20260601": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "taifex_inst_20260601": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "margin_20260601": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "sbl_20260601": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "daytrading_20260601": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "fini_holding_20260601": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "credit_limit_20260601": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
   }
 }
