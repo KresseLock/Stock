@@ -120,30 +120,39 @@
 
 ## 📁 目錄結構
 
-```
+```text
 Stock/
-├── 📂 data/                    # 原始 CSV、快取 JSON、特徵矩陣 Parquet
-├── 📂 models/                  # LightGBM 模型檔 + feature_cols.json
+├── 📂 data/                    # 原始 CSV、快取 JSON、特徵 Parquet
+├── 📂 models/                  # LightGBM 訓練模型檔 + feature_cols.json
 ├── 📂 reports/                 # 回測輸出的 Excel / CSV 績效報表
 ├── 📂 scripts/
 │   ├── check_data.py           # 資料完整性修復工具
 │   ├── feature_engineering.py  # 核心特徵與標籤提取模組
-│   └── scraper.py              # 多源容錯資料爬蟲
+│   └── scraper.py              # 多源容錯資料爬蟲模組
 ├── 📂 tests/
 │   ├── test_finmind.py         # FinMind 財報單元測試
-│   ├── test_pipeline.py        # 全流程整合測試（19 項）
+│   ├── test_pipeline.py        # 全流程整合測試（19 項 100% PASS）
 │   └── test_scraper.py         # 證交所 API 單元測試
-├── 📂 predictions/             # 每日推理結果存檔
-├── auto_pipeline.py            # ⭐ 一鍵式自動化流水線
-├── backtest.py                 # 時光機單日回測器
-├── inference.py                # 多空分數排行榜 + 下單指引
-├── optimize_factors.py         # Optuna 參數最佳化器
-├── trading_sim.py              # 實戰量化模擬交易器
-├── train.py                    # LightGBM 模型訓練器
-├── utils.py                    # 共享股票解析工具
-├── Stocks.txt                  # ⭐ 自選股 / 持倉清單
-├── best_factors.json           # 最佳化因子參數存檔
-└── requirements.txt            # 依賴套件清單
+├── 📂 predictions/             # 每日推理結果存檔 (.txt)
+├── .agyignore                  # AI 開發排除過濾設定 (防干擾)
+├── .gitignore                  # Git 版本控制忽略設定
+├── AGENTS.md                   # AI Agent 架構與導航指南 (開發必讀)
+├── auto_pipeline.py            # 一鍵式自動化調參-訓練-推理流水線
+├── backtest.py                 # 時光機單日回測器 (樣本外評估)
+├── fetch_categories.py         # 產業分類與 ETF 下載工具
+├── inference.py                # 多空分數預測排行榜 + 智慧限價掛單指引
+├── main.py                     # 全市場資料下載與歷史庫初始化入口
+├── optimize_factors.py         # Optuna 貝葉斯超參數最佳化器
+├── patch_finmind.py            # FinMind 基本面個股缺漏強制補丁工具
+├── run_feature_engineering.py  # 獨立特徵工程執行入口
+├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
+├── train.py                    # LightGBM 多天期分類模型訓練器
+├── utils.py                    # 全系統共享股票解析工具
+├── Stocks.txt                  # 自選股 / 實質持倉清單
+├── best_factors.json           # 最佳化技術指標參數存檔
+├── stock_categories.json       # 產業分類與 ETF 全系統共享對照表
+├── FINMIND_TOKEN.txt           # FinMind API 金鑰存放檔 (可選)
+└── requirements.txt            # Python 依賴套件清單
 ```
 
 ---
