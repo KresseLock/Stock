@@ -83,15 +83,17 @@ if __name__ == "__main__":
     print()
 
     # ════════════════════════════════════════════════
-    # 步驟 2: 特徵工程
+    # 步驟 2: 特徵工程 (已停用)
+    # 說明: 每日特徵重建將統一由 auto_pipeline.py 讀取最佳參數進行，
+    #       此處已註解以避免重複計算，大幅提升每日更新數據的效率。
     # ════════════════════════════════════════════════
-    print("=" * 50)
-    print("  步驟 2: 特徵工程")
-    print("=" * 50)
-    print("  輸出: data/features/features_combined.parquet")
-    print()
-    process_all_history_features(start_date, end_date, override_target_stocks=stock_list)
-    print()
+    # print("=" * 50)
+    # print("  步驟 2: 特徵工程")
+    # print("=" * 50)
+    # print("  輸出: data/features/features_combined.parquet")
+    # print()
+    # process_all_history_features(start_date, end_date, override_target_stocks=stock_list)
+    # print()
 
     print("=" * 50)
     print("  所有前置資料準備任務完成！")
