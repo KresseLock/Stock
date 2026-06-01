@@ -175,14 +175,24 @@ pip install -r requirements.txt
 
 > 若要抓取基本面財務報表，請在根目錄建立 `FINMIND_TOKEN.txt` 並貼入 FinMind API Token（支援免費免登入額度）。
 
-### Step 3 — 一鍵啟動全自動流水線
+### Step 3 — 初始化歷史資料庫
+
+首次下載本專案或需要回補最新歷史數據時，請執行 `main.py` 開啟全自動爬蟲下載股價、法人籌碼與基本面資料庫：
+
+```powershell
+python main.py
+```
+
+> 💡 **爬蟲防呆設計**：本爬蟲具備 12 小時/自訂天數快取與失敗永久略過機制。首次抓取歷史資料（依您的股票檔數而定）可能需要較長時間，後續增量回補均可在數秒至數分鐘內迅速完成。
+
+### Step 4 — 一鍵啟動全自動流水線
 
 ```powershell
 # 執行順序：Optuna 調參 → 套用參數 → 重建特徵 → 訓練模型 → 推理預測
 python auto_pipeline.py
 ```
 
-### Step 4 — 執行策略回測
+### Step 5 — 執行策略回測
 
 ```powershell
 # 回測 2026 年上半年，初始資金 100 萬，最大持股 5 檔
@@ -194,7 +204,7 @@ python trading_sim.py --start 2025-01-02 --end 2025-12-30 --capital 500000 --max
 
 回測結束後，報表自動輸出至 `reports/` 資料夾（Excel 多分頁格式）。
 
-### Step 5 — 執行系統測試
+### Step 6 — 執行系統整合測試
 
 ```powershell
 # 確認 19 項整合指標全數通過
