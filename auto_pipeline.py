@@ -43,7 +43,7 @@ OPTUNA_N_JOBS     = 8    # 最佳化時同時啟動的 trial 數量 (建議 2~4 
 # ── 步驟 1 設定：因子最佳化 ─────────────────────────────
 # True  = 每次執行都重新跑貝葉斯最佳化 (耗時數分鐘~數十分鐘)
 # False = 跳過最佳化，直接使用上一次的 best_factors.json
-RUN_OPTIMIZATION    = True
+RUN_OPTIMIZATION    = False
 
 # 若 RUN_OPTIMIZATION=False 但 best_factors.json 不存在，是否使用預設參數繼續？
 FALLBACK_TO_DEFAULT = True

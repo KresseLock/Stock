@@ -1,4 +1,4 @@
-# 📈 台灣股市量化交易系統 (Taiwan Stock Quantitative Trading System)
+# 台灣股市量化交易系統 (Taiwan Stock Quantitative Trading System)
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![LightGBM](https://img.shields.io/badge/machine--learning-LightGBM-green.svg)](https://lightgbm.readthedocs.io/)
@@ -9,7 +9,7 @@
 
 ---
 
-## 🌟 核心亮點：實戰級別「絕對收益避雷系統」
+## 核心亮點：實戰級別「絕對收益避雷系統」
 
 傳統相對選股模型在「市場崩盤日」依然會滿倉買入（例如在全大跌日買入跌最少的股票），導致資產隨大盤一同沉淪。本系統在特徵與標籤工程上進行了實戰級別的重大升級：
 
@@ -22,7 +22,7 @@
 
 ---
 
-## 🚀 核心流水線工作流 (Workflow)
+## 核心流水線工作流 (Workflow)
 
 ```mermaid
 graph TD
@@ -36,17 +36,18 @@ graph TD
 
 ---
 
-## 🛠️ 核心功能清單
+## ️ 核心功能清單
 
-* **🕷️ 多源容錯爬蟲 (`scraper.py`)**：免 Token 抓取證交所收盤行情、三大法人買賣超、融資融券、借券餘額、當沖比例、外資持股、本益比、殖利率；期交所台指期外資未平倉；集保所每週大戶持股。整合 FinMind 月營收與三大財務報表。具備失敗計數略過（`failed_dates.json`）與空值快取機制，大幅節省 Token 與網路開銷。
-* **🧬 精密特徵工程 (`feature_engineering.py`)**：動態計算 Moving Average、KD、RSI、MACD、布林通道與 ATR 技術指標，自動消除 Level Bias（層級偏差），融合法人籌碼、信用交易、大戶持股與宏觀市場寬度特徵。
-* **🤖 貝葉斯超參數最佳化 (`optimize_factors.py`)**：利用 Optuna 框架在 strict 日期分界（避免偷看未來）的驗證集上，自動迭代尋找勝率最高的技術指標參數組合。
-* **💼 實戰級交易模擬器 (`trading_sim.py`)**：模擬真實交易手續費（0.1425%）與證交稅（0.3%），具備個股固定停損（-8%）、信號轉弱出場、剩餘現金動態配倉等實戰風控。日終統一對齊 `Current_Cash`、`Stock_Value` 與 `Total_Equity`。
-* **🛠️ 共享工具與測試套件 (`utils.py` & `tests/`)**：統一 `Stocks.txt` 的解析標準（自動識別代碼或成本對應），並在 `tests/` 下建立了 19 項 100% PASS 的單元與整合測試防禦網，保障系統重構的穩定性。
+* **️ 多源容錯爬蟲 (`scraper.py`)**：免 Token 抓取證交所收盤行情、三大法人買賣超、融資融券、借券餘額、當沖比例、外資持股、本益比、殖利率；期交所台指期外資未平倉；集保所每週大戶持股。整合 FinMind 月營收與三大財務報表。具備失敗計數略過（`failed_dates.json`）與空值快取機制，大幅節省 Token 與網路開銷。
+* ** 精密特徵工程 (`feature_engineering.py`)**：動態計算 Moving Average、KD、RSI、MACD、布林通道與 ATR 技術指標，自動消除 Level Bias（層級偏差），融合法人籌碼、信用交易、大戶持股與宏觀市場寬度特徵。
+* ** 貝葉斯超參數最佳化 (`optimize_factors.py`)**：利用 Optuna 框架在 strict 日期分界（避免偷看未來）的驗證集上，自動迭代尋找勝率最高的技術指標參數組合。
+* ** 智能推論預測與實戰下單指引 (`inference.py`)**：讀取最新一天數據並載入 LightGBM 模型，推論自選股與全市場股票未來 3 天的多空分數並印出排行榜。自動對齊交易模擬器的持股限制與風控，**根據預測信心強度動態推薦溢價幅度（+1.5% ~ +2.5%），並自動對齊台灣股市報價升降單位 (Tick Size) 進行精確四捨五入**，直接輸出明日開盤建議買進之限價掛單金額。
+* ** 實戰級交易模擬器 (`trading_sim.py`)**：模擬真實交易手續費（0.1425%）與證交稅（0.3%），具備個股固定停損（-8%）、信號轉弱出場、剩餘現金動態配倉等實戰風控。日終統一對齊 `Current_Cash`、`Stock_Value` 與 `Total_Equity`。
+* **️ 共享工具與測試套件 (`utils.py` & `tests/`)**：統一 `Stocks.txt` 的解析標準（自動識別代碼或成本對應），並在 `tests/` 下建立了 19 項 100% PASS 的單元與整合測試防禦網，保障系統重構的穩定性。
 
 ---
 
-## 📂 目錄結構
+## 目錄結構
 
 ```text
 D:\VScode_Stock\Stock
@@ -78,7 +79,7 @@ D:\VScode_Stock\Stock
 
 ---
 
-## 🏃 快速開始使用
+## 快速開始使用
 
 ### 1. 安裝依賴環境
 本系統建議使用 Python 3.10 以上版本，並建立虛擬環境（venv）：
@@ -99,7 +100,7 @@ pip install -r requirements.txt
 * 若要抓取基本面財務報表，建議在根目錄建立 `FINMIND_TOKEN.txt` 並貼入您的 FinMind API Token（亦可使用免費免登入額度）。
 
 ### 3. 一鍵啟動全自動流水線
-直接執行 `auto_pipeline.py`，系統將全自動依次執行：**Optuna 超參調優 ➔ 自動套用參數 ➔ 重建特徵與標籤 ➔ 重新訓練 3 天期分類模型 ➔ 輸出推理預測排行榜**：
+直接執行 `auto_pipeline.py`，系統將全自動依次執行：**Optuna 超參調優 -> 自動套用參數 -> 重建特徵與標籤 -> 重新訓練 3 天期分類模型 -> 輸出推理預測排行榜**：
 ```powershell
 python auto_pipeline.py
 ```
@@ -119,6 +120,6 @@ python tests/test_pipeline.py
 
 ---
 
-## 📝 開發者與 AI 開發說明
+## 開發者與 AI 開發說明
 
 如果您是 **AI Agent** 或者希望深入底層二次開發，請優先閱讀根目錄的 **[AGENTS.md](file:///D:/VScode_Stock/Stock/AGENTS.md)** 導航指南，該文件詳細記載了資料結構、特徵欄位命名規則、快取排除邏輯以及底層 API 的運作機制。

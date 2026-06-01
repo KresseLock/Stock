@@ -19,7 +19,7 @@ data/
 !data/missing_fm_datasets.json
 
 # ==========================================
-# ★ AI 學習特許區 (白名單)
+# * AI 學習特許區 (白名單)
 # 允許 AI 讀取 sample_data 資料夾內的微型樣本
 # ==========================================
 !sample_data/
@@ -46,3 +46,4 @@ temp/
 Thumbs.db
 FINMIND_TOKEN.txt
 reports/
+predictions/

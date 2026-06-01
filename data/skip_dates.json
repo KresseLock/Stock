@@ -21935,42 +21935,6 @@
     "reason": "no_data",
     "confirmed_at": "2026-05-31"
   },
-  "price_20260601": {
-    "reason": "market_closed",
-    "confirmed_at": "2026-06-01"
-  },
-  "chips_20260601": {
-    "reason": "market_closed",
-    "confirmed_at": "2026-06-01"
-  },
-  "twse_per_20260601": {
-    "reason": "market_closed",
-    "confirmed_at": "2026-06-01"
-  },
-  "taifex_inst_20260601": {
-    "reason": "market_closed",
-    "confirmed_at": "2026-06-01"
-  },
-  "margin_20260601": {
-    "reason": "market_closed",
-    "confirmed_at": "2026-06-01"
-  },
-  "sbl_20260601": {
-    "reason": "market_closed",
-    "confirmed_at": "2026-06-01"
-  },
-  "daytrading_20260601": {
-    "reason": "market_closed",
-    "confirmed_at": "2026-06-01"
-  },
-  "fini_holding_20260601": {
-    "reason": "market_closed",
-    "confirmed_at": "2026-06-01"
-  },
-  "credit_limit_20260601": {
-    "reason": "market_closed",
-    "confirmed_at": "2026-06-01"
-  },
   "20200520": {
     "reason": "anomaly",
     "desc": "Extreme price anomaly detected (holiday ghost data)"
@@ -23033,6 +22997,26 @@
   },
   "margin_20260417": {
     "reason": "unexpected_format",
+    "confirmed_at": "2026-06-01"
+  },
+  "margin_20260601": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "sbl_20260601": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "daytrading_20260601": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-01"
+  },
+  "fini_holding_20260601": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-01"
+  },
+  "credit_limit_20260601": {
+    "reason": "no_data",
     "confirmed_at": "2026-06-01"
   }
 }

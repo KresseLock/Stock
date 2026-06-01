@@ -78,6 +78,14 @@ def _load_etf_set() -> set:
         return set()
 
 
+# ── FinMind 基本面快取天數設定 ──────────────────────────
+# 設定基本面資料更新天數間隔。預設為 7 (7天更新一次)。
+# 例如填入 3 代表 3 天更新一次，填入 30 代表 30 天更新一次。
+_FINMIND_CACHE_DAYS = 15
+_FINMIND_CACHE_SECONDS = _FINMIND_CACHE_DAYS * 86400
+
+
+
 ETF_SET = _load_etf_set()
 
 # ── 無財報股票快取 ────────────────────────────────────
@@ -330,8 +338,13 @@ def crawl_daily_price(date_str: str, skip: dict) -> str:
         return "error"
 
     if data == "NO_DATA":
-        _mark_skip_dates_batch(skip, _ALL_DATASETS, date_str, reason="market_closed")
-        return "market_closed"
+        today_str = datetime.date.today().strftime("%Y%m%d")
+        if date_str < today_str:
+            _mark_skip_dates_batch(skip, _ALL_DATASETS, date_str, reason="market_closed")
+            return "market_closed"
+        else:
+            print(f"  [提示] 今日 ({date_str}) 資料在證交所尚未上架或正在更新，暫不標記為休市，待稍後重試。")
+            return "error"
 
     df = None
     if "tables" in data:
@@ -726,8 +739,8 @@ def _crawl_fm_dataset(
 
     try:
         if _already_exists(output_path):
-            # ── 12 小時快取：檔案新鮮，不打 API ─────────────
-            if time.time() - os.path.getmtime(output_path) < 43200:
+            # ── 增量更新快取：檔案仍在指定快取天數內，不打 API ─────────────
+            if time.time() - os.path.getmtime(output_path) < _FINMIND_CACHE_SECONDS:
                 return "skipped"
 
             # ── 增量更新：從上次最後一筆 +1 天開始 ──────────

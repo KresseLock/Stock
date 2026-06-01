@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+"""
+backtest.py — 時光機回測工具 (極簡流線對齊版)
+===========================================
+"""
 import os
 import sys
 import datetime
@@ -9,20 +14,46 @@ if hasattr(sys.stdout, 'reconfigure'):
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 
+
+def load_watchlist_detailed() -> dict:
+    try:
+        from utils import parse_stocks_detailed
+        return parse_stocks_detailed("Stocks.txt")
+    except Exception:
+        try:
+            from utils import parse_stocks_file
+            simple = parse_stocks_file("Stocks.txt")
+            return {sid: {"cost": cost, "shares": None} for sid, cost in simple.items()}
+        except Exception:
+            return {}
+
+
+def get_stock_name(sid, date_str):
+    price_file = os.path.join(BASE_DIR, "data", "raw_price", f"{date_str}_price.csv")
+    if os.path.exists(price_file):
+        try:
+            df_price = pd.read_csv(price_file, usecols=["證券代號", "證券名稱"], dtype=str)
+            df_price["證券代號"] = df_price["證券代號"].str.strip()
+            df_price["證券名稱"] = df_price["證券名稱"].str.strip()
+            return df_price.set_index("證券代號")["證券名稱"].get(sid, "")
+        except Exception:
+            return ""
+    return ""
+
+
 def run_backtest(backtest_date_str):
-    print("=" * 60)
-    print(f"  啟動時光機回測模式 (Backtest) - 指定日期: {backtest_date_str}")
-    print("=" * 60)
+    print("=" * 70)
+    print(f"  啟動時光機回測模式 (指定日期: {backtest_date_str})")
+    print("=" * 70)
 
     try:
         backtest_date = pd.to_datetime(backtest_date_str)
-    except Exception as e:
-        print(f"[錯誤] 日期格式解析失敗 ({backtest_date_str})，請使用 YYYY-MM-DD 或 YYYYMMDD 格式。")
+    except Exception:
+        print(f"[錯誤] 日期格式解析失敗 ({backtest_date_str})，請使用 YYYY-MM-DD 或 YYYYMMDD。")
         return
 
     if not os.path.exists(DATA_PATH):
@@ -41,13 +72,13 @@ def run_backtest(backtest_date_str):
     # 確保資料依時間排序
     df = df.sort_values(["date", "stock_id"]).reset_index(drop=True)
 
-    # 找出剛好等於指定日期的那一天的所有股票資料
+    # 找出指定日期的所有股票資料
     df_eval = df[df["date"] == backtest_date].copy()
     if df_eval.empty:
-        print(f"[錯誤] 特徵檔中找不到日期為 {backtest_date_str} 的任何資料。請確認那天台股是否有開市。")
+        print(f"[錯誤] 找不到日期 {backtest_date_str} 的任何資料。請確認該日台股是否有開市。")
         return
 
-    # 取出指定日期「之前」的所有資料做為訓練集
+    # 取出指定日期之前的資料做為訓練集
     df_train_all = df[df["date"] < backtest_date].copy()
     if df_train_all.empty:
         print(f"[錯誤] 找不到 {backtest_date_str} 之前的任何訓練資料。請選擇更晚的日期。")
@@ -60,9 +91,8 @@ def run_backtest(backtest_date_str):
     numeric_cols = df.select_dtypes(include=[np.number, bool]).columns
     feature_cols = [c for c in numeric_cols if c not in ignore_cols]
 
-    print(f"準備就緒。將使用 {backtest_date.date()} 之前的資料訓練模型。")
-    print(f"目標預測基準日: {backtest_date.date()} (共 {len(df_eval)} 檔股票)")
-    print("-" * 60)
+    print(f"  基準日: {backtest_date.date()} (共 {len(df_eval)} 檔股票) | 訓練樣本: {len(df_train_all)} 筆")
+    print("-" * 70)
 
     results = []
 
@@ -70,13 +100,11 @@ def run_backtest(backtest_date_str):
         label_col = f"label_{days_ahead}"
         ret_col = f"next_ret_{days_ahead}"
         
-        # 準備訓練集 (去除該預測天數為 NaN 的資料)
         train_clean = df_train_all.dropna(subset=[label_col]).copy()
         
-        # 將訓練集切出 20% 當作 early stopping 的驗證集
         unique_dates = sorted(train_clean["date"].unique())
         if len(unique_dates) < 10:
-            print(f"[警告] 訓練資料天數過少 ({len(unique_dates)}天)，跳過預測 Day {days_ahead}")
+            print(f"  [警告] 訓練天數過少 ({len(unique_dates)}天)，跳過 Day {days_ahead}")
             continue
             
         split_date = unique_dates[int(len(unique_dates) * 0.8)]
@@ -100,19 +128,17 @@ def run_backtest(backtest_date_str):
             class_weight="balanced"
         )
         
-        print(f"訓練 Day {days_ahead} 模型中... ", end="", flush=True)
+        print(f"  訓練 Day {days_ahead} 模型中... ", end="", flush=True)
         model.fit(
             X_train, y_train,
             eval_set=[(X_valid, y_valid)],
             eval_metric="multi_logloss",
             callbacks=[lgb.early_stopping(stopping_rounds=20, verbose=False)]
         )
-        print("完成!")
+        print("完成")
 
-        # 預測指定日期的未來表現
         eval_clean = df_eval.dropna(subset=[label_col]).copy()
         if eval_clean.empty:
-            print(f"  [警告] 基準日 {backtest_date.date()} 缺乏有效的未來 {days_ahead} 天真實報酬資料可供對比。")
             continue
             
         X_eval = eval_clean[feature_cols]
@@ -121,8 +147,8 @@ def run_backtest(backtest_date_str):
         
         preds_proba = model.predict_proba(X_eval)
         if preds_proba.shape[1] == 3:
-            prob_strong = preds_proba[:, 2]  # Class 2 (強勢) 的機率
-            prob_weak = preds_proba[:, 0]    # Class 0 (弱勢) 的機率
+            prob_strong = preds_proba[:, 2]
+            prob_weak = preds_proba[:, 0]
         else:
             prob_strong = preds_proba[:, 1]
             prob_weak = 1 - prob_strong
@@ -134,10 +160,10 @@ def run_backtest(backtest_date_str):
         eval_clean["net_score"] = net_score
         eval_clean["real_ret"] = y_real_ret
         eval_clean["real_label"] = y_real_label
+        
         df_eval.loc[eval_clean.index, f"pred_{days_ahead}"] = net_score
         df_eval.loc[eval_clean.index, f"pred_weak_{days_ahead}"] = prob_weak
         
-        # 評估每日 Top-K 的勝率 (若全市場只有 17 檔，選前 20 等同於買下全市場，故改為動態 Top-3)
         top_k_num = 3 if len(eval_clean) < 50 else 20
         daily_pick = (
             eval_clean
@@ -146,12 +172,8 @@ def run_backtest(backtest_date_str):
             .head(top_k_num)
         )
         
-        # 勝率 = 這些最強勢股票中，真正被標記為 2 (強勢) 或漲幅 > 0 的比例
-        # 若有命中 Label=2 (代表這檔股票在當天所有股票中排名前 20%)
         top20_hit = (daily_pick["real_label"] == 2).mean() * 100
         top_20_return = daily_pick["real_ret"].mean() * 100
-        
-        # 為了比較，也算一下全市場勝率 (這時看大於 0 就好，因為市場可能多半跌)
         dir_acc = np.mean(eval_clean["real_ret"] > 0) * 100
         
         results.append({
@@ -160,28 +182,19 @@ def run_backtest(backtest_date_str):
             "top20_acc": top20_hit if pd.notna(top20_hit) else 0,
             "top20_return": top_20_return if pd.notna(top_20_return) else 0
         })
-        
-        print(f"  ▶ 預測未來 {days_ahead} 天 (Day {days_ahead}) 結果:")
-        print(f"    - 測試集全市場勝率 (>0%): {dir_acc:.2f}% (評估 {len(eval_clean)} 檔)")
-        print(f"    - 模型看多前 {top_k_num} 檔真實強勢率 (命中 Label=2): {results[-1]['top20_acc']:.2f}%")
-        print(f"    - 模型看多前 {top_k_num} 檔實際平均報酬: {results[-1]['top20_return']:.2f}%")
-        print("-" * 60)
 
-    print("=" * 60)
-    print("  回測總結報告 (全市場)")
-    print("=" * 60)
+    print("-" * 70)
+    print("   [全市場回測總結]")
+    print("-" * 70)
     for r in results:
-        print(f"Day {r['days']}: 全市場勝率 {r['acc']:.1f}% | 嚴選 Top-{top_k_num} 命中強勢股機率 {r['top20_acc']:.1f}% (平均獲利 {r['top20_return']:.2f}%)")
-    
-    # ── 印出 Stocks.txt 專屬的詳細預測表 ──
-    watchlist_path = os.path.join(BASE_DIR, "Stocks.txt")
-    if os.path.exists(watchlist_path):
-        with open(watchlist_path, "r", encoding="utf-8") as f:
-            watchlist = [line.split(",")[0].strip() for line in f if line.strip() and not line.strip().startswith("#")]
-            
-        df_watch = df_eval[df_eval["stock_id"].isin(watchlist)].copy()
+        top_k_num = 3 if len(df_eval) < 50 else 20
+        print(f"  Day {r['days']}: 全市場勝率 {r['acc']:.1f}% | 嚴選 Top-{top_k_num} 命中率 {r['top20_acc']:.1f}% (平均獲利 {r['top20_return']:+.2f}%)")
+
+    # ── 自選追蹤詳細對比 ──
+    watchlist = load_watchlist_detailed()
+    if watchlist:
+        df_watch = df_eval[df_eval["stock_id"].isin(watchlist.keys())].copy()
         if not df_watch.empty:
-            # 取得股票名稱
             stock_names = {}
             date_str = backtest_date.strftime("%Y%m%d")
             price_file = os.path.join(BASE_DIR, "data", "raw_price", f"{date_str}_price.csv")
@@ -191,90 +204,141 @@ def run_backtest(backtest_date_str):
                     df_p["證券代號"] = df_p["證券代號"].str.strip()
                     df_p["證券名稱"] = df_p["證券名稱"].str.strip()
                     stock_names = df_p.set_index("證券代號")["證券名稱"].to_dict()
-                except: pass
+                except Exception:
+                    pass
 
-            print("\n" + "=" * 105)
-            print(f"  自選股 (Stocks.txt) 詳細回測清單 - 基準日: {date_str}")
-            print("=" * 105)
-            print(f"{'排名':<3} | {'股票 (代號+名稱)':<14} | {'收盤價':<6} | {'D1多空分數':<9} | {'Day1真實':<8} | {'D2多空分數':<9} | {'Day2真實':<8} | {'D3多空分數':<9} | {'Day3真實':<8}")
-            print("-" * 105)
+            print("\n" + "=" * 118)
+            print(f"   [持倉與自選詳細回測表] 預測基準日: {backtest_date.date()}")
+            print("=" * 118)
+            print(
+                f"{'排名':<3} | {'類型':<2} | {'股票 (代號+名稱)':<14} | {'收盤價':<6} | "
+                f"{'D1預測':<6} | {'D1真實':<6} | {'D2預測':<6} | {'D2真實':<6} | "
+                f"{'D3預測':<6} | {'D3真實':<6} | {'勝率'}"
+            )
+            print("-" * 118)
             
-            # 依 Day 1 預測降冪排序
             if "pred_1" in df_watch.columns:
                 df_watch = df_watch.sort_values("pred_1", ascending=False)
                 
             for i, row in enumerate(df_watch.itertuples(), start=1):
                 sid = row.stock_id
-                name = stock_names.get(sid, "")
-                disp_name = f"{sid} {name}"
+                cname = stock_names.get(sid, "")
+                disp_name = f"{sid} {cname}"
                 close_p = row.close if hasattr(row, "close") and pd.notna(row.close) else 0.0
                 
-                # 取得預測
                 p1 = getattr(row, "pred_1", np.nan)
                 p2 = getattr(row, "pred_2", np.nan)
                 p3 = getattr(row, "pred_3", np.nan)
                 
-                p1_s = f"{p1*100:+.1f}%" if pd.notna(p1) else "   --   "
-                p2_s = f"{p2*100:+.1f}%" if pd.notna(p2) else "   --   "
-                p3_s = f"{p3*100:+.1f}%" if pd.notna(p3) else "   --   "
+                p1_s = f"{p1*100:+.1f}%" if pd.notna(p1) else "  --  "
+                p2_s = f"{p2*100:+.1f}%" if pd.notna(p2) else "  --  "
+                p3_s = f"{p3*100:+.1f}%" if pd.notna(p3) else "  --  "
                 
-                # 取得真實
                 r1 = getattr(row, "next_ret_1", np.nan)
                 r2 = getattr(row, "next_ret_2", np.nan)
                 r3 = getattr(row, "next_ret_3", np.nan)
-                r1_s = f"{r1*100:+.1f}%" if pd.notna(r1) else "  --  "
-                r2_s = f"{r2*100:+.1f}%" if pd.notna(r2) else "  --  "
-                r3_s = f"{r3*100:+.1f}%" if pd.notna(r3) else "  --  "
                 
-                print(f" {i:<3} | {disp_name:<16} | {close_p:>6.2f} | {p1_s:>10} | {r1_s:>8} | {p2_s:>10} | {r2_s:>8} | {p3_s:>10} | {r3_s:>8}")
-            print("=" * 105)
+                r1_p = close_p * (1 + r1) if pd.notna(r1) and close_p > 0 else np.nan
+                r2_p = close_p * (1 + r2) if pd.notna(r2) and close_p > 0 else np.nan
+                r3_p = close_p * (1 + r3) if pd.notna(r3) and close_p > 0 else np.nan
+                
+                r1_s = f"{r1_p:>6.2f}" if pd.notna(r1_p) else "  --  "
+                r2_s = f"{r2_p:>6.2f}" if pd.notna(r2_p) else "  --  "
+                r3_s = f"{r3_p:>6.2f}" if pd.notna(r3_p) else "  --  "
+                
+                # 計算勝率 (預測方向與實際漲跌方向一致的比例)
+                hits = 0
+                valid_days = 0
+                for p_val, r_val in [(p1, r1), (p2, r2), (p3, r3)]:
+                    if pd.notna(p_val) and pd.notna(r_val):
+                        valid_days += 1
+                        if (p_val > 0 and r_val > 0) or (p_val < 0 and r_val < 0) or (p_val == 0 and r_val == 0):
+                            hits += 1
+                win_rate_s = f"{int((hits / valid_days) * 100)}%" if valid_days > 0 else "  --  "
+                
+                info = watchlist.get(sid, {"cost": None, "shares": None})
+                is_holding = info.get("cost") is not None
+                type_s = "持倉" if is_holding else "自選"
+                
+                print(
+                    f" {i:<3} | {type_s:<2} | {disp_name:<18} | {close_p:>6.2f} | "
+                    f"{p1_s:>6} | {r1_s:>6} | {p2_s:>6} | {r2_s:>6} | "
+                    f"{p3_s:>6} | {r3_s:>6} | {win_rate_s:>4}"
+                )
+            print("=" * 118)
 
-    # ── 新增: 印出當日全市場真正的 Top 10 強勢股 (以 Day 1 為主) ──
-    print()
-    print("=========================================================================================================")
-    print(f"  當日全市場嚴選 Top-10 飆股清單 (以 Day 1 分數排序) - 基準日: {backtest_date_str}")
-    print("=========================================================================================================")
-    print(f"{'排名':<4} | {'股票 (代號+名稱)':<15} | {'收盤價':<7} | {'D1多空分數':<11} | {'Day1真實':<8} | {'D2多空分數':<11} | {'Day2真實':<8} | {'D3多空分數':<11} | {'Day3真實':<8}")
-    print("-" * 105)
-    
-    # 簡單輔助函數取名字
-    def get_stock_name(sid, date_str):
+    # ── 全市場強勢 Top-5 飆股回測 ──
+    if "pred_1" in df_eval.columns:
+        top5_market = df_eval.sort_values(["pred_1"], ascending=False).head(5)
+        stock_names = {}
+        date_str = backtest_date.strftime("%Y%m%d")
         price_file = os.path.join(BASE_DIR, "data", "raw_price", f"{date_str}_price.csv")
         if os.path.exists(price_file):
             try:
                 df_p = pd.read_csv(price_file, usecols=["證券代號", "證券名稱"], dtype=str)
-                name = df_p[df_p["證券代號"].str.strip() == sid]["證券名稱"].values
-                return name[0].strip() if len(name) > 0 else ""
-            except: pass
-        return ""
+                df_p["證券代號"] = df_p["證券代號"].str.strip()
+                df_p["證券名稱"] = df_p["證券名稱"].str.strip()
+                stock_names = df_p.set_index("證券代號")["證券名稱"].to_dict()
+            except Exception:
+                pass
 
-    top10_market = df_eval.sort_values(["pred_1"], ascending=False).head(10)
-    for i, (_, row) in enumerate(top10_market.iterrows(), 1):
-        sid = str(row['stock_id'])
-        name = get_stock_name(sid, backtest_date_str)
-        stock_display = f"{sid} {name}"
-        c = row.get('close', 0.0)
+        print("\n" + "=" * 108)
+        print(f"   全市場強勢 Top-5 飆股回測 (基準日: {backtest_date_str})")
+        print("=" * 108)
+        print(
+            f"{'排名':<3} | {'股票 (代號+名稱)':<14} | {'收盤價':<6} | "
+            f"{'D1預測':<6} | {'D1真實':<6} | {'D2預測':<6} | {'D2真實':<6} | "
+            f"{'D3預測':<6} | {'D3真實':<6} | {'勝率'}"
+        )
+        print("-" * 108)
         
-        p1 = row.get('pred_1', np.nan)
-        p2 = row.get('pred_2', np.nan)
-        p3 = row.get('pred_3', np.nan)
-        r1 = row.get('next_ret_1', np.nan)
-        r2 = row.get('next_ret_2', np.nan)
-        r3 = row.get('next_ret_3', np.nan)
-        
-        p1_str = f"{p1*100:>+8.1f}%" if pd.notna(p1) else f"{'--':>9}"
-        p2_str = f"{p2*100:>+8.1f}%" if pd.notna(p2) else f"{'--':>9}"
-        p3_str = f"{p3*100:>+8.1f}%" if pd.notna(p3) else f"{'--':>9}"
-        r1_str = f"{r1*100:>+7.1f}%" if pd.notna(r1) else f"{'--':>8}"
-        r2_str = f"{r2*100:>+7.1f}%" if pd.notna(r2) else f"{'--':>8}"
-        r3_str = f"{r3*100:>+7.1f}%" if pd.notna(r3) else f"{'--':>8}"
-        
-        print(f" {i:<3} | {stock_display:<14} | {c:>7.2f} | {p1_str:<12} | {r1_str:<9} | {p2_str:<12} | {r2_str:<9} | {p3_str:<12} | {r3_str:<9}")
-    print("=========================================================================================================")
-    
+        for i, row in enumerate(top5_market.itertuples(), start=1):
+            sid = str(row.stock_id)
+            cname = stock_names.get(sid, "")
+            disp_name = f"{sid} {cname}"
+            close_p = row.close if hasattr(row, "close") and pd.notna(row.close) else 0.0
+            
+            p1 = getattr(row, "pred_1", np.nan)
+            p2 = getattr(row, "pred_2", np.nan)
+            p3 = getattr(row, "pred_3", np.nan)
+            p1_s = f"{p1*100:+.1f}%" if pd.notna(p1) else "  --  "
+            p2_s = f"{p2*100:+.1f}%" if pd.notna(p2) else "  --  "
+            p3_s = f"{p3*100:+.1f}%" if pd.notna(p3) else "  --  "
+            
+            r1 = getattr(row, "next_ret_1", np.nan)
+            r2 = getattr(row, "next_ret_2", np.nan)
+            r3 = getattr(row, "next_ret_3", np.nan)
+            
+            r1_p = close_p * (1 + r1) if pd.notna(r1) and close_p > 0 else np.nan
+            r2_p = close_p * (1 + r2) if pd.notna(r2) and close_p > 0 else np.nan
+            r3_p = close_p * (1 + r3) if pd.notna(r3) and close_p > 0 else np.nan
+            
+            r1_s = f"{r1_p:>6.2f}" if pd.notna(r1_p) else "  --  "
+            r2_s = f"{r2_p:>6.2f}" if pd.notna(r2_p) else "  --  "
+            r3_s = f"{r3_p:>6.2f}" if pd.notna(r3_p) else "  --  "
+            
+            # 計算勝率
+            hits = 0
+            valid_days = 0
+            for p_val, r_val in [(p1, r1), (p2, r2), (p3, r3)]:
+                if pd.notna(p_val) and pd.notna(r_val):
+                    valid_days += 1
+                    if (p_val > 0 and r_val > 0) or (p_val < 0 and r_val < 0) or (p_val == 0 and r_val == 0):
+                        hits += 1
+            win_rate_s = f"{int((hits / valid_days) * 100)}%" if valid_days > 0 else "  --  "
+            
+            print(
+                f" {i:<3} | {disp_name:<18} | {close_p:>6.2f} | "
+                f"{p1_s:>6} | {r1_s:>6} | {p2_s:>6} | {r2_s:>6} | "
+                f"{p3_s:>6} | {r3_s:>6} | {win_rate_s:>4}"
+            )
+        print("=" * 108)
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("用法: python backtest.py <YYYYMMDD>")
+        sys.exit(1)
     parser = argparse.ArgumentParser(description="時光機回測工具")
     parser.add_argument("date", type=str, help="欲進行預測的基準日期 (格式: YYYYMMDD 或 YYYY-MM-DD)")
     args = parser.parse_args()

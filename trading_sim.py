@@ -38,8 +38,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
         start_dt = pd.to_datetime(start_date)
         end_dt = pd.to_datetime(end_date)
     except Exception as e:
-        print("\n❌ [日期格式錯誤] 您輸入的日期無法被解析！")
-        print("💡 請確認 --start 和 --end 使用標準格式，例如: 2026-01-02 或 2026/01/02")
+        print("\n[日期格式錯誤] 您輸入的日期無法被解析！")
+        print(" 請確認 --start 和 --end 使用標準格式，例如: 2026-01-02 或 2026/01/02")
         print(f"錯誤細節: {e}\n")
         return
         
@@ -49,8 +49,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
     if df_sim.empty:
         min_date = df['date'].min().date()
         max_date = df['date'].max().date()
-        print(f"\n❌ [查無資料] 在指定的區間 ({start_date} ~ {end_date}) 內沒有找到任何特徵資料！")
-        print(f"💡 提示：目前資料庫 (features_combined.parquet) 中擁有的資料涵蓋範圍為 {min_date} 到 {max_date}。")
+        print(f"\n[查無資料] 在指定的區間 ({start_date} ~ {end_date}) 內沒有找到任何特徵資料！")
+        print(f" 提示：目前資料庫 (features_combined.parquet) 中擁有的資料涵蓋範圍為 {min_date} 到 {max_date}。")
         print("請確認您輸入的日期是否超出此範圍 (例如輸入了未來的日期)，或者該區間內剛好全部都是假日。")
         return
 
@@ -329,7 +329,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
             print(f"  - 淨值曲線: {p1}")
             print(f"  - 交易明細: {p2}")
             print(f"  - 最終持股: {p3}")
-            print("💡 (提示: 執行 pip install openpyxl 即可匯出包含分頁的單一 Excel 檔)")
+            print(" (提示: 執行 pip install openpyxl 即可匯出包含分頁的單一 Excel 檔)")
     except Exception as e:
         print(f"匯出報表失敗: {e}")
         
@@ -337,9 +337,9 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
 
 class CustomHelpParser(argparse.ArgumentParser):
     def error(self, message):
-        print(f"\n❌ [參數輸入錯誤] {message}")
+        print(f"\n[參數輸入錯誤] {message}")
         print("=" * 70)
-        print("💡 正確的執行範例:")
+        print(" 正確的執行範例:")
         print("   python trading_sim.py --start 2026-01-02 --end 2026-06-25 --capital 1000000 --max_pos 5\n")
         print("參數說明:")
         print("  --start    回測起始日期 (預設: 2026-01-01，格式: YYYY-MM-DD)")
