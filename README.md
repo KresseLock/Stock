@@ -26,12 +26,12 @@
 
 ```mermaid
 graph TD
-    A[多源數據爬蟲 scraper.py] -->|12H快取 / 失敗略過| B(歷史資料庫 data/)
+    A[多源數據爬蟲 scraper.py] -->|FinMind 7天快取 / 失敗略過| B(歷史資料庫 data/)
     B -->|因子調參| C(貝葉斯因子最佳化 optimize_factors.py)
     C -->|最佳因子 best_factors.json| D(特徵工程 feature_engineering.py)
     D -->|特徵矩陣 parquet| E(模型訓練 train.py)
     E -->|動態欄位 json| F(推理預測 inference.py)
-    F -->|多多空分數| G(交易模擬回測 trading_sim.py)
+    F -->|多空分數| G(交易模擬回測 trading_sim.py)
 ```
 
 ---
