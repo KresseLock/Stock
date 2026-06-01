@@ -45,10 +45,8 @@ def load_stocks(mode="limited") -> list:
         return auto_pipeline._get_training_stocks()
     except Exception as e:
         print(f"[警告] 無法讀取產業清單 ({e})，只使用 Stocks.txt。")
-        if not os.path.exists("Stocks.txt"):
-            return ["2330", "2317", "2454"]
-        with open("Stocks.txt", "r", encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip()]
+        from utils import load_target_stocks
+        return load_target_stocks("Stocks.txt")
 
 
 if __name__ == "__main__":

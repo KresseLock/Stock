@@ -264,33 +264,41 @@ def _fetch_twse_json(url: str):
       "NO_DATA" = API 正常但明確無資料 (含 404 網頁、很抱歉、data=[] 等)
       None      = 網路/解析錯誤或被 Ban
     """
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
-        if r.status_code != 200:
-            return None
-        body = r.text.strip()
+    while True:
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=15)
+            if r.status_code != 200:
+                return None
+            body = r.text.strip()
 
-        # 證交所對某些過舊日期回傳 HTTP 200 但內容是 HTML (含 404)
-        if not body or body[0] == "<":
-            if "<title>404</title>" in body:
+            # 證交所對某些過舊日期回傳 HTTP 200 但內容是 HTML (含 404)
+            if not body or body[0] == "<":
+                if "<title>404</title>" in body:
+                    return "NO_DATA"
+                return None
+
+            data = r.json()
+
+            stat = data.get("stat", "")
+            
+            # 攔截維護時間 (1:30 PM - 1:45 PM) 或其他伺服器維護 智慧等待
+            if any(k in stat for k in ["暫停查詢", "結算時間", "維護"]):
+                print(f"\n    ⏳ [系統提示] 證交所伺服器結算或維護中 (原因: {stat})，暫停 30 分鐘後自動重試...", end="", flush=True)
+                time.sleep(1800)
+                continue
+
+            if "很抱歉" in stat or "沒有" in stat:
                 return "NO_DATA"
+
+            # 攔截 data 欄位為空 list 且沒有 tables 的情況
+            if isinstance(data.get("data"), list) and not data["data"] and not data.get("tables"):
+                return "NO_DATA"
+
+            return data
+        except KeyboardInterrupt:
+            raise
+        except Exception:
             return None
-
-        data = r.json()
-
-        stat = data.get("stat", "")
-        if "很抱歉" in stat or "沒有" in stat:
-            return "NO_DATA"
-
-        # 攔截 data 欄位為空 list 且沒有 tables 的情況
-        if isinstance(data.get("data"), list) and not data["data"] and not data.get("tables"):
-            return "NO_DATA"
-
-        return data
-    except KeyboardInterrupt:
-        raise
-    except Exception:
-        return None
 
 
 def crawl_daily_price(date_str: str, skip: dict) -> str:
@@ -867,6 +875,9 @@ def download_history_data(
 
         if price_result == "market_closed":
             # 批次 skip 已在 crawl_daily_price 內完成
+            if d_str in fail_log:
+                del fail_log[d_str]
+                _save_fail_log(fail_log)
             print("休市")
             skipped_days += 1
             curr += delta
@@ -894,6 +905,11 @@ def download_history_data(
             _polite_sleep()
             curr += delta
             continue
+
+        # 如果之前有失敗紀錄，但這次成功了，就把它從失敗名單移除
+        if d_str in fail_log:
+            del fail_log[d_str]
+            _save_fail_log(fail_log)
 
         # price_result in ("ok", "exists") → 開市，繼續抓子資料
         results = [

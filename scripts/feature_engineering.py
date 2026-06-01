@@ -86,11 +86,14 @@ def _read_csv(path: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def load_target_stocks(file_path: str = "Stocks.txt") -> list:
-    fp = os.path.join(BASE_DIR, "..", file_path)
-    if not os.path.exists(fp): fp = file_path
-    if not os.path.exists(fp): return ["2330"]
-    with open(fp, "r", encoding="utf-8") as f:
-        return [line.strip() for line in f if line.strip()]
+    try:
+        from utils import load_target_stocks as _load
+        return _load(file_path)
+    except ImportError:
+        import sys
+        sys.path.append(os.path.join(BASE_DIR, ".."))
+        from utils import load_target_stocks as _load
+        return _load(file_path)
 
 def _is_weekend(date_obj: datetime.date) -> bool:
     """判斷是否為週六(5)或週日(6)，台股不開盤，直接跳過"""
@@ -511,13 +514,17 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
         
     print(f"  目標股票: {len(target_stocks)} 檔")
 
-    # Step 1: 逐日建立截面 (自動跳過週六週日)
+    # Step 1: 逐日建立截面 (自動跳過週六週日與無開市的國定假日)
     dates_to_process = []
     delta = datetime.timedelta(days=1)
     curr = start_date_obj
     while curr <= end_date_obj:
         if not _is_weekend(curr):
-            dates_to_process.append(curr.strftime("%Y%m%d"))
+            date_str = curr.strftime("%Y%m%d")
+            # 判斷當天是否有收盤價日報 CSV，若無則代表是國定假日或無開市交易，直接跳過以提升效率
+            price_path = os.path.join(DATA_DIR, "raw_price", f"{date_str}_price.csv")
+            if os.path.exists(price_path):
+                dates_to_process.append(date_str)
         curr += delta
 
     print(f"  準備處理 {len(dates_to_process)} 個交易日資料，啟動多核心平行處理...")
@@ -542,18 +549,63 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     df = apply_parallel(df.groupby("stock_id"), _compute_ta)
     df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
     
-    print("  計算相對大盤強弱指標 (Cross-Sectional RS)...")
-    # 算出每天「全市場」的平均漲跌幅，再拿個股漲跌幅去減，得出相對強弱 (RS)
+    print("  計算相對大盤強弱指標 (Cross-Sectional RS) 與總體市場/板塊特徵 (方案 B)...")
+    # 算出個股日漲跌幅
     df["close_pct"] = df.groupby("stock_id")["close"].pct_change()
-    df["market_mean_pct"] = df.groupby("date")["close_pct"].transform("mean")
+    
+    # 1. 計算總體市場特徵 (市場日均報酬、市場日上漲比例)
+    market_stats = df.groupby("date").agg(
+        market_mean_pct=("close_pct", "mean"),
+        market_breadth_pct=("close_pct", lambda x: (x > 0).mean())
+    ).reset_index()
+    
+    # 時間序列滾動平均 (避開未來資料)
+    market_stats = market_stats.sort_values("date").reset_index(drop=True)
+    market_stats["market_mean_ma5"] = market_stats["market_mean_pct"].rolling(5, min_periods=1).mean()
+    market_stats["market_mean_ma20"] = market_stats["market_mean_pct"].rolling(20, min_periods=1).mean()
+    market_stats["market_breadth_ma5"] = market_stats["market_breadth_pct"].rolling(5, min_periods=1).mean()
+    market_stats["market_breadth_ma20"] = market_stats["market_breadth_pct"].rolling(20, min_periods=1).mean()
+    
+    # 合併市場特徵回主 df
+    df = pd.merge(df, market_stats, on="date", how="left")
+    
+    # 計算相對大盤強弱 (RS)
     df["RS_1d"] = df["close_pct"] - df["market_mean_pct"]
     
-    # 也可以算 5 日的相對強弱
+    # 5日相對大盤強弱 (RS_5d)
     df["close_pct_5d"] = df.groupby("stock_id")["close"].pct_change(periods=5)
-    df["market_mean_pct_5d"] = df.groupby("date")["close_pct_5d"].transform("mean")
-    df["RS_5d"] = df["close_pct_5d"] - df["market_mean_pct_5d"]
+    df["RS_5d"] = df["close_pct_5d"] - df.groupby("date")["close_pct_5d"].transform("mean")
     
-    df = df.drop(columns=["close_pct", "market_mean_pct", "close_pct_5d", "market_mean_pct_5d"])
+    # 2. 計算產業板塊情緒特徵 (Sector Strength)
+    import json
+    cat_path = os.path.join(BASE_DIR, "..", "stock_categories.json")
+    stock_to_industry = {}
+    if os.path.exists(cat_path):
+        try:
+            with open(cat_path, "r", encoding="utf-8") as f:
+                cats = json.load(f)
+            for ind, stocks in cats.items():
+                for sid in stocks.keys():
+                    stock_to_industry[sid] = ind
+            print(f"  成功讀取 stock_categories.json，已建立 {len(stock_to_industry)} 檔股票的產業分類映射。")
+        except Exception as e:
+            print(f"  [警告] 讀取 stock_categories.json 失敗: {e}")
+            
+    if stock_to_industry:
+        df["stock_industry"] = df["stock_id"].map(stock_to_industry).fillna("未分類")
+        
+        # 每日各板塊的平均報酬
+        sector_mean = df.groupby(["date", "stock_industry"])["close_pct"].mean().reset_index(name="sector_mean_pct")
+        
+        # 時間序列滾動平均 (5天)
+        sector_mean = sector_mean.sort_values(["stock_industry", "date"]).reset_index(drop=True)
+        sector_mean["sector_mean_ma5"] = sector_mean.groupby("stock_industry")["sector_mean_pct"].transform(lambda x: x.rolling(5, min_periods=1).mean())
+        
+        # 合併回主 df
+        df = pd.merge(df, sector_mean, on=["date", "stock_industry"], how="left")
+        df = df.drop(columns=["stock_industry"])
+        
+    df = df.drop(columns=["close_pct", "close_pct_5d"])
 
     if ENABLE_CHIPS and "fini_net" in df.columns:
         print("  計算籌碼連續買賣超特徵...")
@@ -598,15 +650,24 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
                   "margin_quota", "short_quota"]
     df = df.drop(columns=[c for c in level_cols if c in df.columns], errors="ignore")
 
-    # Step 6: 產生每日橫截面排序標籤 (Quantile Ranking Label)
-    print("  計算每日橫截面排序標籤 (Quantile Label)...")
+    # Step 6: 產生每日橫截面排序標籤 (Quantile Ranking Label) - 方案 C: 混合絕對與相對標籤
+    print("  計算每日橫截面排序標籤 (Quantile Label)... (方案 C)")
     for d in FORECAST_DAYS:
         ret_col = f"next_ret_{d}"
         if ret_col in df.columns:
             # 每天在橫截面上針對未來的真實報酬做百分位排序
             rank = df.groupby("date")[ret_col].rank(pct=True)
-            # 前 20% 標為 2 (強勢), 後 20% 標為 0 (弱勢), 中間 1 (中性)
-            df[f"label_{d}"] = np.where(rank >= 0.8, 2, np.where(rank <= 0.2, 0, 1))
+            
+            # 混合標籤設計：
+            # 強勢股 (2): 相對排名前 20% 且「絕對報酬必須 > 0%」 (空頭崩盤時不勉強發出買入訊號)
+            is_strong = (rank >= 0.8) & (df[ret_col] > 0.0)
+            
+            # 弱勢股 (0): 相對排名後 20% 或「絕對報酬 < -2.0%」 (即便大盤都跌，大跌的個股依然是弱勢)
+            is_weak = (rank <= 0.2) | (df[ret_col] < -0.02)
+            
+            # 中性股 (1): 其他情況
+            df[f"label_{d}"] = np.where(is_strong, 2, np.where(is_weak, 0, 1))
+            
             # 處理原本 ret 為 NaN 的地方，讓 label 也保持 NaN
             df.loc[df[ret_col].isna(), f"label_{d}"] = np.nan
 
@@ -614,7 +675,7 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     label_cols = [f"next_ret_{d}" for d in FORECAST_DAYS if f"next_ret_{d}" in df.columns]
     label_cols += [f"label_{d}" for d in FORECAST_DAYS if f"label_{d}" in df.columns]
     if label_cols:
-        df = df.dropna(subset=label_cols)
+        pass # 保留最新這幾天的資料，不能在這裡 dropna，否則 inference.py 會永遠落後 3 天
 
     # 排序與存檔
     id_cols = ["stock_id", "date"]

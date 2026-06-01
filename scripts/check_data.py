@@ -180,6 +180,111 @@ def check_and_clean_twse_data():
     print(f"共發現並刪除 {deleted_count} 個異常/舊版空檔檔案。")
     print("==================================================\n")
 
+def check_price_anomalies():
+    """
+    掃描 raw_price 目錄，檢查 0050 的收盤價。
+    因為台股有 10% 漲跌幅限制，若 0050 單日跳空超過 15%，
+    絕對是證交所 API 吐回了舊日期的假資料（通常發生在假補班或颱風天）。
+    這時我們要把這天的所有檔案刪除，並加入 skip_dates.json 防止重抓。
+    """
+    print("==================================================")
+    print("  啟動 極端價格異常 (幽靈資料) 偵測工具")
+    print("==================================================")
+    
+    price_dir = os.path.join(DATA_DIR, "raw_price")
+    if not os.path.exists(price_dir):
+        return
+        
+    all_files = sorted(glob.glob(os.path.join(price_dir, "*_price.csv")))
+    
+    # 讀取 0050 歷史價格
+    history = []
+    for file_path in all_files:
+        filename = os.path.basename(file_path)
+        date_str = filename.split("_")[0]
+        try:
+            df = pd.read_csv(file_path, encoding="utf-8-sig", dtype=str)
+            # 找到 0050
+            row = df[df.iloc[:, 0] == "0050"]
+            if not row.empty:
+                # 收盤價通常在第 8 或 9 欄 (收盤價)
+                cols = list(df.columns)
+                close_col = next((c for c in cols if "收盤價" in c), None)
+                if close_col:
+                    close_price = float(row[close_col].values[0].replace(",", ""))
+                    history.append({"date": date_str, "file": file_path, "price": close_price})
+        except Exception:
+            continue
+            
+    # 讀取現有的 skip_dates 與 failed_dates 以便清除紀錄
+    skip_dates_path = os.path.join(DATA_DIR, "skip_dates.json")
+    fail_log_path = os.path.join(DATA_DIR, "failed_dates.json")
+    
+    skip_dates = {}
+    if os.path.exists(skip_dates_path):
+        try:
+            with open(skip_dates_path, "r", encoding="utf-8") as f:
+                skip_dates = json.load(f)
+        except Exception:
+            pass
+            
+    fail_log = {}
+    if os.path.exists(fail_log_path):
+        try:
+            with open(fail_log_path, "r", encoding="utf-8") as f:
+                fail_log = json.load(f)
+        except Exception:
+            pass
+
+    deleted_count = 0
+
+    for i in range(1, len(history)):
+        prev = history[i-1]
+        curr = history[i]
+        pct_change = abs((curr["price"] - prev["price"]) / prev["price"])
+        
+        if pct_change > 0.15:
+            bad_date = curr["date"]
+            print(f"[幽靈資料] {bad_date} 發現 0050 異常跳空 (前日:{prev['price']} -> 本日:{curr['price']})！")
+            
+            # 刪除這天的所有相關檔案
+            for d in ["raw_price", "raw_chips", "raw_margin", "raw_twse_per", "raw_taifex"]:
+                bad_file_pattern = os.path.join(DATA_DIR, d, f"{bad_date}_*.csv")
+                for bad_f in glob.glob(bad_file_pattern):
+                    os.remove(bad_f)
+                    print(f"  - 刪除假檔案: {os.path.basename(bad_f)}")
+            
+            # 從黑名單中移除，確保 scraper.py 下次會勇敢去抓
+            removed_from_cache = False
+            if bad_date in skip_dates:
+                del skip_dates[bad_date]
+                removed_from_cache = True
+            if bad_date in fail_log:
+                del fail_log[bad_date]
+                removed_from_cache = True
+            
+            if removed_from_cache:
+                print(f"  - 已從 JSON 快取中移除 {bad_date}，確保下次重新抓取。")
+
+            deleted_count += 1
+            
+            # 把 curr 的 price 改回 prev，避免下一次比較又觸發異常 (假跌回)
+            curr["price"] = prev["price"]
+
+    if deleted_count > 0:
+        # 回寫 JSON 檔案
+        with open(skip_dates_path, "w", encoding="utf-8") as f:
+            json.dump(skip_dates, f, indent=4, ensure_ascii=False)
+        with open(fail_log_path, "w", encoding="utf-8") as f:
+            json.dump(fail_log, f, indent=4, ensure_ascii=False)
+            
+        print(f"\n共清除 {deleted_count} 天的幽靈假資料，請在下次執行 main.py 時重新補抓！")
+        print("提示: 幽靈資料已清除，未來補抓完成後，請記得執行 run_feature_engineering.py 重算乾淨的特徵！")
+    else:
+        print("未發現任何幽靈假資料，資料庫非常健康！")
+    print("==================================================\n")
+
 if __name__ == "__main__":
     check_and_clean_finmind_data()
     check_and_clean_twse_data()
+    check_price_anomalies()

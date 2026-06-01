@@ -1,71 +1,71 @@
 {
-  "optimized_at": "2026-06-01 00:10:39",
+  "optimized_at": "2026-06-01 16:12:50",
   "algorithm": "Optuna TPE (Bayesian)",
   "iterations": 600,
-  "best_score_avg": 26.33503401360544,
+  "best_score_avg": 26.643990929705215,
   "backtest_date": "20250801",
   "best_params_for_run_feature_engineering": {
     "MA_WINDOWS": [
-      5,
-      9,
-      10,
-      26
+      8,
+      20,
+      34,
+      107
     ],
-    "RSI_PERIOD": 7,
-    "ATR_PERIOD": 27,
-    "KD_PERIOD": 16,
-    "MACD_FAST": 10,
-    "MACD_SLOW": 33,
-    "MACD_SIGNAL": 8,
-    "BOLL_WINDOW": 10,
-    "BOLL_STD_MULT": 1.65,
-    "VOL_MA_WINDOW": 7,
+    "RSI_PERIOD": 18,
+    "ATR_PERIOD": 23,
+    "KD_PERIOD": 9,
+    "MACD_FAST": 7,
+    "MACD_SLOW": 30,
+    "MACD_SIGNAL": 13,
+    "BOLL_WINDOW": 15,
+    "BOLL_STD_MULT": 2.66,
+    "VOL_MA_WINDOW": 3,
     "CHIPS_SUM_WINDOWS": [
       4,
-      8,
-      26
+      7,
+      25
     ]
   },
   "top10_trials": [
     {
-      "trial": 106,
-      "score": 26.33503401360544
+      "trial": 84,
+      "score": 26.643990929705215
     },
     {
-      "trial": 270,
-      "score": 26.28401360544218
+      "trial": 162,
+      "score": 26.587301587301585
     },
     {
-      "trial": 304,
-      "score": 26.267006802721088
+      "trial": 130,
+      "score": 26.473922902494333
     },
     {
-      "trial": 361,
-      "score": 26.267006802721088
+      "trial": 193,
+      "score": 26.473922902494333
     },
     {
-      "trial": 401,
-      "score": 26.267006802721088
+      "trial": 322,
+      "score": 26.473922902494326
     },
     {
-      "trial": 395,
-      "score": 26.25
+      "trial": 227,
+      "score": 26.417233560090708
     },
     {
-      "trial": 69,
-      "score": 26.241496598639458
+      "trial": 210,
+      "score": 26.360544217687075
     },
     {
-      "trial": 144,
-      "score": 26.232993197278912
+      "trial": 220,
+      "score": 26.360544217687075
     },
     {
-      "trial": 309,
-      "score": 26.232993197278912
+      "trial": 237,
+      "score": 26.303854875283445
     },
     {
-      "trial": 300,
-      "score": 26.22448979591837
+      "trial": 231,
+      "score": 26.24716553287982
     }
   ]
 }

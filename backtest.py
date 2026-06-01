@@ -177,7 +177,7 @@ def run_backtest(backtest_date_str):
     watchlist_path = os.path.join(BASE_DIR, "Stocks.txt")
     if os.path.exists(watchlist_path):
         with open(watchlist_path, "r", encoding="utf-8") as f:
-            watchlist = [line.strip() for line in f if line.strip()]
+            watchlist = [line.split(",")[0].strip() for line in f if line.strip() and not line.strip().startswith("#")]
             
         df_watch = df_eval[df_eval["stock_id"].isin(watchlist)].copy()
         if not df_watch.empty:

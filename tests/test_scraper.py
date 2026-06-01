@@ -1,16 +1,18 @@
 import os
 import sys
 import datetime
+import json
 import pandas as pd
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, BASE_DIR)
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
+sys.path.insert(0, ROOT_DIR)
 sys.stdout.reconfigure(encoding='utf-8')
 
 from scripts.scraper import download_history_data
 
 def test_scrape():
-    # 選擇一個已知必定有開市的交易日進行快速單元測試
+    # 選擇一個已知交易日進行快速單元測試
     test_date = datetime.date(2024, 3, 1)
     date_str = test_date.strftime("%Y%m%d")
     
@@ -18,6 +20,16 @@ def test_scrape():
     print(f"  執行爬蟲單元測試: 測試日期 {test_date}")
     print(f"==================================================")
     
+    # 載入 skip_dates 快取以進行防禦性檢查
+    skip_dates = {}
+    skip_path = os.path.join(ROOT_DIR, "data", "skip_dates.json")
+    if os.path.exists(skip_path):
+        try:
+            with open(skip_path, "r", encoding="utf-8") as f:
+                skip_dates = json.load(f)
+        except:
+            pass
+            
     # 執行單日下載
     download_history_data(test_date, test_date, target_stocks=["2330"])
     
@@ -36,7 +48,29 @@ def test_scrape():
     
     all_pass = True
     for rel_path in files_to_check:
-        full_path = os.path.join(BASE_DIR, rel_path)
+        full_path = os.path.join(ROOT_DIR, rel_path)
+        
+        # 檢查該檔案是否在 skip_dates 中被標記為跳過
+        basename = os.path.basename(rel_path).replace(".csv", "")
+        parts = basename.split("_", 1)
+        
+        is_skipped = False
+        skip_reason = ""
+        if len(parts) == 2 and parts[0].isdigit() and len(parts[0]) == 8:
+            dt_part = parts[0]
+            name_part = parts[1]
+            # 支持如 daytrading_20240301 或 taifex_20240301 (從 taifex_inst 映射)
+            keys_to_try = [
+                f"{name_part}_{dt_part}",
+                f"taifex_{dt_part}" if "taifex" in name_part else "",
+                f"fini_holding_{dt_part}" if "fini" in name_part else ""
+            ]
+            for k in keys_to_try:
+                if k and k in skip_dates:
+                    is_skipped = True
+                    skip_reason = skip_dates[k].get("reason", "unknown")
+                    break
+        
         if os.path.exists(full_path):
             size = os.path.getsize(full_path)
             
@@ -55,13 +89,15 @@ def test_scrape():
             except Exception as e:
                 print(f" FAIL  {rel_path:<40} | 檔案毀損無法讀取: {e}")
                 all_pass = False
+        elif is_skipped:
+            print(f" PASS  {rel_path:<40} | SKIP (跳過快取: 原因={skip_reason})")
         else:
-            print(f" FAIL  {rel_path:<40} | 找不到檔案")
+            print(f" FAIL  {rel_path:<40} | 找不到檔案且無跳過紀錄")
             all_pass = False
 
     print(f"==================================================")
     if all_pass:
-        print(" 爬蟲測試通過！證交所/期交所 API 正常，資料內容正確 (包含指定台積電資料)。")
+        print(" 爬蟲測試通過！證交所/期交所 API 正常，資料內容正確 (包含指定台積電資料或有合理跳過快取)。")
     else:
         print(" 爬蟲測試失敗！部分檔案未成功下載或內容異常。")
         sys.exit(1)

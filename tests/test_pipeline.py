@@ -18,7 +18,8 @@ import os
 import traceback
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, BASE_DIR)
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
+sys.path.insert(0, ROOT_DIR)
 
 PASS = " PASS"
 FAIL = " FAIL"
@@ -98,7 +99,7 @@ def test_kd_column_naming():
     import json
     import pandas as pd
     from scripts.feature_engineering import KD_PERIOD
-    path = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
+    path = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
     if not os.path.exists(path):
         return "Skip (no parquet)"
     df = pd.read_parquet(path)
@@ -152,7 +153,7 @@ check("_STABLE_NON_TA_COLS 無 mkt_inst_net", test_stable_cols_no_mkt_inst_net)
 
 def test_best_factors_json():
     import json
-    path = os.path.join(BASE_DIR, "best_factors.json")
+    path = os.path.join(ROOT_DIR, "best_factors.json")
     assert os.path.exists(path), "best_factors.json 不存在"
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -175,7 +176,7 @@ def test_apply_best_params():
     import json
     import auto_pipeline
     import run_feature_engineering as rfe_module
-    path = os.path.join(BASE_DIR, "best_factors.json")
+    path = os.path.join(ROOT_DIR, "best_factors.json")
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     params = data["best_params_for_run_feature_engineering"]
@@ -304,13 +305,24 @@ check("持股分級 reindex 對齊", test_shareholding_reindex)
 
 def test_parquet_integrity():
     import pandas as pd
-    path = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
+    path = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
     if not os.path.exists(path):
         raise AssertionError("features_combined.parquet 不存在，請先執行 run_feature_engineering.py")
     df = pd.read_parquet(path)
-    required = ["stock_id", "date", "close", "next_ret_1", "next_ret_2", "next_ret_3", "revenue", "cash_dividend"]
+    
+    # 基礎核心欄位 (注意：revenue 與 cash_dividend 為絕對值，已於 Step 5 消除 Level Bias 時 Drop 掉，故不應在 parquet 內直接檢查)
+    required = ["stock_id", "date", "close", "next_ret_1", "next_ret_2", "next_ret_3"]
     missing = [c for c in required if c not in df.columns]
     assert not missing, f"parquet 缺少核心特徵欄位: {missing}"
+    
+    # 方案 B 的總體市場與板塊情緒特徵欄位檢查
+    macro_cols = ["market_mean_pct", "market_breadth_pct", "market_mean_ma5", "market_mean_ma20", "market_breadth_ma5", "market_breadth_ma20"]
+    missing_macro = [c for c in macro_cols if c not in df.columns]
+    assert not missing_macro, f"parquet 缺少方案 B 的總體市場特徵欄位: {missing_macro}"
+    
+    sector_cols = ["sector_mean_pct", "sector_mean_ma5"]
+    missing_sector = [c for c in sector_cols if c not in df.columns]
+    assert not missing_sector, f"parquet 缺少方案 B 的板塊特徵欄位: {missing_sector}"
     
     warnings = []
     if "taifex_txf_fini_net_oi" not in df.columns:
@@ -320,7 +332,7 @@ def test_parquet_integrity():
     if "margin_quota" not in df.columns:
         warnings.append("margin_quota")
         
-    msg = f"parquet 正常，{len(df):,} 筆，{len(df.columns)} 欄"
+    msg = f"parquet 正常，{len(df):,} 筆，{len(df.columns)} 欄 (含總體市場與板塊特徵)"
     if warnings:
         msg += f" ( 警告: 缺少 {warnings}，可能爬蟲跳過歷史下載)"
         
@@ -334,7 +346,7 @@ check("parquet 特徵檔完整性", test_parquet_integrity)
 # ─────────────────────────────────────────────────────────────
 
 def test_scraper_fail_logic():
-    with open(os.path.join(BASE_DIR, "scripts", "scraper.py"), "r", encoding="utf-8") as f:
+    with open(os.path.join(ROOT_DIR, "scripts", "scraper.py"), "r", encoding="utf-8") as f:
         content = f.read()
     assert "failed_dates.json" in content, "scraper.py 找不到 failed_dates.json 的實作"
     assert "SKIP_AFTER_FAILS" in content, "scraper.py 找不到 SKIP_AFTER_FAILS 的常數設定"
@@ -354,6 +366,42 @@ def test_early_stopping_config():
     return f"提早結束變數存在, auto_pipeline: {auto_pipeline.EARLY_STOPPING_ROUNDS}"
 
 check("Early Stopping 參數檢查", test_early_stopping_config)
+
+# ─────────────────────────────────────────────────────────────
+# 13. utils.py 共享解析器單元測試
+# ─────────────────────────────────────────────────────────────
+
+def test_utils_parser():
+    import tempfile
+    import json
+    from utils import parse_stocks_file, load_target_stocks
+    
+    # 建立假 Stocks.txt
+    test_content = (
+        "# 這是測試註解\n"
+        "2330,950.0\n"
+        "2317\n"
+        "  2454 , 1200.5 \n"
+    )
+    with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8", delete=False) as f:
+        tmp_path = f.name
+        f.write(test_content)
+        
+    try:
+        watchlist = parse_stocks_file(tmp_path)
+        assert watchlist["2330"] == 950.0, "解析成本錯誤"
+        assert watchlist["2317"] is None, "解析無成本錯誤"
+        assert watchlist["2454"] == 1200.5, "解析空白及成本錯誤"
+        
+        tickers = load_target_stocks(tmp_path)
+        assert tickers == ["2330", "2317", "2454"], f"載入股票清單列表錯誤: {tickers}"
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+            
+    return "utils.py 共享解析器測試成功"
+
+check("utils.py 共享解析器測試", test_utils_parser)
 
 # ─────────────────────────────────────────────────────────────
 # 輸出結果與產生 Log 檔

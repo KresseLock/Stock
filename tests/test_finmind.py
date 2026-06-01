@@ -1,6 +1,8 @@
 import os, time
 
-fin_dir = r"D:\Vscode_workspace\Stock\data\raw_financial"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
+fin_dir = os.path.join(ROOT_DIR, "data", "raw_financial")
 files = [f for f in os.listdir(fin_dir) if f.startswith("1336")]
 for f in sorted(files):
     path = os.path.join(fin_dir, f)

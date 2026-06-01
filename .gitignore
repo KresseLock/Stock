@@ -40,6 +40,7 @@ Thumbs.db
 *.bak
 predictions/
 sample_data/
+reports/
 
 # ==========================================
 # 標準 Python 忽略設定 (GitHub 官方範本)

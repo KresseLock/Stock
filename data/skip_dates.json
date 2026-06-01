@@ -18748,32 +18748,32 @@
     "confirmed_at": "2026-05-31"
   },
   "chips_20250501": {
-    "reason": "no_data",
-    "confirmed_at": "2026-05-31"
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
   },
   "margin_20250501": {
-    "reason": "no_data",
-    "confirmed_at": "2026-05-31"
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
   },
   "sbl_20250501": {
-    "reason": "no_data",
-    "confirmed_at": "2026-05-31"
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
   },
   "taifex_inst_20250501": {
-    "reason": "no_data",
-    "confirmed_at": "2026-05-31"
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
   },
   "daytrading_20250501": {
-    "reason": "unexpected_format",
-    "confirmed_at": "2026-05-31"
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
   },
   "fini_holding_20250501": {
-    "reason": "no_data",
-    "confirmed_at": "2026-05-31"
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
   },
   "credit_limit_20250501": {
-    "reason": "no_data",
-    "confirmed_at": "2026-05-31"
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
   },
   "daytrading_20250502": {
     "reason": "unexpected_format",
@@ -21969,6 +21969,1070 @@
   },
   "credit_limit_20260601": {
     "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "20200520": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20230510": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20230524": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20230719": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20240215": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20240219": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20240415": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20241217": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250505": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250618": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250619": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250620": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250623": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250624": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250625": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250626": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250627": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250630": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250701": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250702": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250703": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250704": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250707": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250708": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250709": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250710": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250711": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250714": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250715": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250716": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250717": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250718": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250721": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250722": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250723": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250724": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250725": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250728": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250729": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250730": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250731": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250801": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250804": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250805": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250806": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250807": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250808": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250811": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250812": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250813": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250814": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250815": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250818": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250819": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250820": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250821": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250822": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250825": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250826": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250827": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250828": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250829": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250901": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250902": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250903": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250904": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250905": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250908": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250909": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250910": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250911": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250912": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250915": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250916": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250917": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250918": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250919": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250922": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250923": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250924": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250925": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250926": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20250930": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251001": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251002": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251003": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251007": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251008": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251009": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251013": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251014": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251015": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251016": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251017": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251020": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251021": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251022": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251023": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251027": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251028": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251029": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251030": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251031": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251103": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251104": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251105": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251106": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251107": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251110": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251111": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251112": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251113": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251114": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251117": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251118": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251119": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251120": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251121": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251124": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251125": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251126": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251127": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251128": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251201": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251202": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251203": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251204": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251205": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251208": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251209": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251210": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251211": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251212": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251215": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251216": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251217": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251218": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251219": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251222": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251223": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251224": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251226": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251229": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251230": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20251231": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260102": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260105": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260106": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260107": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260108": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260109": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260112": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260113": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260114": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260115": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260116": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260119": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260120": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260121": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260122": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260123": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260126": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260127": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260128": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260129": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260130": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260202": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260203": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260204": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260205": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260206": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260209": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260210": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260211": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260223": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260224": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260225": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260226": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260302": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260303": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260304": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260305": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260306": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260309": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260310": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260311": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260312": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260313": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260316": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260317": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260318": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260319": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260320": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260323": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260324": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260325": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260326": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260327": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260330": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260331": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260401": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260402": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260407": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260408": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260409": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260410": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260413": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260414": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260415": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260416": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260417": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260420": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260421": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260422": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260423": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260424": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260427": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260428": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260429": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260430": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260504": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260505": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260506": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260507": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260508": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260511": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260512": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260513": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260514": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260515": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260518": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260519": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260520": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260521": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260522": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260525": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260526": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260527": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260528": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "20260529": {
+    "reason": "anomaly",
+    "desc": "Extreme price anomaly detected (holiday ghost data)"
+  },
+  "taifex_inst_20200102": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "daytrading_20200102": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-01"
+  },
+  "taifex_inst_20200103": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "daytrading_20200103": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-01"
+  },
+  "taifex_inst_20200106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "daytrading_20200106": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-01"
+  },
+  "taifex_inst_20200107": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "daytrading_20200107": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-01"
+  },
+  "taifex_inst_20200108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "daytrading_20200108": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-01"
+  },
+  "price_20250501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "twse_per_20250501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-01"
+  },
+  "sbl_20250820": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-01"
+  },
+  "sbl_20250826": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-01"
+  },
+  "sbl_20250919": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-01"
+  },
+  "twse_per_20250919": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "twse_per_20251029": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-01"
+  },
+  "chips_20251104": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-01"
+  },
+  "sbl_20251125": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "chips_20251201": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-01"
+  },
+  "sbl_20260106": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-01"
+  },
+  "sbl_20260306": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-01"
+  },
+  "chips_20260313": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-01"
+  },
+  "chips_20260409": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "twse_per_20260410": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-01"
+  },
+  "margin_20260417": {
+    "reason": "unexpected_format",
     "confirmed_at": "2026-06-01"
   }
 }

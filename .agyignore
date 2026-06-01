@@ -45,3 +45,4 @@ temp/
 .DS_Store
 Thumbs.db
 FINMIND_TOKEN.txt
+reports/

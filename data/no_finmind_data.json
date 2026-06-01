@@ -172,19 +172,31 @@
     "confirmed_date": "2026-05-31"
   },
   "6145": {
-    "status": "pending",
-    "first_seen": "2026-05-31"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-01"
   },
   "6255": {
-    "status": "pending",
-    "first_seen": "2026-05-31"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-01"
   },
   "6286": {
-    "status": "pending",
-    "first_seen": "2026-05-31"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-01"
   },
   "6422": {
+    "status": "confirmed",
+    "confirmed_date": "2026-06-01"
+  },
+  "7898": {
+    "status": "confirmed",
+    "confirmed_date": "2026-06-01"
+  },
+  "8008": {
+    "status": "confirmed",
+    "confirmed_date": "2026-06-01"
+  },
+  "8199": {
     "status": "pending",
-    "first_seen": "2026-05-31"
+    "first_seen": "2026-06-01"
   }
 }
