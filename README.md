@@ -207,7 +207,7 @@ python main.py
 1. 增量下載今日最新行情與法人籌碼數據 (`main.py`)
 2. 重建特徵工程與模型訓練 (`auto_pipeline.py`)
 3. 執行推理預測產出多空排行榜與建議下單指令 (`inference.py`)
-4. 調用 rclone 將最新預測 txt 建議單同步上傳至 Google Drive 備份 (`StockSync.py`)
+4. 調用 rclone 將最新預測 txt 建議單同步上傳至雲端硬碟備份 (`StockSync.py`)
 
 執行指令：
 ```powershell
@@ -231,7 +231,7 @@ python StockSync.py
 > #### ☁️ rclone 雲端備份環境與安全性注意事項
 > 
 > 1. **執行檔需另行下載**：`rclone` 本身是用 Go 語言編寫的獨立工具，`pip` 安裝的只是 Python 的封裝庫。您需要前往 [rclone 官網](https://rclone.org/downloads/) 下載適用於 Windows 的 `rclone.exe` 執行檔，並將其放入虛擬環境的 `venv/Scripts/` 目錄中，或者加入系統的環境變數 PATH 中。
-> 2. **Token 與登入金鑰安全**：透過 `rclone config` 登入 Google Drive 後所產生的金鑰資訊會儲存於 `config` / `.config` 資料夾或 `rclone.conf` 設定檔中。**這些金鑰與權限 Token 屬於高度敏感私鑰，已自動列入 `.gitignore` 與 `.agyignore` 中，絕對禁止提交至 Git 倉庫，亦不可外洩或上傳雲端**。
+> 2. **Token 與登入金鑰安全**：透過 `rclone config` 登入雲端硬碟後所產生的金鑰資訊會儲存於 `config` / `.config` 資料夾或 `rclone.conf` 設定檔中。**這些金鑰與權限 Token 屬於高度敏感私鑰，已自動列入 `.gitignore` 與 `.agyignore` 中，絕對禁止提交至 Git 倉庫，亦不可外洩或上傳雲端**。
 
 > [!IMPORTANT]
 > #### 💡 重新訓練與大數據調參流程 (更換追蹤產業與重跑優化時的正確步驟)
