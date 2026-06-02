@@ -72,19 +72,19 @@ TRAIN_INDUSTRIES = {
     "半導體業": True,        "電子零組件業": True,      "電腦及週邊設備業": True,
     "光電業": True,          "電子通路業": True,        "其他電子業": True,
     "電子工業": True,        "通信網路業": True,        "資訊服務業": True,
-    "電子商務業": True,     "生技醫療業": True,       "化學工業": False,
-    "化學生技醫療": True,   "塑膠工業": False,         "橡膠工業": False,
-    "電機機械": True,       "汽車工業": False,         "航運業": False,
-    "鋼鐵工業": False,       "建材營造": False,         "玻璃陶瓷": False,
-    "水泥工業": False,       "造紙工業": False,         "紡織纖維": False,
-    "食品工業": False,       "農業科技業": False,       "農業科技": False,
-    "貿易百貨": False,       "觀光事業": False,         "觀光餐旅": False,
-    "金融保險": False,       "金融業": False,           "油電燃氣業": False,
-    "綠能環保": False,       "綠能環保類": False,       "居家生活": False,
-    "居家生活類": False,     "運動休閒": False,         "運動休閒類": False,
-    "數位雲端": False,       "數位雲端類": False,       "文化創意業": False,
-    "存託憑證": False,       "創新板股票": False,       "創新版股票": False,
-    "ETF": False,            "其他電子類": False,       "其他": False,
+    "電子商務業": True,     "生技醫療業": True,       "化學工業": True,
+    "化學生技醫療": True,   "塑膠工業": True,         "橡膠工業": True,
+    "電機機械": True,       "汽車工業": True,         "航運業": True,
+    "鋼鐵工業": True,       "建材營造": True,         "玻璃陶瓷": True,
+    "水泥工業": True,       "造紙工業": True,         "紡織纖維": True,
+    "食品工業": True,       "農業科技業": True,       "農業科技": True,
+    "貿易百貨": True,       "觀光事業": True,         "觀光餐旅": True,
+    "金融保險": True,       "金融業": True,           "油電燃氣業": True,
+    "綠能環保": True,       "綠能環保類": True,       "居家生活": True,
+    "居家生活類": True,     "運動休閒": True,         "運動休閒類": True,
+    "數位雲端": True,       "數位雲端類": True,       "文化創意業": True,
+    "存託憑證": True,       "創新板股票": True,       "創新版股票": True,
+    "ETF": False,            "其他電子類": True,       "其他": True,
 }
 
 # ── 步驟 1&2 設定：最佳化結果檔路徑 ────────────────────
@@ -256,31 +256,49 @@ def main():
     print("  一鍵自動化量化交易流水線 (Auto Pipeline)")
     print("=" * 65)
     print(f"  執行時間: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  執行步驟: {'最佳化 → ' if RUN_OPTIMIZATION else '(跳過最佳化) → '}"
-          f"載入參數 → 特徵工程 → 訓練 → 推理")
+    print(f"  執行步驟: {'(重置特徵 → 最佳化 → 重建特徵)' if RUN_OPTIMIZATION else '(載入參數 → 特徵工程)'} → 訓練 → 推理")
 
-    # ── 步驟 1: 因子最佳化 ──────────────────────────────
+    # ── 步驟 1: 因子最佳化與特徵準備 ──────────────────────
     bt = _resolve_backtest_date()
     if RUN_OPTIMIZATION:
+        # [互鎖升級] 最佳化前必須先用最新抓取的全股資料建立基礎 parquet 檔，否則 Optuna 會讀到舊資料
+        _banner(0, "最佳化前置準備：以現有參數重建最新特徵矩陣")
+        t0 = time.time()
+        step2_load_params()
+        step3_feature_engineering()
+        print(f"  [耗時] {time.time()-t0:.1f} 秒")
+
         _banner(1, f"貝葉斯因子最佳化 (Optuna TPE, {OPTIMIZATION_TRIALS} 輪, 回測切割={bt})")
         t0 = time.time()
         step1_optimize(bt)
+        print(f"  [耗時] {time.time()-t0:.1f} 秒")
+
+        # 最佳化後，重新載入最新跑出來的 parameters
+        _banner(2, "載入最新最佳因子參數")
+        t0 = time.time()
+        step2_load_params()
+        print(f"  [耗時] {time.time()-t0:.1f} 秒")
+
+        # 使用最佳化後的黃金參數，重新建立最終特徵矩陣
+        _banner(3, "以最佳因子參數重建最終特徵矩陣")
+        t0 = time.time()
+        step3_feature_engineering()
         print(f"  [耗時] {time.time()-t0:.1f} 秒")
     else:
         _banner(1, "跳過因子最佳化 (RUN_OPTIMIZATION=False)")
         print("  直接使用上次最佳化的 best_factors.json")
 
-    # ── 步驟 2: 載入最佳參數 ────────────────────────────
-    _banner(2, "載入最佳因子參數")
-    t0 = time.time()
-    step2_load_params()
-    print(f"  [耗時] {time.time()-t0:.1f} 秒")
+        # ── 步驟 2: 載入最佳參數 ────────────────────────────
+        _banner(2, "載入最佳因子參數")
+        t0 = time.time()
+        step2_load_params()
+        print(f"  [耗時] {time.time()-t0:.1f} 秒")
 
-    # ── 步驟 3: 特徵工程 ────────────────────────────────
-    _banner(3, "重建特徵矩陣 (Feature Engineering)")
-    t0 = time.time()
-    step3_feature_engineering()
-    print(f"  [耗時] {time.time()-t0:.1f} 秒")
+        # ── 步驟 3: 特徵工程 ────────────────────────────────
+        _banner(3, "重建特徵矩陣 (Feature Engineering)")
+        t0 = time.time()
+        step3_feature_engineering()
+        print(f"  [耗時] {time.time()-t0:.1f} 秒")
 
     # ── 步驟 4: 訓練 ────────────────────────────────────
     _banner(4, "訓練 LightGBM 模型 (Day 1 ~ Day 3)")

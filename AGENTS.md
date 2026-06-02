@@ -40,10 +40,12 @@
 
 ### 模型最佳化、訓練與預測 (Modeling & Inference)
 - **`optimize_factors.py`**: **特徵與超參數最佳化腳本**。使用 `Optuna` 框架，在不偷看未來的驗證集上，動態尋找勝率最高的技術指標參數組合並輸出 `best_factors.json`。
+  - **自動板塊篩選**：載入數據時會依據 `train.py` 中的 `TRAIN_INDUSTRIES` 進行股票過濾，確保尋找出來的最佳參數是專門契合您所勾選的產業特性。
 - **`train.py`**: **LightGBM 模型訓練腳本**。讀取 parquet 特徵檔，依照時間軸進行 strict 日期分位切割，訓練 LightGBM 模型並將特徵欄位儲存至 `models/feature_cols.json`。
+  - **訓練產業選擇 (`TRAIN_INDUSTRIES`)**：內建產業控制字典，可自由選擇欲訓練的板塊（例如僅訓練電子股），排除其他產業雜訊，同時無條件保留 `Stocks.txt` 自選股。
 - **`inference.py`**: **預測推論腳本**。載入最新一天資料與模型，推論目標清單股票未來 3 天的多空分數並印出排名表。
-  - **實戰倉位對齊**：自動與 `trading_sim.py` 的「最多 5 檔持倉上限、Day1 >= 10.0% 買入、Day3 < 0% 賣出、-8% 停損」策略完全對齊。
-  - **智慧下單建議**：自動區分 `Stocks.txt` 內實質持倉（有買入成本）與自選股（無成本），動態計算明日可用空位，並在每日收盤後提供明日「開盤買進/賣出」的雲端智慧單具體掛單建議。
+  - **實戰倉位與板塊對齊**：自動與 `trading_sim.py` 的「最多 5 檔持倉上限、Day1 >= 10.0% 買入、Day3 < 0% 賣出、-8% 停損」策略對齊；同時自動以 `train.py` 設定過濾股票，只推薦您選中的產業。
+  - **智慧下單建議**：自動區分 `Stocks.txt` 內實質持倉與自選股，動態計算明日可用空位，並在每日收盤後提供明日「開盤買進/賣出」具體掛單建議。
 
 ### 雲端備份與自動化控制 (Cloud Sync & Master Control)
 - **`StockSync.py`**: **雲端自動備份腳本**。使用 rclone 把 `predictions/` 下產生的預測建議文字檔同步拷貝至 Google Drive (StockSync 遠端)。
@@ -60,7 +62,9 @@
 - **`backtest.py`**: **時光機回測模式腳本**。指定單一基準日，以該日前的數據訓練模型，回測該日未來 3 天全市場及自選股的實質利潤與勝率。
 
 ### ️ 共享核心工具與測試 (Utilities & Tests)
-- **`utils.py`**: **全系統共享股票解析工具**。統一 `Stocks.txt` 的解析邏輯（格式 A 及格式 B 成本欄位），提供單一事實來源並自動支援 subdirectory 與 fallback。
+- **`utils.py`**: **全系統共享股票解析與過濾工具**。
+  - 統一 `Stocks.txt` 的解析邏輯（格式 A/B/C 成本與股數欄位），支援 subdirectory 與 fallback。
+  - 提供 `filter_stocks_by_train_industries(df)` 統一過濾器，自動以 `train.py` 的設定篩選 DataFrame 中的個股（支持 int/str 類型 stock_id 與自選股強制保留）。
 - **`tests/test_pipeline.py`**: **全系統整合測試腳本**。驗證 19 項核心邏輯，包含日期切割、特徵檔完整性（排除 Level Bias 絕對值特徵，包含方案 B 特徵）、`utils.py` 解析器單元測試等。
 - **`tests/test_scraper.py`**: **爬蟲單元測試腳本**。快速測試證交所與期交所 API 下載功能，自動整合 `skip_dates.json` 防呆略過機制。
 - **`tests/test_finmind.py`**: **FinMind 資料單元測試**。自動以 `__file__` 動態解析路徑，檢驗基本面資料與歷年修改時間。

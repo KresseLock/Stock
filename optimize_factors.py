@@ -398,6 +398,15 @@ def main():
 
     print("[1] 載入特徵數據 (僅此一次)...")
     df_base = pd.read_parquet(parquet_path)
+    
+    # ── 根據 train.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
+    from utils import filter_stocks_by_train_industries
+    before_cnt = df_base["stock_id"].nunique()
+    df_base = filter_stocks_by_train_industries(df_base)
+    after_cnt = df_base["stock_id"].nunique()
+    print(f"  [最佳化過濾] 依 train.py 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行因子最佳化")
+    # ──────────────────────────────────────────────────────────
+    
     df_base["date"] = pd.to_datetime(df_base["date"])
 
     bt_date = pd.to_datetime(BACKTEST_DATE, format="%Y%m%d")

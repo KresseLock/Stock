@@ -23,6 +23,29 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 FEATURE_COLS_PATH = os.path.join(MODEL_DIR, "feature_cols.json")
+
+# ── 步驟 4 設定：訓練產業選擇 ────────────────────────
+# 設定 True 代表要將該產業的股票納入 LightGBM 的訓練集。
+# 設定 False 代表排除該產業 (模型不會從該產業學習規律)。
+# 註：無論如何設定，Stocks.txt 裡面的自選股「一定」會保留在訓練集中。
+TRAIN_INDUSTRIES = {
+    "半導體業": True,        "電子零組件業": True,      "電腦及週邊設備業": True,
+    "光電業": True,          "電子通路業": True,        "其他電子業": True,
+    "電子工業": True,        "通信網路業": True,        "資訊服務業": True,
+    "電子商務業": True,     "生技醫療業": False,       "化學工業": False,
+    "化學生技醫療": False,   "塑膠工業": False,         "橡膠工業": False,
+    "電機機械": True,       "汽車工業": False,         "航運業": False,
+    "鋼鐵工業": False,       "建材營造": False,         "玻璃陶瓷": False,
+    "水泥工業": False,       "造紙工業": False,         "紡織纖維": False,
+    "食品工業": False,       "農業科技業": False,       "農業科技": False,
+    "貿易百貨": False,       "觀光事業": False,         "觀光餐旅": False,
+    "金融保險": False,       "金融業": False,           "油電燃氣業": False,
+    "綠能環保": False,       "綠能環保類": False,       "居家生活": False,
+    "居家生活類": False,     "運動休閒": False,         "運動休閒類": False,
+    "數位雲端": False,       "數位雲端類": False,       "文化創意業": False,
+    "存託憑證": False,       "創新板股票": False,       "創新版股票": False,
+    "ETF": False,            "其他電子類": False,       "其他": False,
+}
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 def train_model(df, feature_cols, target_col, days_ahead):
@@ -107,6 +130,34 @@ def main():
         return
         
     df = pd.read_parquet(DATA_PATH)
+    
+    # ── 根據 TRAIN_INDUSTRIES 過濾訓練集股票 ─────────────────────
+    cat_path = os.path.join(BASE_DIR, "stock_categories.json")
+    if os.path.exists(cat_path):
+        with open(cat_path, "r", encoding="utf-8") as f:
+            categories = json.load(f)
+            
+        allowed_stocks = set()
+        for ind_name, is_enabled in TRAIN_INDUSTRIES.items():
+            if is_enabled and ind_name in categories:
+                allowed_stocks.update(categories[ind_name].keys())
+                
+        # 載入 Stocks.txt 自選股並確保其一定保留在訓練集中
+        from utils import load_target_stocks
+        try:
+            allowed_stocks.update(load_target_stocks("Stocks.txt"))
+        except Exception as e:
+            print(f"  [警告] 載入 Stocks.txt 自選股失敗: {e}")
+            
+        # 過濾資料
+        before_count = df["stock_id"].nunique()
+        df_filtered = df[df["stock_id"].isin(allowed_stocks)].copy()
+        after_count = df_filtered["stock_id"].nunique()
+        print(f"  [訓練篩選] 套用 TRAIN_INDUSTRIES 篩選：原本有 {before_count} 檔股票，篩選後剩餘 {after_count} 檔股票進行訓練。")
+        df = df_filtered
+    else:
+        print("  [警告] 找不到 stock_categories.json，不進行訓練產業篩選")
+    # ──────────────────────────────────────────────────────────
     
     label_cols = ["label_1", "label_2", "label_3"]
     ret_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]

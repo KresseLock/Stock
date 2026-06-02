@@ -101,3 +101,52 @@ def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
             detailed_watchlist[sid] = {"cost": cost, "shares": shares}
 
     return detailed_watchlist
+
+
+def filter_stocks_by_train_industries(df, target_col="stock_id") -> "pd.DataFrame":
+    """
+    根據 train.py 中的 TRAIN_INDUSTRIES 設定與 stock_categories.json 檔案，
+    以及 Stocks.txt，過濾 DataFrame 中的股票。
+    """
+    import numpy as np
+    import json
+    
+    # 延遲載入 train 模組的 TRAIN_INDUSTRIES 避免循環引用
+    try:
+        from train import TRAIN_INDUSTRIES
+    except ImportError:
+        print("[utils] 無法載入 train 中的 TRAIN_INDUSTRIES，跳過過濾")
+        return df
+
+    cat_path = os.path.join(BASE_DIR, "stock_categories.json")
+    if not os.path.exists(cat_path):
+        print("[utils] 找不到 stock_categories.json，跳過過濾")
+        return df
+
+    with open(cat_path, "r", encoding="utf-8") as f:
+        categories = json.load(f)
+
+    allowed_stocks = set()
+    for ind_name, is_enabled in TRAIN_INDUSTRIES.items():
+        if is_enabled and ind_name in categories:
+            allowed_stocks.update(categories[ind_name].keys())
+
+    # 確保 Stocks.txt 裡的自選股一定保留在股票池中
+    try:
+        allowed_stocks.update(load_target_stocks("Stocks.txt"))
+    except Exception:
+        pass
+
+    # 偵測 df[target_col] 的型態，將 allowed_stocks 進行對齊以提升效能
+    if not df.empty:
+        sample = df[target_col].iloc[0]
+        if isinstance(sample, (int, np.integer)):
+            # 轉換為整數集合
+            allowed_set = {int(x) for x in allowed_stocks if x.isdigit()}
+        else:
+            allowed_set = {str(x) for x in allowed_stocks}
+        df_filtered = df[df[target_col].isin(allowed_set)].copy()
+        return df_filtered
+        
+    return df
+

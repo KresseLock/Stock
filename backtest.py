@@ -63,6 +63,14 @@ def run_backtest(backtest_date_str):
     print("載入歷史特徵矩陣...")
     df = pd.read_parquet(DATA_PATH)
     
+    # ── 根據 train.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
+    from utils import filter_stocks_by_train_industries
+    before_cnt = df["stock_id"].nunique()
+    df = filter_stocks_by_train_industries(df)
+    after_cnt = df["stock_id"].nunique()
+    print(f"  [時光機過濾] 依 train.py 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行時光機回測")
+    # ──────────────────────────────────────────────────────────
+    
     target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     for col in target_cols:
         if col not in df.columns:

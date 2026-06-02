@@ -68,6 +68,15 @@ def main():
         return
 
     df = pd.read_parquet(DATA_PATH)
+    
+    # ── 根據 train.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
+    from utils import filter_stocks_by_train_industries
+    before_cnt = df["stock_id"].nunique()
+    df = filter_stocks_by_train_industries(df)
+    after_cnt = df["stock_id"].nunique()
+    print(f"  [推理過濾] 依 train.py 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行推理")
+    # ──────────────────────────────────────────────────────────
+    
     latest_date = df["date"].max()
     date_str = latest_date.strftime("%Y%m%d")
 

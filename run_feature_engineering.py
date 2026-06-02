@@ -39,20 +39,20 @@ BACKTEST_MODE = False
 BACKTEST_DATE = ""  # 格式: "YYYYMMDD"，留空則執行時提示輸入
 
 # ── 技術指標參數 ────────────────────────────────────────
-MA_WINDOWS           = [9, 17, 19, 46]
-RSI_PERIOD           = 8
-ATR_PERIOD           = 23
-KD_PERIOD            = 10
+MA_WINDOWS           = [5, 8, 32, 53]
+RSI_PERIOD           = 28
+ATR_PERIOD           = 27
+KD_PERIOD            = 8
 MACD_FAST            = 15
-MACD_SLOW            = 21
-MACD_SIGNAL          = 5
-BOLL_WINDOW          = 10
-BOLL_STD_MULT        = 2.89
+MACD_SLOW            = 48
+MACD_SIGNAL          = 12
+BOLL_WINDOW          = 13
+BOLL_STD_MULT        = 2.34
 VOL_MA_WINDOW        = 13
 
 # ── 籌碼滾動加總週期 ────────────────────────────────────
 # 法人買賣超「滾動加總」的時間視窗（例如：[3,5,10] = 計算近3日、近5日、近10日的買賣超合計）
-CHIPS_SUM_WINDOWS    = [5, 9, 20]
+CHIPS_SUM_WINDOWS    = [4, 10, 22]
 
 # ── 預測天數設定 ────────────────────────────────────────
 # 產生幾天的「未來標籤」供 LightGBM 訓練
