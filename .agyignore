@@ -47,3 +47,11 @@ Thumbs.db
 FINMIND_TOKEN.txt
 reports/
 predictions/
+
+# rclone 雲端密鑰與設定檔 (防外洩)
+config
+config/
+.config
+.config/
+rclone.conf
+rclone.conf.bak

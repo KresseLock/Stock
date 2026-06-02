@@ -313,8 +313,6 @@ def main():
             )
         output_lines.append("")
         output_lines.append("     [掛單提醒] 建議掛單價已依 D1 信心動態加價並自動對齊台股 Tick 升降單位 (D1>=30%加2.5%, >=20%加2.0%, 其他加1.5%)。")
-        output_lines.append("     [操作提醒] 優先買進前述 [優先買進] 標的。成交後請在 Stocks.txt 中填寫「代號,買入價,股數」啟用損益監控。")
-        output_lines.append("    (ETF 已自動排除於買進建議之外)")
     output_lines.append("-" * 90)
 
     if has_real_watchlist and len(track_only) > 0:

@@ -23018,5 +23018,29 @@
   "credit_limit_20260601": {
     "reason": "no_data",
     "confirmed_at": "2026-06-01"
+  },
+  "margin_20260602": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-02"
+  },
+  "sbl_20260602": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-02"
+  },
+  "twse_per_20260602": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-02"
+  },
+  "daytrading_20260602": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-02"
+  },
+  "fini_holding_20260602": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-02"
+  },
+  "credit_limit_20260602": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-02"
   }
 }

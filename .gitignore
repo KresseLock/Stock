@@ -73,6 +73,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+config/
 
 # PyInstaller
 *.manifest
@@ -195,3 +196,11 @@ __marimo__/
 # 密鑰檔案 (防外洩)
 FINMIND_TOKEN.txt
 *.7z
+
+# rclone 雲端密鑰與設定檔 (防外洩)
+config
+config/
+.config
+.config/
+rclone.conf
+rclone.conf.bak

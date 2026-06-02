@@ -45,6 +45,13 @@
   - **實戰倉位對齊**：自動與 `trading_sim.py` 的「最多 5 檔持倉上限、Day1 >= 10.0% 買入、Day3 < 0% 賣出、-8% 停損」策略完全對齊。
   - **智慧下單建議**：自動區分 `Stocks.txt` 內實質持倉（有買入成本）與自選股（無成本），動態計算明日可用空位，並在每日收盤後提供明日「開盤買進/賣出」的雲端智慧單具體掛單建議。
 
+### 雲端備份與自動化控制 (Cloud Sync & Master Control)
+- **`StockSync.py`**: **雲端自動備份腳本**。使用 rclone 把 `predictions/` 下產生的預測建議文字檔同步拷貝至 Google Drive (StockSync 遠端)。
+- **`Auto_RUN.py`**: **一鍵自動化執行主控腳本**。以完全解耦的形式，依序呼叫並監控：`main.py` ➡️ `auto_pipeline.py` ➡️ `inference.py` ➡️ `StockSync.py`。
+- **安全性與敏感資料防護**：
+  - **`rclone.exe` 執行檔**：需另行下載，可放置於虛擬環境的 `venv/Scripts/` 目錄中以方便調用。
+  - **敏感金鑰防外洩**：任何包含 rclone 登入 OAuth Token 的 `config`、`.config` 資料夾或 `rclone.conf` 設定檔，**屬於極度敏感私鑰，已列入 Git 與 AI 忽略清單，絕對禁止提交與外洩**。
+
 ### 實戰回測與模擬交易 (Simulation)
 - **`trading_sim.py`**: **實戰級交易模擬回測器 (Out-of-Sample)**。
   - 模擬真實交易：支持自訂時間區間、初始資金、買入多空信心分數門檻（預設 `>= 10%` 信心）、個股固定停損（如 `-8%`）或轉弱出場。

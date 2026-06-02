@@ -136,6 +136,7 @@ Stock/
 ├── .agyignore                  # AI 開發排除過濾設定 (防干擾)
 ├── .gitignore                  # Git 版本控制忽略設定
 ├── AGENTS.md                   # AI Agent 架構與導航指南 (開發必讀)
+├── Auto_RUN.py                 # 一鍵順序執行全流程主控腳本 (完全解耦)
 ├── auto_pipeline.py            # 一鍵式自動化調參-訓練-推理流水線
 ├── backtest.py                 # 時光機單日回測器 (樣本外評估)
 ├── fetch_categories.py         # 產業分類與 ETF 下載工具
@@ -144,6 +145,7 @@ Stock/
 ├── optimize_factors.py         # Optuna 貝葉斯超參數最佳化器
 ├── patch_finmind.py            # FinMind 基本面個股缺漏強制補丁工具
 ├── run_feature_engineering.py  # 獨立特徵工程執行入口
+├── StockSync.py                # 雲端自動備份上傳工具 (調用 rclone)
 ├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
 ├── train.py                    # LightGBM 多天期分類模型訓練器
 ├── utils.py                    # 全系統共享股票解析工具
@@ -196,12 +198,63 @@ python main.py
 > * **FinMind 基本面爬蟲**：採取「`_FINMIND_CACHE_DAYS` 自訂天數快取（預設 7 天）」與「確認無財報 / 局部缺漏 90 天快取」機制，極大化節省 API 比對的等待時間與 Token 額度。
 > 首次抓取歷史資料（依您的股票檔數而定）因需要建立完整歷史庫可能需要較長時間，後續每日增量回補均可在數秒至數分鐘內迅速完成。
 
-### Step 4 — 一鍵啟動全自動流水線
+### Step 4 — 一鍵啟動全自動流水線與雲端同步
 
+本系統支援兩種自動化執行方式：
+
+#### 方案甲：一鍵主控執行 (完全解耦，最推薦)
+我們將所有功能腳本進行了完全解耦，並由 `Auto_RUN.py` 主控執行。它會依序啟動並監控以下步驟：
+1. 增量下載今日最新行情與法人籌碼數據 (`main.py`)
+2. 重建特徵工程與模型訓練 (`auto_pipeline.py`)
+3. 執行推理預測產出多空排行榜與建議下單指令 (`inference.py`)
+4. 調用 rclone 將最新預測 txt 建議單同步上傳至 Google Drive 備份 (`StockSync.py`)
+
+執行指令：
 ```powershell
-# 執行順序：Optuna 調參 → 套用參數 → 重建特徵 → 訓練模型 → 推理預測
-python auto_pipeline.py
+python Auto_RUN.py
 ```
+
+#### 方案乙：分步單獨執行 (模組化執行)
+如果您只想執行特定的核心流程，可以直接單獨運行以下腳本：
+```powershell
+# 只執行：因子載入 → 特徵生成 → 模型訓練 → 推理預測 (不包含資料下載與雲端上傳)
+python auto_pipeline.py
+
+# 只執行：推理預測 (讀取現有特徵與模型，直接輸出今日排行榜與下單建議)
+python inference.py
+
+# 只執行：雲端備份 (將 predictions/ 底下的預測建議 txt 上傳至雲端)
+python StockSync.py
+```
+
+> [!WARNING]
+> #### ☁️ rclone 雲端備份環境與安全性注意事項
+> 
+> 1. **執行檔需另行下載**：`rclone` 本身是用 Go 語言編寫的獨立工具，`pip` 安裝的只是 Python 的封裝庫。您需要前往 [rclone 官網](https://rclone.org/downloads/) 下載適用於 Windows 的 `rclone.exe` 執行檔，並將其放入虛擬環境的 `venv/Scripts/` 目錄中，或者加入系統的環境變數 PATH 中。
+> 2. **Token 與登入金鑰安全**：透過 `rclone config` 登入 Google Drive 後所產生的金鑰資訊會儲存於 `config` / `.config` 資料夾或 `rclone.conf` 設定檔中。**這些金鑰與權限 Token 屬於高度敏感私鑰，已自動列入 `.gitignore` 與 `.agyignore` 中，絕對禁止提交至 Git 倉庫，亦不可外洩或上傳雲端**。
+
+> [!IMPORTANT]
+> #### 💡 重新訓練與大數據調參流程 (更換追蹤產業與重跑優化時的正確步驟)
+>
+> 當您修改了 `auto_pipeline.py` 中的 `TRAIN_INDUSTRIES`（例如只保留科技股以縮小訓練範圍），或者半年後大盤環境變更想重跑因子優化時，因為流水線「先優化、後建檔」的特性，正確的「三步走」流程是：
+>
+> 1. **第一步（產生全市場特徵檔）**：
+>    * 在 `auto_pipeline.py` 中，將所有產業都改成 `True`。
+>    * 設定 `RUN_OPTIMIZATION = False`（不進行優化，先建檔）。
+>    * 執行 `python auto_pipeline.py`。
+>    *(此步驟目的在於在硬碟中產生包含「全市場股票」的特徵 Parquet 檔案供優化器讀取)*
+> 
+> 2. **第二步（執行大數據優化）**：
+>    * 維持所有產業為 `True`。
+>    * 設定 `RUN_OPTIMIZATION = True`。
+>    * 執行 `python auto_pipeline.py`。
+>    *(此步驟會讀取第一步建立的全市場特徵檔，進行貝葉斯優化，並把最佳解寫入 `best_factors.json` 中)*
+> 
+> 3. **第三步（縮小範圍並訓練）**：
+>    * 將不想追蹤的產業改為 `False`（例如只留下科技股）。
+>    * 設定 `RUN_OPTIMIZATION = False`（直接套用最佳化完成的結果，免重複優化）。
+>    * 執行 `python auto_pipeline.py`。
+>    *(此步驟會載入剛才優化好的最佳參數，並「只為科技股」重新計算特徵與訓練模型，既能保證參數在大樣本下的通用性，又不易在小樣本下產生過度擬合)*
 
 ### Step 5 — 執行策略回測
 

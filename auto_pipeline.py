@@ -71,10 +71,10 @@ END_DATE   = datetime.date.today()       # 自動設為今日
 TRAIN_INDUSTRIES = {
     "半導體業": True,        "電子零組件業": True,      "電腦及週邊設備業": True,
     "光電業": True,          "電子通路業": True,        "其他電子業": True,
-    "電子工業": False,       "通信網路業": False,       "資訊服務業": False,
-    "電子商務業": False,     "生技醫療業": False,       "化學工業": False,
-    "化學生技醫療": False,   "塑膠工業": False,         "橡膠工業": False,
-    "電機機械": False,       "汽車工業": False,         "航運業": False,
+    "電子工業": True,        "通信網路業": True,        "資訊服務業": True,
+    "電子商務業": True,     "生技醫療業": True,       "化學工業": False,
+    "化學生技醫療": True,   "塑膠工業": False,         "橡膠工業": False,
+    "電機機械": True,       "汽車工業": False,         "航運業": False,
     "鋼鐵工業": False,       "建材營造": False,         "玻璃陶瓷": False,
     "水泥工業": False,       "造紙工業": False,         "紡織纖維": False,
     "食品工業": False,       "農業科技業": False,       "農業科技": False,
@@ -84,7 +84,7 @@ TRAIN_INDUSTRIES = {
     "居家生活類": False,     "運動休閒": False,         "運動休閒類": False,
     "數位雲端": False,       "數位雲端類": False,       "文化創意業": False,
     "存託憑證": False,       "創新板股票": False,       "創新版股票": False,
-    "ETF": False,            "其他電子類": False,       "其他": False
+    "ETF": False,            "其他電子類": False,       "其他": False,
 }
 
 # ── 步驟 1&2 設定：最佳化結果檔路徑 ────────────────────
