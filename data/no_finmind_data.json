@@ -198,5 +198,33 @@
   "8199": {
     "status": "confirmed",
     "confirmed_date": "2026-06-01"
+  },
+  "1107": {
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
+  },
+  "1262": {
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
+  },
+  "1311": {
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
+  },
+  "1469": {
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
+  },
+  "1520": {
+    "status": "pending",
+    "first_seen": "2026-06-03"
+  },
+  "1523": {
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
+  },
+  "2391": {
+    "status": "pending",
+    "first_seen": "2026-06-03"
   }
 }

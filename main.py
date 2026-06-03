@@ -71,6 +71,12 @@ if __name__ == "__main__":
         print(f"  (來源: Stocks.txt 以及 auto_pipeline.py 中設定為 True 的產業)")
     print()
 
+    try:
+        from scripts.scraper import FinMindLimitExceeded
+    except ImportError:
+        class FinMindLimitExceeded(Exception):
+            pass
+
     # ════════════════════════════════════════════════
     # 步驟 1: 多源資料下載 (TWSE + FinMind)
     # ════════════════════════════════════════════════
@@ -79,7 +85,12 @@ if __name__ == "__main__":
     print("=" * 50)
     print("  包含: 股價 / 法人籌碼 / 融資券 / 當沖 / 財報 / 本益比")
     print()
-    download_history_data(start_date, end_date, target_stocks=stock_list)
+    try:
+        download_history_data(start_date, end_date, target_stocks=stock_list)
+    except FinMindLimitExceeded:
+        print("\n[提示] 偵測到 FinMind API 額度用盡，本階段先結束並回報狀態碼 99 以跳過。")
+        import sys
+        sys.exit(99)
     print()
 
     # ════════════════════════════════════════════════

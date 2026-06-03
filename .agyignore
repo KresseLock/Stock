@@ -55,3 +55,6 @@ config/
 .config/
 rclone.conf
 rclone.conf.bak
+
+# 本地臨時/除錯腳本
+scratch/

@@ -38,6 +38,11 @@ import requests
 
 warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
+
+class FinMindLimitExceeded(Exception):
+    """Raised when FinMind API limit (429/402) is reached."""
+    pass
+
 try:
     from taiwan_holidays.taiwan_calendar import TaiwanCalendar
     _th = TaiwanCalendar()
@@ -677,6 +682,10 @@ def _fm_get(
             r = requests.get(FM_BASE_URL, params=params, timeout=30)
 
             if r.status_code in (429, 402):
+                if os.environ.get("SKIP_ON_FINMIND_LIMIT") == "1":
+                    print(f"\n    [FinMind] 觸發限速 (狀態碼 {r.status_code})，因設定 SKIP_ON_FINMIND_LIMIT，直接中斷下載以利後續執行。")
+                    raise FinMindLimitExceeded("FinMind API quota limit reached.")
+                
                 # 免費帳號每小時 600 次；429/402 = 額度耗盡，等待 1 小時重置
                 resume_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
                 print(f"\n    [FinMind] 觸發限速 (狀態碼 {r.status_code})，每小時額度已用盡。")
@@ -695,6 +704,8 @@ def _fm_get(
             time.sleep(5)
             attempt += 1
 
+        except FinMindLimitExceeded:
+            raise
         except KeyboardInterrupt:
             print("\n[系統] 收到中斷指令，強制結束爬蟲。")
             raise
@@ -785,6 +796,8 @@ def _crawl_fm_dataset(
         df.to_csv(output_path, index=False, encoding="utf-8-sig")
         return True
 
+    except FinMindLimitExceeded:
+        raise
     except Exception as e:
         print(f"\n    [錯誤] {dataset_name} / {stock_id} 發生例外: {type(e).__name__} - {e}")
         return False
@@ -977,77 +990,89 @@ def download_history_data(
     partial_miss  = 0
     errors_total  = 0
 
-    for idx, stock_id in enumerate(target_stocks, 1):
-        print(f"  FinMind 進度: {idx}/{total} ({stock_id})          ", end="\r", flush=True)
+    try:
+        for idx, stock_id in enumerate(target_stocks, 1):
+            print(f"  FinMind 進度: {idx}/{total} ({stock_id})          ", end="\r", flush=True)
 
-        if stock_id in ETF_SET:
-            skipped_etf += 1
-            continue
+            if stock_id in ETF_SET:
+                skipped_etf += 1
+                continue
 
-        if _is_confirmed_no_data(no_data_cache, stock_id):
-            skipped_cache += 1
-            continue
-
-        results = []
-        datasets = [
-            ("營收",   "TaiwanStockMonthRevenue",       f"{stock_id}_monthly_revenue.csv"),
-            ("損益表", "TaiwanStockFinancialStatements", f"{stock_id}_financial_stmt.csv"),
-            ("資產表", "TaiwanStockBalanceSheet",        f"{stock_id}_balance_sheet.csv"),
-            ("現金流", "TaiwanStockCashFlowsStatement",  f"{stock_id}_cashflow.csv"),
-            ("股利",   "TaiwanStockDividend",            f"{stock_id}_dividend.csv"),
-        ]
-        for label, dataset, fname in datasets:
-            path = os.path.join(DATA_DIR, "raw_financial", fname)
-            res  = _crawl_fm_dataset(dataset, stock_id, start_str, end_str, path, missing_fm_cache)
-            results.append((label, res))
-            if res != "skipped":
-                _polite_sleep(1, 2)
-
-        errors  = [name for name, ok in results if ok is False]
-        no_data = [name for name, ok in results if ok is None]
-
-        if errors:
-            if stock_id in no_data_cache and no_data_cache[stock_id].get("status") == "pending":
-                _reset_no_data(no_data_cache, stock_id)
-            errors_total += 1
-            print(f"  [錯誤] FinMind {stock_id} 抓取失敗: {errors}                    ")
-
-        elif no_data:
-            if len(no_data) == len(results):
-                # 5 張表全無 → 兩階段確認後快取
-                status = _record_no_data(no_data_cache, stock_id)
-                if status == "pending":
-                    print(f"  [首次無資料] FinMind {stock_id} → 待下次二次確認後快取      ")
-                else:
-                    print(
-                        f"  [確認無財報] FinMind {stock_id} → "
-                        f"已快取，{_NO_DATA_RECHECK_DAYS} 天後重新確認"
-                    )
+            if _is_confirmed_no_data(no_data_cache, stock_id):
                 skipped_cache += 1
+                continue
+
+            results = []
+            datasets = [
+                ("營收",   "TaiwanStockMonthRevenue",       f"{stock_id}_monthly_revenue.csv"),
+                ("損益表", "TaiwanStockFinancialStatements", f"{stock_id}_financial_stmt.csv"),
+                ("資產表", "TaiwanStockBalanceSheet",        f"{stock_id}_balance_sheet.csv"),
+                ("現金流", "TaiwanStockCashFlowsStatement",  f"{stock_id}_cashflow.csv"),
+                ("股利",   "TaiwanStockDividend",            f"{stock_id}_dividend.csv"),
+            ]
+            for label, dataset, fname in datasets:
+                path = os.path.join(DATA_DIR, "raw_financial", fname)
+                res  = _crawl_fm_dataset(dataset, stock_id, start_str, end_str, path, missing_fm_cache)
+                results.append((label, res))
+                if res != "skipped":
+                    _polite_sleep(1, 2)
+
+            errors  = [name for name, ok in results if ok is False]
+            no_data = [name for name, ok in results if ok is None]
+
+            if errors:
+                if stock_id in no_data_cache and no_data_cache[stock_id].get("status") == "pending":
+                    _reset_no_data(no_data_cache, stock_id)
+                errors_total += 1
+                print(f"  [錯誤] FinMind {stock_id} 抓取失敗: {errors}                    ")
+
+            elif no_data:
+                if len(no_data) == len(results):
+                    # 5 張表全無 → 兩階段確認後快取
+                    status = _record_no_data(no_data_cache, stock_id)
+                    if status == "pending":
+                        print(f"  [首次無資料] FinMind {stock_id} → 待下次二次確認後快取      ")
+                    else:
+                        print(
+                            f"  [確認無財報] FinMind {stock_id} → "
+                            f"已快取，{_NO_DATA_RECHECK_DAYS} 天後重新確認"
+                        )
+                    skipped_cache += 1
+                else:
+                    # 局部缺失 → 寫入 missing_fm_cache，90 天內跳過該 dataset
+                    # 注：若 FinMind 之後補上資料，需等 90 天後才會重抓
+                    partial_miss += 1
+                    for label in no_data:
+                        ds_api_name = next(ds for l, ds, _ in datasets if l == label)
+                        missing_fm_cache[f"{stock_id}_{ds_api_name}"] = (
+                            datetime.date.today().isoformat()
+                        )
+                    _save_missing_fm(missing_fm_cache)
+                    print(f"  [局部缺漏] FinMind {stock_id} 缺 {no_data} → 已加入快取       ")
+
             else:
-                # 局部缺失 → 寫入 missing_fm_cache，90 天內跳過該 dataset
-                # 注：若 FinMind 之後補上資料，需等 90 天後才會重抓
-                partial_miss += 1
-                for label in no_data:
-                    ds_api_name = next(ds for l, ds, _ in datasets if l == label)
-                    missing_fm_cache[f"{stock_id}_{ds_api_name}"] = (
-                        datetime.date.today().isoformat()
-                    )
-                _save_missing_fm(missing_fm_cache)
-                print(f"  [局部缺漏] FinMind {stock_id} 缺 {no_data} → 已加入快取       ")
+                _reset_no_data(no_data_cache, stock_id)
+                any_new = any(ok is True for _, ok in results)
+                if any_new:
+                    updated += 1
+                    print(f"  [更新] FinMind {stock_id} 新資料已寫入                         ")
 
-        else:
-            _reset_no_data(no_data_cache, stock_id)
-            any_new = any(ok is True for _, ok in results)
-            if any_new:
-                updated += 1
-                print(f"  [更新] FinMind {stock_id} 新資料已寫入                         ")
-
-    print(
-        f"  FinMind 爬蟲完成。"
-        f" (略過ETF: {skipped_etf}"
-        f" | 略過快取: {skipped_cache}"
-        f" | 新更新: {updated}"
-        f" | 部分缺項: {partial_miss}"
-        f" | 錯誤: {errors_total})"
-    )
+        print(
+            f"  FinMind 爬蟲完成。"
+            f" (略過ETF: {skipped_etf}"
+            f" | 略過快取: {skipped_cache}"
+            f" | 新更新: {updated}"
+            f" | 部分缺項: {partial_miss}"
+            f" | 錯誤: {errors_total})"
+        )
+    except FinMindLimitExceeded:
+        print(f"\n[中斷] 偵測到 FinMind API 額度用盡！提前結束 FinMind 爬蟲流程。")
+        print(
+            f"  中斷前進度: {idx}/{total} 檔"
+            f" (略過ETF: {skipped_etf}"
+            f" | 略過快取: {skipped_cache}"
+            f" | 新更新: {updated}"
+            f" | 部分缺項: {partial_miss}"
+            f" | 錯誤: {errors_total})"
+        )
+        raise

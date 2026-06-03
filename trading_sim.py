@@ -93,7 +93,12 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
 
     # 3. 模擬交易迴圈
     print("開始模擬每日交易...\n")
-    cash = initial_capital
+    
+    # T+2 餘額交割帳戶設計
+    available_cash = initial_capital  # 可用資金 (購買力)
+    bank_cash = initial_capital       # 銀行帳戶實質餘額
+    pending_settlements = {}          # 預計交割項目: date_obj -> net_amount (T+1/T+2 待交割款)
+
     positions = {}  # stock_id -> {'shares': X, 'buy_price': Y, 'buy_date': Z}
     history = []
     trades = []     # 交易明細紀錄
@@ -117,9 +122,17 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
         except Exception as e:
             print(f"[警告] 讀取 stock_categories.json 失敗: {e}")
 
-    for today in dates:
+    for idx_today, today in enumerate(dates):
         # 紀錄今天新增交易記錄的起點索引，以便在收盤後統一更新資金欄位為日終一致狀態 (解決問題 2)
         start_trade_idx = len(trades)
+        
+        # --- A0. 處理今日交割款 (T+2 餘額交割) ---
+        today_date = today.date()
+        settled_amount = 0
+        for s_date in list(pending_settlements.keys()):
+            if s_date <= today_date:
+                settled_amount += pending_settlements.pop(s_date)
+        bank_cash += settled_amount
         
         today_data = df_sim[df_sim['date'] == today].set_index('stock_id')
         
@@ -145,18 +158,23 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
                 elif current_profit_pct <= -8.0:
                     sells_today.append((sid, "觸發-8%停損"))
                     
+        today_sells_amount = 0
         for sid, reason in sells_today:
             pos = positions.pop(sid)
             sell_price = pos['current_price']
             gross = pos['shares'] * sell_price
             net_proceeds = gross * (1 - FEE_RATE - TAX_RATE)
-            cash += net_proceeds
+            
+            # 賣出當天即刻增加可用資金 (購買力)
+            available_cash += net_proceeds
+            today_sells_amount += net_proceeds
+            
             profit = net_proceeds - (pos['shares'] * pos['buy_price'] * (1 + FEE_RATE))
             profit_pct = profit / (pos['shares'] * pos['buy_price'] * (1 + FEE_RATE)) * 100
             cname = stock_names.get(sid, "")
             
             stock_value = sum(p['shares'] * p['current_price'] for p in positions.values())
-            total_equity = cash + stock_value
+            total_equity = available_cash + stock_value
             
             trades.append({
                 'Date': today.date(),
@@ -168,7 +186,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
                 'Amount': net_proceeds,
                 'Profit': profit,
                 'Profit_Pct(%)': profit_pct,
-                'Current_Cash': cash,
+                'Current_Cash': available_cash,
                 'Stock_Value': stock_value,
                 'Total_Equity': total_equity,
                 'Reason': reason
@@ -179,6 +197,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
         buy_candidates = today_data[~today_data.index.isin(positions.keys())].copy()
         buy_candidates = buy_candidates.sort_values('Day1_net', ascending=False)
         
+        today_buys_amount = 0
         # Bug 2 修復：將判定是否已滿倉的邏輯移至迴圈內
         for sid in buy_candidates.index:
             if len(positions) >= max_positions:
@@ -192,18 +211,20 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
             if pd.isna(buy_price) or buy_price <= 0:
                 continue
             
-            # Bug 3 修復：每次買進時，根據「剩餘現金」與「剩餘槽位」動態計算可投入金額
+            # Bug 3 修復：每次買進時，根據「剩餘可用資金(購買力)」與「剩餘槽位」動態計算可投入金額
             available_slots = max_positions - len(positions)
-            target_investment = cash / available_slots
+            target_investment = available_cash / available_slots
             
-            invest_amount = min(target_investment, cash)
+            invest_amount = min(target_investment, available_cash)
             if invest_amount < 1000:
                 continue
                 
             max_shares = int((invest_amount / (1 + FEE_RATE)) // buy_price)
             if max_shares > 0:
                 cost = max_shares * buy_price * (1 + FEE_RATE)
-                cash -= cost
+                available_cash -= cost
+                today_buys_amount += cost
+                
                 positions[sid] = {
                     'shares': max_shares,
                     'buy_price': buy_price,
@@ -213,7 +234,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
                 cname = stock_names.get(sid, "")
                 
                 stock_value = sum(p['shares'] * p['current_price'] for p in positions.values())
-                total_equity = cash + stock_value
+                total_equity = available_cash + stock_value
                 
                 trades.append({
                     'Date': today.date(),
@@ -225,27 +246,55 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
                     'Amount': cost,
                     'Profit': 0.0,
                     'Profit_Pct(%)': 0.0,
-                    'Current_Cash': cash,
+                    'Current_Cash': available_cash,
                     'Stock_Value': stock_value,
                     'Total_Equity': total_equity,
                     'Reason': f"D1分數強勢 ({day1_score:.1f}%)"
                 })
 
+        # --- C2. 計算今日交易之 T+2 淨交割金額並加入待交割佇列 ---
+        net_change = today_sells_amount - today_buys_amount
+        if net_change != 0:
+            # 尋找 T+2 交割日 (以 dates 列表為準)
+            if idx_today + 2 < len(dates):
+                settlement_date = dates[idx_today + 2].date()
+            else:
+                # 若超出模擬區間，則估計下兩個工作日
+                curr_dt = today
+                added = 0
+                while added < 2:
+                    curr_dt += pd.Timedelta(days=1)
+                    if curr_dt.weekday() < 5:
+                        added += 1
+                settlement_date = curr_dt.date()
+                
+            if settlement_date in pending_settlements:
+                pending_settlements[settlement_date] += net_change
+            else:
+                pending_settlements[settlement_date] = net_change
+
         # --- D. 計算今日最終淨值並寫入 history (Bug 1 修復) ---
-        current_equity = cash + sum(pos['shares'] * pos['current_price'] for pos in positions.values())
+        final_stock_value = sum(pos['shares'] * pos['current_price'] for pos in positions.values())
+        pending_cash = sum(pending_settlements.values())
+        current_equity = bank_cash + pending_cash + final_stock_value
+        
         history.append({
             'date': today.date(),
             'equity': current_equity,
-            'cash': cash,
-            'invested': current_equity - cash
+            'cash': available_cash,
+            'bank_cash': bank_cash,
+            'pending_cash': pending_cash,
+            'invested': final_stock_value
         })
 
         # 統一將今天發生的所有交易明細中的資金欄位更新為當天收盤後的最終狀態 (解決問題 2)
-        final_stock_value = sum(pos['shares'] * pos['current_price'] for pos in positions.values())
         for i in range(start_trade_idx, len(trades)):
-            trades[i]['Current_Cash'] = cash
+            trades[i]['Current_Cash'] = available_cash
             trades[i]['Stock_Value'] = final_stock_value
             trades[i]['Total_Equity'] = current_equity
+
+    # 在迴圈外保留原本變數以相容後續結算報告與 Excel 寫入
+    cash = available_cash
 
     # 4. 結算與報表
     print("\n" + "=" * 70)
@@ -297,12 +346,17 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
 
     # 將 DataFrame 的欄位名稱翻譯成中文再匯出
     df_history.rename(columns={
-        'date': '日期', 'equity': '權益', 'cash': '現金', 'invested': '投資'
+        'date': '日期', 
+        'equity': '總資產', 
+        'cash': '可用資金(購買力)', 
+        'bank_cash': '銀行帳戶實質餘額', 
+        'pending_cash': '待交割金額', 
+        'invested': '持股市值'
     }, inplace=True)
     df_trades.rename(columns={
         'Date': '日期', 'Action': '操作', 'Stock_ID': '股票編號', 'Stock_Name': '股票名稱',
         'Price': '價格', 'Shares': '股數', 'Amount': '金額', 'Profit': '利潤', 
-        'Profit_Pct(%)': '利潤率(%)', 'Current_Cash': '現有資金', 
+        'Profit_Pct(%)': '利潤率(%)', 'Current_Cash': '可用資金(購買力)', 
         'Stock_Value': '持股市值', 'Total_Equity': '總資產', 'Reason': '原因'
     }, inplace=True)
     df_holdings.rename(columns={

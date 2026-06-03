@@ -38,7 +38,7 @@ sys.path.append(BASE_DIR)
 # 若怕運算時電腦卡頓，可以設定為具體的核心數量 (例如 4 或 8)
 FEAT_N_JOBS       = -1   # 特徵工程平行運算 (影響最鉅)
 TRAIN_N_JOBS      = -1   # LightGBM 訓練模型使用核心數
-OPTUNA_N_JOBS     = 8    # 最佳化時同時啟動的 trial 數量 (建議 2~4 即可，太高會卡死)
+OPTUNA_N_JOBS     = 6    # 最佳化時同時啟動的 trial 數量 (建議 2~4 即可，太高會卡死)
 
 # ── 步驟 1 設定：因子最佳化 ─────────────────────────────
 # True  = 每次執行都重新跑貝葉斯最佳化 (耗時數分鐘~數十分鐘)
@@ -52,7 +52,7 @@ FALLBACK_TO_DEFAULT = True
 OPTIMIZATION_TRIALS = 600
 
 # 提早結束機制 (Early Stopping)：連續 N 輪未找到更好的解就提早結束 (None=不提早結束)
-EARLY_STOPPING_ROUNDS = 300
+EARLY_STOPPING_ROUNDS = 200
 
 # ── 回測切割日期 ────────────────────────────────────────
 # 最佳化使用此日期之「前」的資料訓練，之「後」的資料評估勝率。
@@ -65,27 +65,31 @@ START_DATE = datetime.date(2020, 1, 1)   # 歷史回溯起點
 END_DATE   = datetime.date.today()       # 自動設為今日
 
 # ── 步驟 3 設定：訓練產業選擇 ────────────────────────
-# 設定 True 代表要拿該產業的「所有股票」加入訓練集 (讓模型學習通用規律)
-# 設定 False 代表排除該產業 (加快訓練速度或排除不相關類股)
-# 註：無論如何設定，Stocks.txt 裡面的自選股「一定」會加入訓練與最後的預測。
-TRAIN_INDUSTRIES = {
-    "半導體業": True,        "電子零組件業": True,      "電腦及週邊設備業": True,
-    "光電業": True,          "電子通路業": True,        "其他電子業": True,
-    "電子工業": True,        "通信網路業": True,        "資訊服務業": True,
-    "電子商務業": True,     "生技醫療業": True,       "化學工業": True,
-    "化學生技醫療": True,   "塑膠工業": True,         "橡膠工業": True,
-    "電機機械": True,       "汽車工業": True,         "航運業": True,
-    "鋼鐵工業": True,       "建材營造": True,         "玻璃陶瓷": True,
-    "水泥工業": True,       "造紙工業": True,         "紡織纖維": True,
-    "食品工業": True,       "農業科技業": True,       "農業科技": True,
-    "貿易百貨": True,       "觀光事業": True,         "觀光餐旅": True,
-    "金融保險": True,       "金融業": True,           "油電燃氣業": True,
-    "綠能環保": True,       "綠能環保類": True,       "居家生活": True,
-    "居家生活類": True,     "運動休閒": True,         "運動休閒類": True,
-    "數位雲端": True,       "數位雲端類": True,       "文化創意業": True,
-    "存託憑證": True,       "創新板股票": True,       "創新版股票": True,
-    "ETF": False,            "其他電子類": True,       "其他": True,
-}
+# 註：為確保整個流水線與模型訓練的一致性，並避免下載無效的 FinMind 財報資料，
+#     此處直接引用 train.py 中的 TRAIN_INDUSTRIES 設定。
+#     若要修改訓練的產業，請統一至 train.py 的 TRAIN_INDUSTRIES 中修改。
+try:
+    from train import TRAIN_INDUSTRIES
+except ImportError:
+    TRAIN_INDUSTRIES = {
+        "半導體業": True,        "電子零組件業": True,      "電腦及週邊設備業": True,
+        "光電業": True,          "電子通路業": True,        "其他電子業": True,
+        "電子工業": True,        "通信網路業": True,        "資訊服務業": True,
+        "電子商務業": True,     "生技醫療業": False,       "化學工業": False,
+        "化學生技醫療": False,   "塑膠工業": False,         "橡膠工業": False,
+        "電機機械": True,       "汽車工業": False,         "航運業": False,
+        "鋼鐵工業": False,       "建材營造": False,         "玻璃陶瓷": False,
+        "水泥工業": False,       "造紙工業": False,         "紡織纖維": False,
+        "食品工業": False,       "農業科技業": False,       "農業科技": False,
+        "貿易百貨": False,       "觀光事業": False,         "觀光餐旅": False,
+        "金融保險": False,       "金融業": False,           "油電燃氣業": False,
+        "綠能環保": False,       "綠能環保類": False,       "居家生活": False,
+        "居家生活類": False,     "運動休閒": False,         "運動休閒類": False,
+        "數位雲端": False,       "數位雲端類": False,       "文化創意業": False,
+        "存託憑證": False,       "創新板股票": False,       "創新版股票": False,
+        "ETF": False,            "other": False,            "其他": False,
+    }
+
 
 # ── 步驟 1&2 設定：最佳化結果檔路徑 ────────────────────
 BEST_FACTORS_PATH = os.path.join(BASE_DIR, "best_factors.json")

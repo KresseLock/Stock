@@ -32,11 +32,19 @@ def run_script(script_name: str) -> bool:
     t_start = time.time()
     try:
         # 使用當前虛擬環境的 Python 執行檔執行子腳本，並將輸出實時印出到終端機
-        subprocess.run([sys.executable, script_path], check=True)
+        # 加入環境變數以指示 FinMind API 遇到流量限制時直接跳過，不等待 1 小時
+        env = os.environ.copy()
+        env["SKIP_ON_FINMIND_LIMIT"] = "1"
+        
+        subprocess.run([sys.executable, script_path], check=True, env=env)
         t_elapsed = time.time() - t_start
         print(f"\n[成功] {script_name} 執行完成！耗時: {t_elapsed:.1f} 秒")
         return True
     except subprocess.CalledProcessError as e:
+        if script_name == "main.py" and e.returncode == 99:
+            t_elapsed = time.time() - t_start
+            print(f"\n[注意] {script_name} 觸發 FinMind API 額度限制 (已自動跳過，不中斷全流程)，流程繼續！耗時: {t_elapsed:.1f} 秒")
+            return True
         print(f"\n[失敗] {script_name} 執行中斷，錯誤代碼: {e.returncode}")
         return False
     except Exception as ex:
