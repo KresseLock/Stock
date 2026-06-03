@@ -85,7 +85,7 @@ def main():
         before_cnt = df["stock_id"].nunique()
         df = filter_stocks_by_train_industries(df)
         after_cnt = df["stock_id"].nunique()
-        print(f"  [推理過濾] 依 config 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行推理")
+        print(f"  [推理過濾] 依 config 產業設定篩選：{after_cnt} 檔進行推理")
     except Exception as e:
         print(f"  [警告] 篩選過濾器執行失敗 ({e})，使用全特徵進行推理")
     # ──────────────────────────────────────────────────────────

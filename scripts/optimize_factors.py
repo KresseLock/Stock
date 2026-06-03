@@ -376,7 +376,7 @@ def main():
     before_cnt = df_base["stock_id"].nunique()
     df_base = filter_stocks_by_train_industries(df_base)
     after_cnt = df_base["stock_id"].nunique()
-    print(f"  [最佳化過濾] 依 config 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行因子最佳化")
+    print(f"  [最佳化過濾] 依 config 產業設定篩選：{after_cnt} 檔進行因子最佳化")
     
     df_base["date"] = pd.to_datetime(df_base["date"])
 

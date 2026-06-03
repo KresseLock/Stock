@@ -87,11 +87,9 @@ def _read_csv(path: str) -> pd.DataFrame:
 
 def load_target_stocks(file_path: str = "Stocks.txt") -> list:
     try:
-        from utils import load_target_stocks as _load
+        from scripts.utils import load_target_stocks as _load
         return _load(file_path)
     except ImportError:
-        import sys
-        sys.path.append(os.path.join(BASE_DIR, ".."))
         from utils import load_target_stocks as _load
         return _load(file_path)
 

@@ -144,7 +144,7 @@ def main():
         before_count = df["stock_id"].nunique()
         df_filtered = df[df["stock_id"].isin(allowed_stocks)].copy()
         after_count = df_filtered["stock_id"].nunique()
-        print(f"  [訓練篩選] 套用 TRAIN_INDUSTRIES 篩選：原本有 {before_count} 檔股票，篩選後剩餘 {after_count} 檔股票進行訓練。")
+        print(f"  [訓練篩選] 套用 TRAIN_INDUSTRIES 篩選：{after_count} 檔進行訓練。")
         df = df_filtered
     else:
         print("  [警告] 找不到 stock_categories.json，不進行訓練產業篩選")

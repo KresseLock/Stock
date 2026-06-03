@@ -244,32 +244,46 @@ def check_price_anomalies():
         pct_change = abs((curr["price"] - prev["price"]) / prev["price"])
         
         if pct_change > 0.15:
-            bad_date = curr["date"]
-            print(f"[幽靈資料] {bad_date} 發現 0050 異常跳空 (前日:{prev['price']} -> 本日:{curr['price']})！")
+            # 判斷是「真實的股票分割/永久跳空」還是「單日的幽靈資料異常」
+            # 幽靈資料特色：只有單日異常暴跌/暴漲，隔天就立刻彈回原本的價格水準
+            # 股票分割特色：價格跳空後，隔天會維持在新價格附近（永久性位移）
+            is_anomaly = True
+            if i + 1 < len(history):
+                nxt = history[i+1]
+                pct_change_curr_to_next = abs((nxt["price"] - curr["price"]) / curr["price"])
+                pct_change_prev_to_next = abs((nxt["price"] - prev["price"]) / prev["price"])
+                
+                # 如果隔天價格與當天價格相近 (波動 <= 15%)，且與前一天相比仍有巨大跳空，代表這是永久性分割/跳空
+                if pct_change_curr_to_next <= 0.15 and pct_change_prev_to_next > 0.15:
+                    is_anomaly = False
             
-            # 刪除這天的所有相關檔案
-            for d in ["raw_price", "raw_chips", "raw_margin", "raw_twse_per", "raw_taifex"]:
-                bad_file_pattern = os.path.join(DATA_DIR, d, f"{bad_date}_*.csv")
-                for bad_f in glob.glob(bad_file_pattern):
-                    os.remove(bad_f)
-                    print(f"  - 刪除假檔案: {os.path.basename(bad_f)}")
-            
-            # 從黑名單中移除，確保 scraper.py 下次會勇敢去抓
-            removed_from_cache = False
-            if bad_date in skip_dates:
-                del skip_dates[bad_date]
-                removed_from_cache = True
-            if bad_date in fail_log:
-                del fail_log[bad_date]
-                removed_from_cache = True
-            
-            if removed_from_cache:
-                print(f"  - 已從 JSON 快取中移除 {bad_date}，確保下次重新抓取。")
-
-            deleted_count += 1
-            
-            # 把 curr 的 price 改回 prev，避免下一次比較又觸發異常 (假跌回)
-            curr["price"] = prev["price"]
+            if is_anomaly:
+                bad_date = curr["date"]
+                print(f"[幽靈資料] {bad_date} 發現 0050 異常跳空 (前日:{prev['price']} -> 本日:{curr['price']})！")
+                
+                # 刪除這天的所有相關檔案
+                for d in ["raw_price", "raw_chips", "raw_margin", "raw_twse_per", "raw_taifex"]:
+                    bad_file_pattern = os.path.join(DATA_DIR, d, f"{bad_date}_*.csv")
+                    for bad_f in glob.glob(bad_file_pattern):
+                        os.remove(bad_f)
+                        print(f"  - 刪除假檔案: {os.path.basename(bad_f)}")
+                
+                # 從黑名單中移除，確保 scraper.py 下次會勇敢去抓
+                removed_from_cache = False
+                if bad_date in skip_dates:
+                    del skip_dates[bad_date]
+                    removed_from_cache = True
+                if bad_date in fail_log:
+                    del fail_log[bad_date]
+                    removed_from_cache = True
+                
+                if removed_from_cache:
+                    print(f"  - 已從 JSON 快取中移除 {bad_date}，確保下次重新抓取。")
+    
+                deleted_count += 1
+                
+                # 把 curr 的 price 改回 prev，避免下一次比較又觸發異常 (假跌回)
+                curr["price"] = prev["price"]
 
     if deleted_count > 0:
         # 回寫 JSON 檔案

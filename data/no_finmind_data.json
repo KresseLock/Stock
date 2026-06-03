@@ -224,34 +224,38 @@
     "confirmed_date": "2026-06-03"
   },
   "2391": {
-    "status": "pending",
-    "first_seen": "2026-06-03"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
   },
   "2418": {
-    "status": "pending",
-    "first_seen": "2026-06-03"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
   },
   "2447": {
-    "status": "pending",
-    "first_seen": "2026-06-03"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
   },
   "2479": {
-    "status": "pending",
-    "first_seen": "2026-06-03"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
   },
   "2494": {
-    "status": "pending",
-    "first_seen": "2026-06-03"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
   },
   "3007": {
-    "status": "pending",
-    "first_seen": "2026-06-03"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
   },
   "3142": {
-    "status": "pending",
-    "first_seen": "2026-06-03"
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
   },
   "3214": {
+    "status": "confirmed",
+    "confirmed_date": "2026-06-03"
+  },
+  "4984": {
     "status": "pending",
     "first_seen": "2026-06-03"
   }

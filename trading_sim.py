@@ -35,11 +35,14 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
     df = pd.read_parquet(DATA_PATH)
     
     # ── 根據 train.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
-    from utils import filter_stocks_by_train_industries
+    try:
+        from scripts.utils import filter_stocks_by_train_industries
+    except ImportError:
+        from utils import filter_stocks_by_train_industries
     before_cnt = df["stock_id"].nunique()
     df = filter_stocks_by_train_industries(df)
     after_cnt = df["stock_id"].nunique()
-    print(f"  [模擬過濾] 依 train.py 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行回測模擬")
+    print(f"  [模擬過濾] 依 train.py 產業設定篩選：{after_cnt} 檔進行回測模擬")
     # ──────────────────────────────────────────────────────────
     
     try:
