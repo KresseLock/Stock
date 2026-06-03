@@ -163,7 +163,7 @@ def step2_load_params() -> dict:
 def _get_training_stocks() -> list:
     """根據 TRAIN_INDUSTRIES 設定與 Stocks.txt 組合出要訓練的股票清單"""
     target_stocks = set(load_target_stocks("Stocks.txt"))  # Stocks.txt 一定要包含
-    cat_path = os.path.join(BASE_DIR, "stock_categories.json")
+    cat_path = os.path.join(BASE_DIR, "scripts", "stock_categories.json")
     
     if os.path.exists(cat_path):
         with open(cat_path, "r", encoding="utf-8") as f:
@@ -244,6 +244,10 @@ def main():
 
     if target_step == "optimize":
         _banner("1", f"單獨執行：貝葉斯因子最佳化 (Optuna TPE, {OPTIMIZATION_TRIALS} 輪)")
+        if not RUN_OPTIMIZATION:
+            print("  [提示] 偵測到中央控制面板的 RUN_OPTIMIZATION=False。")
+            print("         因您已指定單獨執行 optimize 步驟，系統將無視該設定，直接啟動因子最佳化。")
+            print()
         # 最佳化前需要建立基礎特徵，供 Optuna 讀取
         step2_load_params()
         step3_feature_engineering()

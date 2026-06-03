@@ -9,7 +9,7 @@ def clean_stocks(stocks_file="Stocks.txt", categories_file="stock_categories.jso
     # 統一將 base_dir 設為專案根目錄 (即 scripts/tools/ 的上上上層)
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     stocks_path = os.path.join(base_dir, stocks_file)
-    categories_path = os.path.join(base_dir, categories_file)
+    categories_path = os.path.join(base_dir, "scripts", categories_file)
 
     if not os.path.exists(categories_path):
         print(f"錯誤: 找不到分類檔案 {categories_path}")

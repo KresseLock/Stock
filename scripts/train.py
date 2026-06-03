@@ -118,7 +118,7 @@ def main():
     df = pd.read_parquet(DATA_PATH)
     
     # ── 根據 TRAIN_INDUSTRIES 過濾訓練集股票 ─────────────────────
-    cat_path = os.path.join(BASE_DIR, "stock_categories.json")
+    cat_path = os.path.join(BASE_DIR, "scripts", "stock_categories.json")
     if os.path.exists(cat_path):
         with open(cat_path, "r", encoding="utf-8") as f:
             categories = json.load(f)

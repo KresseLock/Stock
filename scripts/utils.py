@@ -127,7 +127,7 @@ def filter_stocks_by_train_industries(df, target_col="stock_id") -> "pd.DataFram
             print("[utils] 無法載入 config 中的 TRAIN_INDUSTRIES，跳過過濾")
             return df
 
-    cat_path = os.path.join(BASE_DIR, "stock_categories.json")
+    cat_path = os.path.join(BASE_DIR, "scripts", "stock_categories.json")
     if not os.path.exists(cat_path):
         print("[utils] 找不到 stock_categories.json，跳過過濾")
         return df

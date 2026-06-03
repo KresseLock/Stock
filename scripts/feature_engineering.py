@@ -578,7 +578,7 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     
     # 2. 計算產業板塊情緒特徵 (Sector Strength)
     import json
-    cat_path = os.path.join(BASE_DIR, "..", "stock_categories.json")
+    cat_path = os.path.join(BASE_DIR, "stock_categories.json")
     stock_to_industry = {}
     if os.path.exists(cat_path):
         try:

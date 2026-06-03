@@ -7,7 +7,7 @@ import json
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 FINANCIAL_DIR = os.path.join(DATA_DIR, "raw_financial")
-CATEGORIES_PATH = os.path.join(BASE_DIR, "..", "stock_categories.json")
+CATEGORIES_PATH = os.path.join(BASE_DIR, "stock_categories.json")
 NO_DATA_PATH = os.path.join(DATA_DIR, "no_finmind_data.json")
 
 # 定義每個資料集應該具備的「必備欄位」

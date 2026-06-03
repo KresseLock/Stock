@@ -72,7 +72,7 @@ _ALL_DATASETS = [
 _SUB_DATASETS = _ALL_DATASETS[1:]  # price 以外的 8 個
 
 # ── ETF 清單 ──────────────────────────────────────────
-_CATEGORIES_PATH = os.path.join(BASE_DIR, "..", "stock_categories.json")
+_CATEGORIES_PATH = os.path.join(BASE_DIR, "stock_categories.json")
 
 
 def _load_etf_set() -> set:
@@ -1097,7 +1097,7 @@ def fetch_industry_categories():
     print("=" * 60)
     print("  開始下載台股全市場產業分類資料 (FinMind)")
     print("=" * 60)
-    output_json = os.path.join(PARENT_DIR, "stock_categories.json")
+    output_json = os.path.join(BASE_DIR, "stock_categories.json")
     url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
     try:
         res = requests.get(url, timeout=15)
@@ -1332,7 +1332,7 @@ if __name__ == "__main__":
                 
         # 根據 FINMIND_FETCH_MODE 加載產業股票
         if FINMIND_FETCH_MODE == "all":
-            cat_path = os.path.join(PARENT_DIR, "stock_categories.json")
+            cat_path = os.path.join(BASE_DIR, "stock_categories.json")
             if os.path.exists(cat_path):
                 with open(cat_path, "r", encoding="utf-8") as f:
                     categories = json.load(f)
@@ -1342,7 +1342,7 @@ if __name__ == "__main__":
             # limited 模式: 載入 config.py 中設定為 True 的產業股票
             try:
                 from config import TRAIN_INDUSTRIES
-                cat_path = os.path.join(PARENT_DIR, "stock_categories.json")
+                cat_path = os.path.join(BASE_DIR, "stock_categories.json")
                 if os.path.exists(cat_path):
                     with open(cat_path, "r", encoding="utf-8") as f:
                         categories = json.load(f)

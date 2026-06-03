@@ -111,7 +111,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions):
     
     # 嘗試讀取 stock_categories.json 來建立股票名稱對照表
     stock_names = {}
-    cat_path = os.path.join(BASE_DIR, "stock_categories.json")
+    cat_path = os.path.join(BASE_DIR, "scripts", "stock_categories.json")
     if os.path.exists(cat_path):
         try:
             with open(cat_path, 'r', encoding='utf-8') as f:

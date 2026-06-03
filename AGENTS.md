@@ -9,7 +9,7 @@
 
 ### 核心升級：絕對收益系統 (2026/06 升級)
 系統內建兩大實戰級別防線，徹底解決了傳統相對選股「在市場崩盤時也滿倉跌較少股票」的盲點：
-1. **方案 B (總體與板塊特徵)：** 特徵工程自動注入全市場日報酬平均、市場寬度（上漲比例）及其 5日/20日 滾動趨勢；同時透過 `stock_categories.json` 計算各產業板塊的每日平均表現與滾動強度，給予模型宏觀視野。
+1. **方案 B (總體與板塊特徵)：** 特徵工程自動注入全市場日報酬平均、市場寬度（上漲比例）及其 5日/20日 滾動趨勢；同時透過 `scripts/stock_categories.json` 計算各產業板塊的每日平均表現與滾動強度，給予模型宏觀視野。
 2. **方案 C (絕對與相對混合標籤)：** 標籤設計強制規定強勢股（`Label=2`）除滿足相對排名前 20% 外，**未來絕對報酬率必須大於 0%**，否則歸為中性。
 3. **風控效果：** 這兩者與 `trading_sim.py` 的信心分數門檻相輔相成。在大盤大跌日，全市場多空分數會自適應下滑，系統會**自動判定無股可買而 100% 空倉避險（報酬率 0.00%）**，完美避開系統性崩盤！
 4. **產業過濾對齊與節流優化**：`auto_pipeline.py` 動態導入 `config.py` 中的 `TRAIN_INDUSTRIES` 設定，避免下載與特徵化不需訓練的產業，大幅節省 FinMind API 額度並確保全系統篩選一致。
@@ -59,7 +59,7 @@
 - **`Auto_RUN.py`**: **生產流程主控腳本**。一鍵順序執行全流程（scraper ➔ pipeline ➔ StockSync）。
   - **CLI 步驟分流**：支援 `-s` / `--step` 參數，可帶入完整值或簡碼（`download`/`d`、`predict`/`p`、`backup`/`b`）執行單一步驟。
 - **`auto_pipeline.py`**: **機器學習研發流水線入口**。
-  - **CLI 步驟分流**：支援 `-s` / `--step` 參數，可帶入完整值或簡碼（`optimize`/`o`、`feature`/`f`、`train`/`t`、`inference`/`i`）執行單一模型訓練步驟。
+  - **CLI 步驟分流**：支援 `-s` / `--step` 參數，可帶入完整值或簡碼（`optimize`/`o`、`feature`/`f`、`train`/`t`、`inference`/`i`）執行單一模型訓練步驟。其中單獨執行 `optimize`/`o` 步驟時會自動無視 `config.py` 中的 `RUN_OPTIMIZATION` 限制強行啟動因子調參。
 - **安全性與敏感資料防護**：
   - **`rclone.exe` 執行檔**：需另行下載，可放置於虛擬環境的 `venv/Scripts/` 目錄中以方便調用。
   - **敏感金鑰防外洩**：任何包含 rclone 登入 OAuth Token 的 `config`、`.config` 資料夾或 `rclone.conf` 設定檔，**屬於極度敏感金鑰，已列入 Git 與 AI 忽略清單，絕對禁止提交與外洩**。
@@ -75,7 +75,7 @@
 - **`scripts/utils.py`**: **全系統共享股票解析與過濾工具**。
   - 統一 `Stocks.txt` 的解析邏輯（格式 A/B/C 成本與股數欄位），支援 subdirectory 與 fallback。
   - 提供 `filter_stocks_by_train_industries(df)` 統一過濾器，自動以 `config.py` 的設定篩選 DataFrame 中的個股（支持 int/str 類型 stock_id 與自選股強制保留）。
-- **`scripts/tools/clean_stocks.py`**: **自選股清單清理工具**。讀取 `Stocks.txt`，對照 `stock_categories.json` 過濾無效的股票代號，並自動處理重複項。
+- **`scripts/tools/clean_stocks.py`**: **自選股清單清理工具**。讀取 `Stocks.txt`，對照 `scripts/stock_categories.json` 過濾無效的股票代號，並自動處理重複項。
 - **`tests/test_pipeline.py`**: **全系統整合測試腳本**。驗證 18 項核心邏輯，包含日期切割、特徵檔完整性、`utils.py` 解析器單元測試等。
 - **`tests/test_scraper.py`**: **爬蟲單元測試腳本**。快速測試證交所與期交所 API 下載功能，自動整合 `skip_dates.json` 防呆略過機制。
 - **`tests/test_finmind.py`**: **FinMind 資料單元測試**。
@@ -95,7 +95,7 @@
 
 ### 核心設定與快取檔案 (.json)
 1. **`best_factors.json`**: 記錄 Optuna 找出的最佳技術指標參數，由 `feature_engineering.py` 自動讀取。
-2. **`stock_categories.json`**: 產業分類與 ETF 清單，為特徵工程的板塊情緒、爬蟲跳過 ETF 任務及交易模擬器股票名稱轉換的共用依據。
+2. **`scripts/stock_categories.json`**: 產業分類與 ETF 清單，為特徵工程的板塊情緒、爬蟲跳過 ETF 任務及交易模擬器股票名稱轉換的共用依據。
 3. **`models/feature_cols.json`**: 記錄模型訓練當下的所有特徵名稱，確保推論特徵順序與數量 100% 一致。
 4. **`data/failed_dates.json`**: TWSE/TAIFEX 的失敗計數器。失敗超過 3 次則判定為「無開市/假補班」並永久略過。
 5. **`data/no_finmind_data.json`**: FinMind 股票空值快取（快取 90 天）。

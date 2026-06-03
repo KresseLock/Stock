@@ -81,7 +81,7 @@
 - **技術指標**：Moving Average、KD、RSI、MACD、布林通道、ATR、成交量比（參數均可由 Optuna 最佳化）
 - **法人籌碼**：外資/投信/自營買賣超、連續買超天數、滾動累積籌碼
 - **市場感知**：全市場日報酬均值、市場寬度（上漲比例）5日/20日滾動趨勢
-- **板塊強度**：依 `stock_categories.json` 計算各產業每日平均報酬與滾動強度
+- **板塊強度**：依 `scripts/stock_categories.json` 計算各產業每日平均報酬與滾動強度
 - **自動消除 Level Bias**：絕對金額轉為比例/變化率，避免模型記住個股身份
 
 </details>
@@ -128,7 +128,6 @@ Stock/
 ├── 📂 models/                  # LightGBM 訓練模型檔 + feature_cols.json
 ├── 📂 reports/                 # 回測輸出的 Excel / CSV 績效報表
 ├── 📂 predictions/             # 每日推理結果存檔 (.txt)
-├── 📂 scratch/                 # 本地臨時/除錯腳本資料夾
 ├── 📂 scripts/                 # 重構後所有邏輯與腳本的放置處
 │   ├── 📂 tools/
 │   │   └── clean_stocks.py     # 自選股清單 (Stocks.txt) 驗證與重複清理工具
@@ -139,6 +138,7 @@ Stock/
 │   ├── optimize_factors.py     # Optuna 貝葉斯超參數最佳化器
 │   ├── backtest.py             # 時光機單日回測器 (樣本外評估)
 │   ├── utils.py                # 全系統共享股票解析工具
+│   ├── stock_categories.json   # 產業分類與 ETF 全系統共享對照表
 │   └── StockSync.py            # 雲端自動備份上傳工具 (調用 rclone)
 ├── 📂 tests/
 │   ├── test_finmind.py         # FinMind 財報單元測試
@@ -147,13 +147,12 @@ Stock/
 ├── .agyignore                  # AI 開發排除過濾設定 (防干擾)
 ├── .gitignore                  # Git 版本控制忽略設定
 ├── AGENTS.md                   # AI Agent 架構與導航指南 (開發必讀)
-├── Auto_RUN.py                 # 一鍵順序執行全流程主控腳本 (支援 CLI `--step` 路由)
-├── auto_pipeline.py            # 一鍵式自動化流水線入口 (支援 CLI `--step` 路由)
+├── Auto_RUN.py                 # 一鍵順序執行全流程主控腳本 (支援 CLI `-s/--step` 簡碼路由)
+├── auto_pipeline.py            # 一鍵式自動化流水線入口 (支援 CLI `-s/--step` 簡碼路由)
 ├── config.py                   # 系統中央控制面板 (所有策略、爬蟲、調參參數皆在此設定)
 ├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
 ├── Stocks.txt                  # 自選股 / 實質持倉清單
 ├── best_factors.json           # 最佳化技術指標參數存檔
-├── stock_categories.json       # 產業分類與 ETF 全系統共享對照表
 ├── FINMIND_TOKEN.txt           # FinMind API 金鑰存放檔 (可選)
 └── requirements.txt            # Python 依賴套件清單
 ```
@@ -200,37 +199,54 @@ pip install -r requirements.txt
 #### 方案甲：一鍵主控執行（生產流程）
 執行 `Auto_RUN.py` 會自動進行一鍵生產流程：增量下載今日最新行情 ➔ 重建特徵工程與訓練模型 ➔ 產出推理排名與掛單建議 ➔ 雲端硬碟同步備份。
 
+> [!NOTE]
+> 參數選項 (`--step` / `-s`) 與步驟值 (完整拼寫 / 簡寫首字) 可以任意混合搭配使用。例如：`--step download`, `-s download`, `--step d`, `-s d` 全數等價。
+
 ```powershell
 # 1. 執行全套生產流程
 python Auto_RUN.py
 
-# 2. 僅執行特定生產步驟 (支援 -s 簡碼與簡寫值)
-python Auto_RUN.py --step download  # 僅增量下載今日最新資料 (亦可寫為 python Auto_RUN.py -s d)
-python Auto_RUN.py --step predict   # 僅重新建立特徵、訓練並產生明日下單建議 (亦可寫為 python Auto_RUN.py -s p)
-python Auto_RUN.py --step backup    # 僅執行雲端備份 (亦可寫為 python Auto_RUN.py -s b)
+# 2. 僅執行特定生產步驟
+python Auto_RUN.py -s d             # 僅增量下載今日最新資料 (同 --step download)
+python Auto_RUN.py -s p             # 僅重新建立特徵、訓練與模型推理 (同 --step predict)
+python Auto_RUN.py -s b             # 僅執行雲端備份 (同 --step backup)
 ```
 
 #### 方案乙：一鍵流水線執行（研發與最佳化流程）
 執行 `auto_pipeline.py` 會自動執行機器學習的研發流程：參數載入 ➔ 特徵矩陣重建 ➔ 模型訓練 ➔ 模型推理。
 
+> [!NOTE]
+> 參數選項 (`--step` / `-s`) 與步驟值 (完整拼寫 / 簡寫首字) 可以任意混合搭配使用。例如：`--step optimize`, `-s optimize`, `--step o`, `-s o` 全數等價。
+
 ```powershell
 # 1. 執行完整研發流水線 (是否跑 Optuna 調參取決於 config.py 中的 RUN_OPTIMIZATION 設定)
 python auto_pipeline.py
 
-# 2. 僅執行特定研發步驟 (支援 -s 簡碼與簡寫值)
-python auto_pipeline.py --step optimize   # 單獨啟動 Optuna 調參 (亦可寫為 python auto_pipeline.py -s o)
-python auto_pipeline.py --step feature    # 單獨重建特徵矩陣 (亦可寫為 python auto_pipeline.py -s f)
-python auto_pipeline.py --step train      # 單獨訓練 LightGBM 模型 (亦可寫為 python auto_pipeline.py -s t)
-python auto_pipeline.py --step inference  # 單獨輸出今日推理結果 (亦可寫為 python auto_pipeline.py -s i)
+# 2. 僅執行特定研發步驟
+python auto_pipeline.py -s o        # 單獨啟動 Optuna 調參 (同 --step optimize，會無視 config.py 中的限制強行執行)
+python auto_pipeline.py -s f        # 單獨重建特徵矩陣 (同 --step feature)
+python auto_pipeline.py -s t        # 單獨訓練 LightGBM 模型 (同 --step train)
+python auto_pipeline.py -s i        # 單獨輸出今日推理結果 (同 --step inference)
 ```
 
 #### 方案丙：資料庫維護中心 (scripts/scraper.py)
-所有資料抓取、特定補件、完整性維護功能，統一整合在 `scraper.py` 的 CLI 參數中：
+所有資料抓取、特定補件、完整性維護功能，統一整合在 `scraper.py` 的 CLI 參數中。
+
+> [!NOTE]
+> 所有功能與參數選項均支援「完整拼寫」或「簡短簡碼」自由搭配使用。例如：`--patch 2330`, `-p 2330` 或 `--fetch-categories`, `-fc` 全數等價。
+
 ```powershell
-python scripts/scraper.py                       # 正常增量下載
-python scripts/scraper.py -p 2330               # (或 --patch 2330) 手動強制補抓特定股票 (例如2330) 缺漏之財報
-python scripts/scraper.py -fc                   # (或 --fc / --fetch-categories) 重新抓取並更新全市場產業分類對照表
-python scripts/scraper.py -c                    # (或 --check) 執行損毀、異常、極端價格幽靈資料校驗與修復
+# 1. 正常增量下載今日最新資料
+python scripts/scraper.py
+
+# 2. 針對性補足特定股票 (例如 2330) 的歷史財報與基本面資料
+python scripts/scraper.py -p 2330               # 針對性補件 (同 --patch 2330)
+
+# 3. 重新下載並更新全市場產業分類與對照表 (scripts/stock_categories.json)
+python scripts/scraper.py -fc                   # 更新分類表 (同 --fetch-categories)
+
+# 4. 掃描並刪除損毀、格式異常或含極端價格的歷史日報資料
+python scripts/scraper.py -c                    # 校驗與修復 (同 --check)
 ```
 
 > [!WARNING]
@@ -293,7 +309,7 @@ python tests/test_pipeline.py
 ## 🛡️ 開發規範
 
 - **中央設定檔 (config.py)**：所有常數變數與機器學習核心配置均統一在 [config.py](file:///D:/VScode_Stock/Stock/config.py) 修改，禁止在單一模組腳本中硬編碼。
-- **新增特徵**：修改 `scripts/feature_engineering.py` 後，必須重新執行 `auto_pipeline.py --step feature` 重建特徵工程 parquet 檔並重新訓練。
+- **新增特徵**：修改 `scripts/feature_engineering.py` 後，必須重新執行 `auto_pipeline.py -s f` (或 `--step feature`) 重建特徵工程 parquet 檔並重新訓練。
 - **編輯自選股清單**：請直接修改 `Stocks.txt`。可以使用輔助工具 `python scripts/tools/clean_stocks.py` 自動清理重複或無效的股票代碼。
 - **提交前**：務必執行 `python tests/test_pipeline.py` 確認全數通過。
 

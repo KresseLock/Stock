@@ -138,7 +138,7 @@ def main():
 
     stock_names = {}
     etf_set = set()
-    cat_path = os.path.join(BASE_DIR, "stock_categories.json")
+    cat_path = os.path.join(BASE_DIR, "scripts", "stock_categories.json")
     if os.path.exists(cat_path):
         try:
             with open(cat_path, "r", encoding="utf-8") as f:
