@@ -2,13 +2,14 @@
 test_pipeline.py — 全流程模擬測試 (不下載資料、不實際訓練)
 ============================================================
 測試項目：
-  1. 所有模組 import 是否正常
+  1. 所有模組 import 是否正常 (從 scripts/ 載入)
   2. feature_engineering 的欄位產出是否正確 (KD 命名, 持股分級對齊)
   3. optimize_factors 的 _TA_PREFIXES 過濾是否涵蓋所有 TA 欄位
   4. best_factors.json 的 key 結構是否與 auto_pipeline 一致
   5. train.py 的日期切割是否正常
   6. inference.py 的 feature_cols.json 讀取流程是否正常
   7. scraper.py 的 json 模組是否可用
+  8. utils.py 共享解析器單元測試
 
 執行方式: python test_pipeline.py
 """
@@ -43,7 +44,6 @@ def check(name, fn):
 def test_import_scraper():
     import scripts.scraper as sc
     assert hasattr(sc, 'download_history_data'), "找不到 download_history_data"
-    # 確認 json 已匯入（間接測試：呼叫有使用 json 的函式不會報 NameError）
     import json
     assert json is not None
     return "scraper + json import OK"
@@ -55,20 +55,20 @@ def test_import_feature_engineering():
     return "feature_engineering import OK"
 
 def test_import_optimize_factors():
-    import optimize_factors as of_
+    import scripts.optimize_factors as of_
     assert hasattr(of_, 'main'), "找不到 main"
     assert hasattr(of_, '_TA_PREFIXES'), "找不到 _TA_PREFIXES"
     assert hasattr(of_, '_STABLE_NON_TA_COLS'), "找不到 _STABLE_NON_TA_COLS"
     return "optimize_factors import OK"
 
 def test_import_train():
-    import train
+    import scripts.train as train
     assert hasattr(train, 'main'), "找不到 train.main"
     assert hasattr(train, 'train_model'), "找不到 train.train_model"
     return "train import OK"
 
 def test_import_inference():
-    import inference
+    import scripts.inference as inference
     assert hasattr(inference, 'main'), "找不到 inference.main"
     return "inference import OK"
 
@@ -85,11 +85,6 @@ check("Import: optimize_factors.py", test_import_optimize_factors)
 check("Import: train.py", test_import_train)
 check("Import: inference.py", test_import_inference)
 check("Import: auto_pipeline.py", test_import_auto_pipeline)
-
-def test_import_main():
-    import main
-    return "main import OK"
-check("Import: main.py", test_import_main)
 
 # ─────────────────────────────────────────────────────────────
 # 2. feature_engineering KD 欄位命名
@@ -118,7 +113,7 @@ check("KD 欄位動態命名", test_kd_column_naming)
 # ─────────────────────────────────────────────────────────────
 
 def test_ta_prefixes():
-    from optimize_factors import _TA_PREFIXES, _is_ta_col
+    from scripts.optimize_factors import _TA_PREFIXES, _is_ta_col
     # k9 / d9 必須被識別為 TA 欄位
     assert _is_ta_col("k9"), "_TA_PREFIXES 未涵蓋 k9"
     assert _is_ta_col("d9"), "_TA_PREFIXES 未涵蓋 d9"
@@ -140,7 +135,7 @@ check("_TA_PREFIXES 覆蓋範圍", test_ta_prefixes)
 # ─────────────────────────────────────────────────────────────
 
 def test_stable_cols_no_mkt_inst_net():
-    from optimize_factors import _STABLE_NON_TA_COLS
+    from scripts.optimize_factors import _STABLE_NON_TA_COLS
     assert "mkt_inst_net" not in _STABLE_NON_TA_COLS, \
         "mkt_inst_net 仍在 _STABLE_NON_TA_COLS，應已移除"
     return f"mkt_inst_net 已移除，共 {len(_STABLE_NON_TA_COLS)} 個穩定特徵"
@@ -175,7 +170,7 @@ check("best_factors.json 結構", test_best_factors_json)
 def test_apply_best_params():
     import json
     import auto_pipeline
-    import run_feature_engineering as rfe_module
+    import scripts.feature_engineering as rfe_module
     path = os.path.join(ROOT_DIR, "best_factors.json")
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -197,7 +192,7 @@ check("auto_pipeline._apply_best_params 對應", test_apply_best_params)
 def test_train_date_split():
     import numpy as np
     import pandas as pd
-    from train import train_model
+    from scripts.train import train_model
     # 建立假資料：100 個日期 x 5 支股票 = 500 筆 (避免 LightGBM 因為資料過少而無法進行 Valid Split 導致報錯)
     dates = pd.date_range("2023-01-02", periods=100, freq="B")
     stocks = ["1101", "2330", "2317"]
@@ -211,7 +206,6 @@ def test_train_date_split():
     df = pd.DataFrame(rows)
     # 驗證 train.py 的源碼中切割邏輯是否能實際運行不報錯
     import tempfile
-    from train import train_model
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
             # 建立假 feature_cols 與目標
@@ -219,8 +213,7 @@ def test_train_date_split():
             target = "next_ret_1"
             
             # 使用我們剛才建立的假 df (含 20 天)
-            # 因為 train_model 預設儲存到 models/，我們暫時把 MODEL_DIR 改到 tmp_dir 避免污染
-            import train
+            import scripts.train as train
             original_model_dir = train.MODEL_DIR
             train.MODEL_DIR = tmp_dir
             
@@ -360,7 +353,7 @@ check("scraper.py 失敗略過機制", test_scraper_fail_logic)
 
 def test_early_stopping_config():
     import auto_pipeline
-    import optimize_factors as of_module
+    import scripts.optimize_factors as of_module
     assert hasattr(auto_pipeline, 'EARLY_STOPPING_ROUNDS'), "auto_pipeline 缺少 EARLY_STOPPING_ROUNDS 設定"
     assert hasattr(of_module, 'EARLY_STOPPING_ROUNDS'), "optimize_factors 缺少 EARLY_STOPPING_ROUNDS 設定"
     return f"提早結束變數存在, auto_pipeline: {auto_pipeline.EARLY_STOPPING_ROUNDS}"
@@ -374,7 +367,7 @@ check("Early Stopping 參數檢查", test_early_stopping_config)
 def test_utils_parser():
     import tempfile
     import json
-    from utils import parse_stocks_file, load_target_stocks
+    from scripts.utils import parse_stocks_file, load_target_stocks
     
     # 建立假 Stocks.txt
     test_content = (

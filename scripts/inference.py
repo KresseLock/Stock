@@ -14,26 +14,36 @@ import lightgbm as lgb
 import pandas as pd
 import numpy as np
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 統一設定路徑與環境
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 
-BUY_THRESHOLD   = 10.0   
-SELL_THRESHOLD  = 0.0    
-STOP_LOSS_PCT   = -8.0   
-FEE_RATE        = 0.001425
-TAX_RATE        = 0.003
-MAX_POSITIONS   = 5       # 最大持倉上限，與 trading_sim.py 保持一致
+# ── 載入中央控制面板 config ──────────────────────────────────
+try:
+    from config import BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS, FEE_RATE, TAX_RATE
+except ImportError:
+    BUY_THRESHOLD   = 10.0   
+    SELL_THRESHOLD  = 0.0    
+    STOP_LOSS_PCT   = -8.0   
+    FEE_RATE        = 0.001425
+    TAX_RATE        = 0.003
+    MAX_POSITIONS   = 5
 
 
 def load_watchlist_detailed() -> dict:
     try:
-        from utils import parse_stocks_detailed
+        from scripts.utils import parse_stocks_detailed
         return parse_stocks_detailed("Stocks.txt")
-    except Exception:
-        from utils import parse_stocks_file
-        simple = parse_stocks_file("Stocks.txt")
-        return {sid: {"cost": cost, "shares": None} for sid, cost in simple.items()}
+    except ImportError:
+        try:
+            from utils import parse_stocks_detailed
+            return parse_stocks_detailed("Stocks.txt")
+        except Exception:
+            return {}
 
 
 def get_tw_tick_size(price: float) -> float:
@@ -69,12 +79,15 @@ def main():
 
     df = pd.read_parquet(DATA_PATH)
     
-    # ── 根據 train.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
-    from utils import filter_stocks_by_train_industries
-    before_cnt = df["stock_id"].nunique()
-    df = filter_stocks_by_train_industries(df)
-    after_cnt = df["stock_id"].nunique()
-    print(f"  [推理過濾] 依 train.py 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行推理")
+    # ── 根據 config.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
+    try:
+        from scripts.utils import filter_stocks_by_train_industries
+        before_cnt = df["stock_id"].nunique()
+        df = filter_stocks_by_train_industries(df)
+        after_cnt = df["stock_id"].nunique()
+        print(f"  [推理過濾] 依 config 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行推理")
+    except Exception as e:
+        print(f"  [警告] 篩選過濾器執行失敗 ({e})，使用全特徵進行推理")
     # ──────────────────────────────────────────────────────────
     
     latest_date = df["date"].max()

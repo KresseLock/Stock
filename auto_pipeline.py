@@ -1,20 +1,20 @@
+# -*- coding: utf-8 -*-
 """
-auto_pipeline.py — 一鍵自動化量化交易流水線
+auto_pipeline.py — 一鍵自動化量化交易流水線 (CLI 步驟路由版)
 ================================================================
 執行順序:
-  步驟 1. [可選] 貝葉斯因子最佳化 (optimize_factors.py)
-           → 自動搜尋最佳 RSI/MA/MACD/布林通道等因子參數
-           → 結果寫入 best_factors.json
-  步驟 2. 自動讀取 best_factors.json，套用最佳參數
-  步驟 3. 重建特徵矩陣 (run_feature_engineering.py)
-           → 輸出 data/features/features_combined.parquet
-  步驟 4. 訓練 LightGBM 模型 (train.py)
-           → 輸出 models/lgbm_model_1.txt ~ lgbm_model_3.txt
-  步驟 5. 推理預測輸出 (inference.py)
-           → 印出未來 3 天走勢預測排行榜
+  步驟 1. 貝葉斯因子最佳化 (scripts/optimize_factors.py)
+  步驟 2. 載入並套用最佳因子參數 (scripts/feature_engineering.py)
+  步驟 3. 重建特徵工程矩陣 (scripts/feature_engineering.py)
+  步驟 4. 訓練 LightGBM 模型 (scripts/train.py)
+  步驟 5. 模型預測推理 (scripts/inference.py)
 
-使用方式:
-  python auto_pipeline.py
+用法:
+  python auto_pipeline.py                 # 一鍵跑完完整流程 (由 config.py 控制是否執行最佳化)
+  python auto_pipeline.py --step optimize # 僅執行步驟 1 因子最佳化
+  python auto_pipeline.py --step feature  # 僅執行步驟 2+3 特徵工程
+  python auto_pipeline.py --step train    # 僅執行步驟 4 訓練模型
+  python auto_pipeline.py --step inference # 僅執行步驟 5 模型推理
 """
 
 import os
@@ -22,87 +22,49 @@ import sys
 import json
 import datetime
 import time
+import argparse
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
 
-# ╔══════════════════════════════════════════════════════╗
-# ║              一鍵流水線設定區 (請自行調整)            ║
-# ╚══════════════════════════════════════════════════════╝
-
-# ── 電腦資源設定 (多核心運算) ──────────────────────────────
-# -1 代表使用全部核心 (預設最快)
-# 若怕運算時電腦卡頓，可以設定為具體的核心數量 (例如 4 或 8)
-FEAT_N_JOBS       = -1   # 特徵工程平行運算 (影響最鉅)
-TRAIN_N_JOBS      = -1   # LightGBM 訓練模型使用核心數
-OPTUNA_N_JOBS     = 6    # 最佳化時同時啟動的 trial 數量 (建議 2~4 即可，太高會卡死)
-
-# ── 步驟 1 設定：因子最佳化 ─────────────────────────────
-# True  = 每次執行都重新跑貝葉斯最佳化 (耗時數分鐘~數十分鐘)
-# False = 跳過最佳化，直接使用上一次的 best_factors.json
-RUN_OPTIMIZATION    = False
-
-# 若 RUN_OPTIMIZATION=False 但 best_factors.json 不存在，是否使用預設參數繼續？
-FALLBACK_TO_DEFAULT = True
-
-# 最佳化迭代次數 (此處可覆寫 optimize_factors.py 裡的 MAX_ITERATIONS)
-OPTIMIZATION_TRIALS = 600
-
-# 提早結束機制 (Early Stopping)：連續 N 輪未找到更好的解就提早結束 (None=不提早結束)
-EARLY_STOPPING_ROUNDS = 200
-
-# ── 回測切割日期 ────────────────────────────────────────
-# 最佳化使用此日期之「前」的資料訓練，之「後」的資料評估勝率。
-# 建議設為「約一年前」：樣本充足，又能反映近期市場規律。
-# 設為 None 時，程式自動計算為「今日減一年」。
-BACKTEST_DATE = "20250801"   # None = 自動設為一年前 | 或填入字串如 "20250101"
-
-# ── 步驟 3 設定：特徵工程時間區間 ──────────────────────
-START_DATE = datetime.date(2020, 1, 1)   # 歷史回溯起點
-END_DATE   = datetime.date.today()       # 自動設為今日
-
-# ── 步驟 3 設定：訓練產業選擇 ────────────────────────
-# 註：為確保整個流水線與模型訓練的一致性，並避免下載無效的 FinMind 財報資料，
-#     此處直接引用 train.py 中的 TRAIN_INDUSTRIES 設定。
-#     若要修改訓練的產業，請統一至 train.py 的 TRAIN_INDUSTRIES 中修改。
+# ── 載入中央控制面板 config 設定 ──────────────────────────────
 try:
-    from train import TRAIN_INDUSTRIES
+    from config import (
+        RUN_OPTIMIZATION,
+        OPTIMIZATION_TRIALS,
+        EARLY_STOPPING_ROUNDS,
+        BACKTEST_DATE,
+        START_DATE,
+        TRAIN_INDUSTRIES,
+        FEAT_N_JOBS,
+        TRAIN_N_JOBS,
+        OPTUNA_N_JOBS
+    )
 except ImportError:
-    TRAIN_INDUSTRIES = {
-        "半導體業": True,        "電子零組件業": True,      "電腦及週邊設備業": True,
-        "光電業": True,          "電子通路業": True,        "其他電子業": True,
-        "電子工業": True,        "通信網路業": True,        "資訊服務業": True,
-        "電子商務業": True,     "生技醫療業": False,       "化學工業": False,
-        "化學生技醫療": False,   "塑膠工業": False,         "橡膠工業": False,
-        "電機機械": True,       "汽車工業": False,         "航運業": False,
-        "鋼鐵工業": False,       "建材營造": False,         "玻璃陶瓷": False,
-        "水泥工業": False,       "造紙工業": False,         "紡織纖維": False,
-        "食品工業": False,       "農業科技業": False,       "農業科技": False,
-        "貿易百貨": False,       "觀光事業": False,         "觀光餐旅": False,
-        "金融保險": False,       "金融業": False,           "油電燃氣業": False,
-        "綠能環保": False,       "綠能環保類": False,       "居家生活": False,
-        "居家生活類": False,     "運動休閒": False,         "運動休閒類": False,
-        "數位雲端": False,       "數位雲端類": False,       "文化創意業": False,
-        "存託憑證": False,       "創新板股票": False,       "創新版股票": False,
-        "ETF": False,            "other": False,            "其他": False,
-    }
+    RUN_OPTIMIZATION      = False
+    OPTIMIZATION_TRIALS   = 600
+    EARLY_STOPPING_ROUNDS = 200
+    BACKTEST_DATE         = "20250801"
+    START_DATE            = datetime.date(2020, 1, 1)
+    FEAT_N_JOBS           = -1
+    TRAIN_N_JOBS          = -1
+    OPTUNA_N_JOBS         = 6
+    TRAIN_INDUSTRIES      = {}
 
-
-# ── 步驟 1&2 設定：最佳化結果檔路徑 ────────────────────
+END_DATE = datetime.date.today()
 BEST_FACTORS_PATH = os.path.join(BASE_DIR, "best_factors.json")
 
-# ╔══════════════════════════════════════════════════════╗
-# ║              以下為流水線核心邏輯，一般不需修改        ║
-# ╚══════════════════════════════════════════════════════╝
-
+# 引入位於 scripts/ 的新模組
 import scripts.feature_engineering as fe_module
-from scripts.feature_engineering import process_all_history_features, load_target_stocks
+from scripts.feature_engineering import process_all_history_features
+from scripts.utils import load_target_stocks
 
 
-def _banner(step: int, title: str):
+def _banner(step: str, title: str):
     print()
     print("=" * 65)
     print(f"  步驟 {step}: {title}")
@@ -142,7 +104,6 @@ def _resolve_backtest_date() -> str:
 
     candidate = datetime.date.today() - datetime.timedelta(days=365)
     
-    # 嘗試載入 taiwan_holidays，若未安裝則退化為只判斷週末
     try:
         from taiwan_holidays.taiwan_calendar import TaiwanCalendar
         th = TaiwanCalendar()
@@ -150,7 +111,6 @@ def _resolve_backtest_date() -> str:
     except Exception:
         check_holiday = lambda d: False
         
-    # 往回找最近的交易日（最多找 10 天，避免無限迴圈）
     for _ in range(10):
         weekday = candidate.weekday()          # 0=週一 … 6=週日
         is_holiday = check_holiday(candidate)  
@@ -165,9 +125,9 @@ def _resolve_backtest_date() -> str:
 
 def step1_optimize(bt: str):
     """步驟 1: 執行 Optuna 貝葉斯最佳化"""
-    import optimize_factors as of_module
+    import scripts.optimize_factors as of_module
 
-    # 覆寫最佳化模組的設定 (統一由 auto_pipeline.py 控制)
+    # 覆寫最佳化模組的設定 (統一由 config.py 控制)
     of_module.MAX_ITERATIONS = OPTIMIZATION_TRIALS
     of_module.EARLY_STOPPING_ROUNDS = EARLY_STOPPING_ROUNDS
     of_module.BACKTEST_DATE  = bt
@@ -184,13 +144,8 @@ def step1_optimize(bt: str):
 def step2_load_params() -> dict:
     """步驟 2: 讀取最佳參數並套用到特徵工程模組"""
     if not os.path.exists(BEST_FACTORS_PATH):
-        if FALLBACK_TO_DEFAULT:
-            print("  [提示] 找不到 best_factors.json，將不會覆寫 feature_engineering，直接使用其預設因子參數繼續。")
-            return {}
-        else:
-            raise FileNotFoundError(
-                f"找不到 {BEST_FACTORS_PATH}，請先執行最佳化或設定 FALLBACK_TO_DEFAULT=True"
-            )
+        print("  [提示] 找不到 best_factors.json，將不會覆寫 feature_engineering，直接使用其預設因子參數繼續。")
+        return {}
 
     with open(BEST_FACTORS_PATH, "r", encoding="utf-8") as f:
         result = json.load(f)
@@ -207,7 +162,7 @@ def step2_load_params() -> dict:
 
 def _get_training_stocks() -> list:
     """根據 TRAIN_INDUSTRIES 設定與 Stocks.txt 組合出要訓練的股票清單"""
-    target_stocks = set(load_target_stocks())  # Stocks.txt 一定要包含
+    target_stocks = set(load_target_stocks("Stocks.txt"))  # Stocks.txt 一定要包含
     cat_path = os.path.join(BASE_DIR, "stock_categories.json")
     
     if os.path.exists(cat_path):
@@ -233,98 +188,140 @@ def step3_feature_engineering():
     else:
         print(f"  清單: {train_stocks[:10]} ... 等 {len(train_stocks)} 檔")
         
-    # 直接傳遞 override_target_stocks 給 feature_engineering
     fe_module.N_JOBS = FEAT_N_JOBS
     process_all_history_features(START_DATE, END_DATE, override_target_stocks=train_stocks)
-        
     return train_stocks
 
 
 def step4_train():
     """步驟 4: 訓練 LightGBM 模型"""
-    import train as train_module
+    import scripts.train as train_module
     train_module.N_JOBS = TRAIN_N_JOBS
     train_module.main()
 
 
 def step5_inference():
     """步驟 5: 推理預測"""
-    import inference as inference_module
+    import scripts.inference as inference_module
     inference_module.main()
 
 
 def main():
+    parser = argparse.ArgumentParser(description="一鍵自動化量化交易流水線")
+    parser.add_argument(
+        "-s", "--step", 
+        type=str, 
+        choices=["optimize", "o", "feature", "f", "train", "t", "inference", "i", "all", "a"], 
+        default="all",
+        help="執行單一指定步驟 (optimize/o | feature/f | train/t | inference/i | all/a)"
+    )
+    args = parser.parse_args()
+
+    # 簡碼對齊映射
+    step_map = {
+        "o": "optimize",
+        "f": "feature",
+        "t": "train",
+        "i": "inference",
+        "a": "all",
+        "optimize": "optimize",
+        "feature": "feature",
+        "train": "train",
+        "inference": "inference",
+        "all": "all"
+    }
+    target_step = step_map[args.step]
+
     t_total_start = time.time()
 
     print("=" * 65)
     print("  一鍵自動化量化交易流水線 (Auto Pipeline)")
     print("=" * 65)
     print(f"  執行時間: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  執行步驟: {'(重置特徵 → 最佳化 → 重建特徵)' if RUN_OPTIMIZATION else '(載入參數 → 特徵工程)'} → 訓練 → 推理")
+    print(f"  目標步驟: {target_step.upper()}")
 
-    # ── 步驟 1: 因子最佳化與特徵準備 ──────────────────────
     bt = _resolve_backtest_date()
-    if RUN_OPTIMIZATION:
-        # [互鎖升級] 最佳化前必須先用最新抓取的全股資料建立基礎 parquet 檔，否則 Optuna 會讀到舊資料
-        _banner(0, "最佳化前置準備：以現有參數重建最新特徵矩陣")
-        t0 = time.time()
+
+    if target_step == "optimize":
+        _banner("1", f"單獨執行：貝葉斯因子最佳化 (Optuna TPE, {OPTIMIZATION_TRIALS} 輪)")
+        # 最佳化前需要建立基礎特徵，供 Optuna 讀取
         step2_load_params()
         step3_feature_engineering()
-        print(f"  [耗時] {time.time()-t0:.1f} 秒")
-
-        _banner(1, f"貝葉斯因子最佳化 (Optuna TPE, {OPTIMIZATION_TRIALS} 輪, 回測切割={bt})")
-        t0 = time.time()
         step1_optimize(bt)
-        print(f"  [耗時] {time.time()-t0:.1f} 秒")
 
-        # 最佳化後，重新載入最新跑出來的 parameters
-        _banner(2, "載入最新最佳因子參數")
-        t0 = time.time()
+    elif target_step == "feature":
+        _banner("3", "單獨執行：重建特徵矩陣 (Feature Engineering)")
         step2_load_params()
-        print(f"  [耗時] {time.time()-t0:.1f} 秒")
-
-        # 使用最佳化後的黃金參數，重新建立最終特徵矩陣
-        _banner(3, "以最佳因子參數重建最終特徵矩陣")
-        t0 = time.time()
         step3_feature_engineering()
-        print(f"  [耗時] {time.time()-t0:.1f} 秒")
+
+    elif target_step == "train":
+        _banner("4", "單獨執行：訓練 LightGBM 模型 (Day 1 ~ Day 3)")
+        step4_train()
+
+    elif target_step == "inference":
+        _banner("5", "單獨執行：推理預測 — 未來 3 天走勢排行榜與下單建議")
+        step5_inference()
+
     else:
-        _banner(1, "跳過因子最佳化 (RUN_OPTIMIZATION=False)")
-        print("  直接使用上次最佳化的 best_factors.json")
+        # 預設執行完整流程
+        if RUN_OPTIMIZATION:
+            # 最佳化前置準備
+            _banner("0", "最佳化前置準備：以現有參數重建最新特徵矩陣")
+            t0 = time.time()
+            step2_load_params()
+            step3_feature_engineering()
+            print(f"  [耗時] {time.time()-t0:.1f} 秒")
 
-        # ── 步驟 2: 載入最佳參數 ────────────────────────────
-        _banner(2, "載入最佳因子參數")
+            # 執行最佳化
+            _banner("1", f"貝葉斯因子最佳化 (Optuna TPE, {OPTIMIZATION_TRIALS} 輪, 回測切割={bt})")
+            t0 = time.time()
+            step1_optimize(bt)
+            print(f"  [耗時] {time.time()-t0:.1f} 秒")
+
+            # 最佳化後，載入新參數
+            _banner("2", "載入最新最佳因子參數")
+            t0 = time.time()
+            step2_load_params()
+            print(f"  [耗時] {time.time()-t0:.1f} 秒")
+
+            # 使用新參數重新特徵工程
+            _banner("3", "以最佳因子參數重建最終特徵矩陣")
+            t0 = time.time()
+            step3_feature_engineering()
+            print(f"  [耗時] {time.time()-t0:.1f} 秒")
+        else:
+            _banner("1", "跳過因子最佳化 (RUN_OPTIMIZATION=False)")
+            print("  直接使用上次最佳化的 best_factors.json")
+
+            _banner("2", "載入最佳因子參數")
+            t0 = time.time()
+            step2_load_params()
+            print(f"  [耗時] {time.time()-t0:.1f} 秒")
+
+            _banner("3", "重建特徵矩陣 (Feature Engineering)")
+            t0 = time.time()
+            step3_feature_engineering()
+            print(f"  [耗時] {time.time()-t0:.1f} 秒")
+
+        _banner("4", "訓練 LightGBM 模型 (Day 1 ~ Day 3)")
         t0 = time.time()
-        step2_load_params()
+        step4_train()
         print(f"  [耗時] {time.time()-t0:.1f} 秒")
 
-        # ── 步驟 3: 特徵工程 ────────────────────────────────
-        _banner(3, "重建特徵矩陣 (Feature Engineering)")
+        _banner("5", "推理預測 — 未來 3 天走勢排行榜")
         t0 = time.time()
-        step3_feature_engineering()
+        step5_inference()
         print(f"  [耗時] {time.time()-t0:.1f} 秒")
 
-    # ── 步驟 4: 訓練 ────────────────────────────────────
-    _banner(4, "訓練 LightGBM 模型 (Day 1 ~ Day 3)")
-    t0 = time.time()
-    step4_train()
-    print(f"  [耗時] {time.time()-t0:.1f} 秒")
-
-    # ── 步驟 5: 推理 ────────────────────────────────────
-    _banner(5, "推理預測 — 未來 3 天走勢排行榜")
-    t0 = time.time()
-    step5_inference()
-    print(f"  [耗時] {time.time()-t0:.1f} 秒")
-
-    # ── 總結 ─────────────────────────────────────────────
-    total = time.time() - t_total_start
-    print()
-    print("=" * 65)
-    print(f"  [流水線完成] 總耗時: {total/60:.1f} 分鐘")
-    print(f"  模型已儲存至 : models/")
-    print(f"  特徵已儲存至 : data/features/features_combined.parquet")
-    print(f"  最佳因子存於 : best_factors.json")
-    print("=" * 65)
+        # 總結
+        total = time.time() - t_total_start
+        print()
+        print("=" * 65)
+        print(f"  [流水線完成] 總耗時: {total/60:.1f} 分鐘")
+        print(f"  模型已儲存至 : models/")
+        print(f"  特徵已儲存至 : data/features/features_combined.parquet")
+        print(f"  最佳因子存於 : best_factors.json")
+        print("=" * 65)
 
 
 if __name__ == "__main__":

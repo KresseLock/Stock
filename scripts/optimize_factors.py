@@ -1,21 +1,7 @@
+# -*- coding: utf-8 -*-
 """
 optimize_factors.py — 因子貝葉斯自動最佳化 (Optuna TPE)
 ================================================================
-升級原因:
-  Random Search 每一輪都是「瞎子摸象」，完全不學習之前的結果。
-  Optuna 使用貝葉斯最佳化 (TPE 演算法)，每一輪都會分析前幾輪的
-  好壞結果，智慧地決定「下一輪要往哪個方向探索」，通常只需
-  200～500 輪，就能媲美 Random Search 跑 10 萬輪的品質。
-
-核心設計:
-  1. 啟動時只讀一次 parquet，所有 TA 計算均在記憶體中完成
-  2. 使用 Optuna TPE 智慧搜尋，非盲目隨機
-  3. 參數大小關係以「偏移量」設計，確保合法 (short < mid1 < long)
-  4. 即時顯示每輪進度，最佳解即時更新
-  5. 結束後自動儲存最佳參數到 best_factors.json
-
-使用方式:
-  python optimize_factors.py
 """
 
 import os
@@ -28,7 +14,6 @@ import lightgbm as lgb
 import optuna
 import threading
 
-
 _lock = threading.Lock()
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -37,35 +22,29 @@ if hasattr(sys.stdout, 'reconfigure'):
 # 隱藏 Optuna 的系統詳細 log，由我們自己控制輸出
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 統一將 BASE_DIR 設為專案根目錄
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
 
-# ╔══════════════════════════════════════════════════════╗
-# ║              最佳化搜尋設定區 (請自行調整)            ║
-# ╚══════════════════════════════════════════════════════╝
-
-# 回測切割日期：此日期之前的資料用於訓練，之後用於評估預測準確率
-BACKTEST_DATE  = "20250801"
-
-# 最佳化迭代次數
-# - 貝葉斯最佳化: 通常 300~500 輪就能找到極佳解
-# - Random Search: 需要 10000~100000 輪才能媲美
-MAX_ITERATIONS = 400
-
-# 提早結束條件：連續 N 輪未找到更好的參數則提早結束 (None 或 0 代表不提早結束)
-EARLY_STOPPING_ROUNDS = None
-
-# 執行緒數量 (預設最多 4 核，避免 OOM)
-N_JOBS = min(os.cpu_count() or 1, 4)
+# ── 載入中央控制面板 config ──────────────────────────────────
+try:
+    from config import BACKTEST_DATE, OPTIMIZATION_TRIALS, EARLY_STOPPING_ROUNDS, OPTUNA_N_JOBS
+    MAX_ITERATIONS = OPTIMIZATION_TRIALS
+    N_JOBS = OPTUNA_N_JOBS
+except ImportError:
+    BACKTEST_DATE  = "20250801"
+    MAX_ITERATIONS = 400
+    EARLY_STOPPING_ROUNDS = None
+    N_JOBS = min(os.cpu_count() or 1, 4)
 
 # 預測哪幾天的勝率作為評分基準
 FORECAST_DAYS  = [1, 2, 3]
 
-# 最佳化結果儲存路徑
+# 最佳化結果儲存路徑 (保存在根目錄)
 RESULT_PATH    = os.path.join(BASE_DIR, "best_factors.json")
 
 # ── 參數搜尋邊界 ─────────────────────────────────────────
-# 使用「偏移量」設計確保參數大小關係永遠合法
-# (例如 mid1 = short + offset，保證 short < mid1)
 BOUNDS = {
     # 均線 (短 → 中1 → 中2 → 長，採偏移量設計)
     "ma_short":         ( 3,  9),   # 短均線絕對值
@@ -96,9 +75,6 @@ BOUNDS = {
     "chips_w3_offset":  ( 5, 20),   # w3 = w2 + offset
 }
 
-# ╔══════════════════════════════════════════════════════╗
-# ║                 核心邏輯區                            ║
-# ╚══════════════════════════════════════════════════════╝
 
 import re
 
@@ -251,10 +227,6 @@ _STABLE_NON_TA_COLS = [
 
 def make_objective(df_base: pd.DataFrame, bt_date: pd.Timestamp,
                    best_holder: dict) -> callable:
-    """
-    建立 Optuna 目標函式（閉包），捕捉 df_base 讓每輪只做記憶體計算。
-    best_holder 用來即時更新最佳解以便在 callback 中顯示。
-    """
     label_cols = [f"label_{d}" for d in FORECAST_DAYS]
     ret_cols = [f"next_ret_{d}" for d in FORECAST_DAYS]
     ohlcv_cols = ["open", "high", "low", "close", "volume"]
@@ -297,7 +269,6 @@ def make_objective(df_base: pd.DataFrame, bt_date: pd.Timestamp,
             label = f"label_{day}"
             if label not in df_merged.columns: continue
             
-            # 確保標籤是整數類型 (3類)
             y_train = train_df[label].astype(int)
             y_test  = test_df[label].astype(int)
             
@@ -349,7 +320,6 @@ def make_objective(df_base: pd.DataFrame, bt_date: pd.Timestamp,
 
 
 def print_progress(study, trial):
-    """Optuna callback：每次 trial 結束後印出進度（多執行緒安全版）"""
     try:
         n    = trial.number + 1
         val  = trial.value if trial.value is not None else 0.0
@@ -380,7 +350,6 @@ def print_progress(study, trial):
         pass
 
 
-
 def main():
     print("=" * 65)
     print("  因子貝葉斯最佳化 (Optuna TPE)")
@@ -390,22 +359,24 @@ def main():
     print(f"  搜尋參數個數: {len(BOUNDS)} 個連續參數")
     print()
 
-    # ── 步驟 1: 只讀一次 parquet ────────────────────────
     parquet_path = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
     if not os.path.exists(parquet_path):
-        print("[錯誤] 找不到特徵檔，請先執行 python run_feature_engineering.py")
+        print("[錯誤] 找不到特徵檔，請先執行特徵工程計算。")
         return
 
     print("[1] 載入特徵數據 (僅此一次)...")
     df_base = pd.read_parquet(parquet_path)
     
-    # ── 根據 train.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
-    from utils import filter_stocks_by_train_industries
+    # ── 根據 config 的產業與自選設定過濾股票 ──────────────────
+    try:
+        from scripts.utils import filter_stocks_by_train_industries
+    except ImportError:
+        from utils import filter_stocks_by_train_industries
+        
     before_cnt = df_base["stock_id"].nunique()
     df_base = filter_stocks_by_train_industries(df_base)
     after_cnt = df_base["stock_id"].nunique()
-    print(f"  [最佳化過濾] 依 train.py 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行因子最佳化")
-    # ──────────────────────────────────────────────────────────
+    print(f"  [最佳化過濾] 依 config 產業設定篩選：原本 {before_cnt} 檔，剩餘 {after_cnt} 檔進行因子最佳化")
     
     df_base["date"] = pd.to_datetime(df_base["date"])
 
@@ -422,7 +393,7 @@ def main():
     print(f"   評估樣本   : {len(df_base[df_base['date'] >= bt_date])}")
     print()
 
-    # ── 步驟 2: 建立 Optuna study 並執行最佳化 ──────────
+    # ── 步驟 2: 建立 study 並執行最佳化 ──────────
     print("[2] 啟動 Optuna 貝葉斯最佳化...")
     print(f"    (並行數: {N_JOBS}，每 50 輪或出現新最佳解時顯示進度)")
     print("-" * 65)
@@ -453,7 +424,6 @@ def main():
     best_score  = study.best_value
     raw_p       = best_trial.params
 
-    # 還原真正的絕對值參數
     ma_short = raw_p["ma_short"]
     ma_mid1  = ma_short + raw_p["ma_mid1_offset"]
     ma_mid2  = ma_mid1  + raw_p["ma_mid2_offset"]
@@ -484,10 +454,7 @@ def main():
     print(f"  歷史最佳平均勝率: {best_score:.2f}%")
     print("=" * 65)
     print()
-    print("請將以下參數複製到 run_feature_engineering.py 的設定區：")
-    print()
-    for k, v in best_config.items():
-        print(f"{k:<20} = {v}")
+    print("已找到最佳參數組。")
 
     # ── 儲存結果 ────────────────────────────────────────
     result = {
@@ -508,12 +475,6 @@ def main():
     print()
     print(f"  最佳參數已儲存至: {RESULT_PATH}")
     print()
-    print("  下一步:")
-    print("    1. 將上述參數貼到 run_feature_engineering.py 設定區")
-    print("    2. 執行 python run_feature_engineering.py  (重建最佳化特徵)")
-    print("    3. 執行 python train.py                    (訓練最佳模型)")
-    print("    4. 執行 python inference.py                (預測明天走勢)")
-    print("=" * 65)
 
 
 if __name__ == "__main__":

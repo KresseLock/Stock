@@ -53,6 +53,7 @@ except Exception:
 
 # ── 建立所有資料夾 ──────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.dirname(BASE_DIR)
 DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 
 DIRS = [
@@ -84,10 +85,16 @@ def _load_etf_set() -> set:
 
 
 # ── FinMind 基本面快取天數設定 ──────────────────────────
-# 設定基本面資料更新天數間隔。預設為 7 (7天更新一次)。
-# 例如填入 3 代表 3 天更新一次，填入 30 代表 30 天更新一次。
-_FINMIND_CACHE_DAYS = 15
+try:
+    import sys
+    _PARENT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _PARENT not in sys.path:
+        sys.path.insert(0, _PARENT)
+    from config import FINMIND_CACHE_DAYS as _FINMIND_CACHE_DAYS
+except ImportError:
+    _FINMIND_CACHE_DAYS = 15
 _FINMIND_CACHE_SECONDS = _FINMIND_CACHE_DAYS * 86400
+
 
 
 
@@ -724,6 +731,7 @@ def _crawl_fm_dataset(
     end_date:     str,
     output_path:  str,
     missing_cache: dict,
+    force:        bool = False,
 ):
     """
     三態回傳:
@@ -739,20 +747,22 @@ def _crawl_fm_dataset(
     DATE_COL_CANDIDATES = ["date", "revenue_date", "calendarDate", "period"]
 
     # ── missing_fm_cache 個別快取：90 天內跳過 ─────────────
-    cache_key = f"{stock_id}_{dataset_name}"
-    if cache_key in missing_cache:
-        try:
-            last_check = datetime.date.fromisoformat(missing_cache[cache_key])
-            if (datetime.date.today() - last_check).days < _NO_DATA_RECHECK_DAYS:
-                return "skipped"
-        except Exception:
-            pass
+    if not force:
+        cache_key = f"{stock_id}_{dataset_name}"
+        if cache_key in missing_cache:
+            try:
+                last_check = datetime.date.fromisoformat(missing_cache[cache_key])
+                if (datetime.date.today() - last_check).days < _NO_DATA_RECHECK_DAYS:
+                    return "skipped"
+            except Exception:
+                pass
 
     try:
-        if _already_exists(output_path):
+        if _already_exists(output_path) and not force:
             # ── 增量更新快取：檔案仍在指定快取天數內，不打 API ─────────────
             if time.time() - os.path.getmtime(output_path) < _FINMIND_CACHE_SECONDS:
                 return "skipped"
+
 
             # ── 增量更新：從上次最後一筆 +1 天開始 ──────────
             existing = pd.read_csv(output_path, encoding="utf-8-sig")
@@ -1076,3 +1086,278 @@ def download_history_data(
             f" | 錯誤: {errors_total})"
         )
         raise
+
+
+# =====================================================================
+# 合併功能：分類、補件與完整性修復工具
+# =====================================================================
+
+def fetch_industry_categories():
+    """自動抓取台股全市場分類與代碼並寫入 stock_categories.json (取代 fetch_categories.py)"""
+    print("=" * 60)
+    print("  開始下載台股全市場產業分類資料 (FinMind)")
+    print("=" * 60)
+    output_json = os.path.join(PARENT_DIR, "stock_categories.json")
+    url = "https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockInfo"
+    try:
+        res = requests.get(url, timeout=15)
+        res.raise_for_status()
+        data = res.json()
+        if data.get("msg") != "success":
+            print(f"API 回應錯誤: {data.get('msg')}")
+            return False
+        stock_list = data.get("data", [])
+        print(f"  成功取得 {len(stock_list)} 筆資料，開始進行分類整理...")
+        from collections import defaultdict
+        categories = defaultdict(dict)
+        for item in stock_list:
+            stock_id = item.get("stock_id", "")
+            stock_name = item.get("stock_name", "")
+            industry = item.get("industry_category", "未分類")
+            if stock_id.isalnum() and 4 <= len(stock_id) <= 6:
+                categories[industry][stock_id] = stock_name
+        if "" in categories:
+            del categories[""]
+        sorted_categories = {}
+        for ind, stocks in categories.items():
+            sorted_categories[ind] = dict(sorted(stocks.items(), key=lambda x: x[0]))
+        with open(output_json, "w", encoding="utf-8") as f:
+            json.dump(sorted_categories, f, ensure_ascii=False, indent=4)
+        print("-" * 60)
+        print(f"  [完成] 產業分類已儲存至: {output_json}")
+        print(f"  共分出 {len(sorted_categories)} 個產業類別。")
+        return True
+    except Exception as e:
+        print(f"[錯誤] 下載分類資料失敗: {e}")
+        return False
+
+
+def patch_stock_finmind(stock_id: str):
+    """手動強制補抓特定股票之最新財報，不走 15 天快取與 90 天空值快取 (取代 patch_finmind.py)"""
+    print("=" * 60)
+    print(f"  強制手動補抓 FinMind 財報資料 (代號: {stock_id})")
+    print("=" * 60)
+    try:
+        from config import START_DATE as _START_DATE
+    except ImportError:
+        _START_DATE = datetime.date(2020, 1, 1)
+        
+    start_str = _START_DATE.strftime("%Y-%m-%d")
+    end_str = datetime.date.today().strftime("%Y-%m-%d")
+    
+    datasets = [
+        ("營收",   "TaiwanStockMonthRevenue",       f"{stock_id}_monthly_revenue.csv"),
+        ("損益表", "TaiwanStockFinancialStatements", f"{stock_id}_financial_stmt.csv"),
+        ("資產表", "TaiwanStockBalanceSheet",        f"{stock_id}_balance_sheet.csv"),
+        ("現金流", "TaiwanStockCashFlowsStatement",  f"{stock_id}_cashflow.csv"),
+        ("股利",   "TaiwanStockDividend",            f"{stock_id}_dividend.csv"),
+    ]
+    for label, dataset, fname in datasets:
+        path = os.path.join(DATA_DIR, "raw_financial", fname)
+        print(f"  -> 正在抓取 {label}...", end=" ", flush=True)
+        res = _crawl_fm_dataset(dataset, stock_id, start_str, end_str, path, {}, force=True)
+        if res is True:
+            print("OK")
+        elif res == "skipped":
+            print("已是最新 (跳過)")
+        elif res is None:
+            print("無資料")
+        else:
+            print("失敗")
+        _polite_sleep(1, 2)
+    print("=" * 60)
+
+
+def check_data_integrity():
+    """完整資料庫完整性修復工具，檢查空檔、欄位缺失與極端價格幽靈資料 (取代 check_data.py)"""
+    import glob
+    financial_dir = os.path.join(DATA_DIR, "raw_financial")
+    specs = {
+        "monthly_revenue": ["date", "revenue"],
+        "financial_stmt":  ["date", "type", "value"],
+        "balance_sheet":   ["date", "type", "value"],
+        "cashflow":        ["date", "type", "value"],
+        "dividend":        ["date", "CashEarningsDistribution"]
+    }
+
+    # 1. 檢查 FinMind
+    print("==================================================")
+    print("  [1/3] 檢查 FinMind 財報與營收檔案...")
+    print("==================================================")
+    fm_files = glob.glob(os.path.join(financial_dir, "*.csv"))
+    fm_del = 0
+    for fpath in fm_files:
+        fname = os.path.basename(fpath)
+        parts = fname.replace(".csv", "").split("_", 1)
+        if len(parts) != 2: continue
+        sid, ds_name = parts
+        if ds_name not in specs: continue
+        try:
+            df = pd.read_csv(fpath, encoding="utf-8-sig")
+            if df.empty or any(c not in df.columns for c in specs[ds_name]):
+                os.remove(fpath)
+                fm_del += 1
+        except Exception:
+            os.remove(fpath)
+            fm_del += 1
+    print(f"  FinMind 檢查完畢。共刪除 {fm_del} 個異常/損毀檔案。\n")
+
+    # 2. 檢查證交所
+    print("==================================================")
+    print("  [2/3] 檢查 證交所/期交所 歷史資料檔...")
+    print("==================================================")
+    twse_dirs = ["raw_price", "raw_chips", "raw_margin", "raw_twse_per", "raw_taifex"]
+    twse_del = 0
+    for d in twse_dirs:
+        dir_path = os.path.join(DATA_DIR, d)
+        if not os.path.exists(dir_path): continue
+        for fpath in glob.glob(os.path.join(dir_path, "*.csv")):
+            try:
+                size = os.path.getsize(fpath)
+                if size <= 3:
+                    os.remove(fpath)
+                    twse_del += 1
+                    continue
+                df = pd.read_csv(fpath, encoding="utf-8-sig", dtype=str)
+                if df.empty:
+                    os.remove(fpath)
+                    twse_del += 1
+                    continue
+                cols = list(df.columns)
+                if len(cols) == 1 and ("html" in cols[0].lower() or "很抱歉" in cols[0]):
+                    os.remove(fpath)
+                    twse_del += 1
+            except Exception:
+                os.remove(fpath)
+                twse_del += 1
+    print(f"  證交所檢查完畢。共刪除 {twse_del} 個損毀/錯誤網頁檔案。\n")
+
+    # 3. 幽靈價格檢查
+    print("==================================================")
+    print("  [3/3] 檢查極端價格異常 (休市假數據/幽靈資料)...")
+    print("==================================================")
+    price_dir = os.path.join(DATA_DIR, "raw_price")
+    price_files = sorted(glob.glob(os.path.join(price_dir, "*_price.csv")))
+    history = []
+    for fpath in price_files:
+        date_str = os.path.basename(fpath).split("_")[0]
+        try:
+            df = pd.read_csv(fpath, encoding="utf-8-sig", dtype=str)
+            row = df[df.iloc[:, 0] == "0050"]
+            if not row.empty:
+                close_col = next((c for c in df.columns if "收盤價" in c), None)
+                if close_col:
+                    close_price = float(row[close_col].values[0].replace(",", ""))
+                    history.append({"date": date_str, "file": fpath, "price": close_price})
+        except Exception:
+            continue
+    skip_dates_path = os.path.join(DATA_DIR, "skip_dates.json")
+    fail_log_path = os.path.join(DATA_DIR, "failed_dates.json")
+    skip_dates = {}
+    if os.path.exists(skip_dates_path):
+        try:
+            with open(skip_dates_path, "r", encoding="utf-8") as f: skip_dates = json.load(f)
+        except Exception: pass
+    fail_log = {}
+    if os.path.exists(fail_log_path):
+        try:
+            with open(fail_log_path, "r", encoding="utf-8") as f: fail_log = json.load(f)
+        except Exception: pass
+
+    ghost_del = 0
+    for i in range(1, len(history)):
+        prev, curr = history[i-1], history[i]
+        pct = abs((curr["price"] - prev["price"]) / prev["price"])
+        if pct > 0.15:
+            bad_date = curr["date"]
+            print(f"  [幽靈資料] {bad_date} 發現 0050 價格異常跳空！")
+            for d in twse_dirs:
+                for bad_f in glob.glob(os.path.join(DATA_DIR, d, f"{bad_date}_*.csv")):
+                    os.remove(bad_f)
+            if bad_date in skip_dates: del skip_dates[bad_date]
+            if bad_date in fail_log: del fail_log[bad_date]
+            ghost_del += 1
+            curr["price"] = prev["price"]
+
+    if ghost_del > 0:
+        with open(skip_dates_path, "w", encoding="utf-8") as f:
+            json.dump(skip_dates, f, indent=4, ensure_ascii=False)
+        with open(fail_log_path, "w", encoding="utf-8") as f:
+            json.dump(fail_log, f, indent=4, ensure_ascii=False)
+    print(f"  幽靈資料檢查完畢。共清理 {ghost_del} 天的異常幽靈日資料。\n")
+    print("=" * 50)
+    print("  資料庫完整性校驗與修復工作已全部執行完成！")
+    print("=" * 50)
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="台股多源資料爬蟲與維護中心")
+    parser.add_argument("-p", "--patch", type=str, help="手動強制補抓指定股票代號的 FinMind 財報資料")
+    parser.add_argument("-fc", "--fc", "--fetch-categories", dest="fetch_categories", action="store_true", help="重新抓取並更新全市場產業分類對照表")
+    parser.add_argument("-c", "--check", action="store_true", help="執行資料庫損毀/異常/極端價格幽靈資料校驗與修復")
+    
+    args = parser.parse_args()
+    
+    if args.patch:
+        patch_stock_finmind(args.patch)
+    elif args.fetch_categories:
+        fetch_industry_categories()
+    elif args.check:
+        check_data_integrity()
+    else:
+        # 預設執行標準資料增量抓取 (原 main.py 入口)
+        print("=" * 60)
+        print("  啟動資料增量下載流程...")
+        print("=" * 60)
+        try:
+            from config import START_DATE, FINMIND_FETCH_MODE
+        except ImportError:
+            START_DATE = datetime.date(2020, 1, 1)
+            FINMIND_FETCH_MODE = "limited"
+            
+        # 讀取股票清單 (從中央 config 中控制)
+        target_stocks = set()
+        
+        # 載入 Stocks.txt 自選股
+        try:
+            from scripts.utils import load_target_stocks
+            target_stocks.update(load_target_stocks("Stocks.txt"))
+        except ImportError:
+            try:
+                from utils import load_target_stocks
+                target_stocks.update(load_target_stocks("Stocks.txt"))
+            except Exception:
+                pass
+                
+        # 根據 FINMIND_FETCH_MODE 加載產業股票
+        if FINMIND_FETCH_MODE == "all":
+            cat_path = os.path.join(PARENT_DIR, "stock_categories.json")
+            if os.path.exists(cat_path):
+                with open(cat_path, "r", encoding="utf-8") as f:
+                    categories = json.load(f)
+                for ind_name, stocks_dict in categories.items():
+                    target_stocks.update(stocks_dict.keys())
+        else:
+            # limited 模式: 載入 config.py 中設定為 True 的產業股票
+            try:
+                from config import TRAIN_INDUSTRIES
+                cat_path = os.path.join(PARENT_DIR, "stock_categories.json")
+                if os.path.exists(cat_path):
+                    with open(cat_path, "r", encoding="utf-8") as f:
+                        categories = json.load(f)
+                    for ind_name, is_enabled in TRAIN_INDUSTRIES.items():
+                        if is_enabled and ind_name in categories:
+                            target_stocks.update(categories[ind_name].keys())
+            except Exception as e:
+                print(f"[警告] 無法載入 config 產業清單 ({e})")
+                
+        stock_list = sorted(list(target_stocks))
+        print(f"下載目標股票數量: {len(stock_list)} 檔 (模式: {FINMIND_FETCH_MODE})")
+        
+        try:
+            download_history_data(START_DATE, datetime.date.today(), target_stocks=stock_list)
+        except FinMindLimitExceeded:
+            # 退出碼 99 通知上層 Pipeline 可以跳過並繼續
+            import sys
+            sys.exit(99)

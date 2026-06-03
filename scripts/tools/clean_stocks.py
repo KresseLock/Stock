@@ -6,7 +6,8 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 def clean_stocks(stocks_file="Stocks.txt", categories_file="stock_categories.json"):
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    # 統一將 base_dir 設為專案根目錄 (即 scripts/tools/ 的上上上層)
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     stocks_path = os.path.join(base_dir, stocks_file)
     categories_path = os.path.join(base_dir, categories_file)
 

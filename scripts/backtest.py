@@ -15,18 +15,22 @@ import pandas as pd
 import numpy as np
 import lightgbm as lgb
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 統一設定路徑與環境
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 
 
 def load_watchlist_detailed() -> dict:
     try:
-        from utils import parse_stocks_detailed
-        return parse_stocks_detailed("Stocks.txt")
+        from scripts.utils import parse_stocks_detailed
+        return parse_stocks_detailed(os.path.join(BASE_DIR, "Stocks.txt"))
     except Exception:
         try:
-            from utils import parse_stocks_file
-            simple = parse_stocks_file("Stocks.txt")
+            from scripts.utils import parse_stocks_file
+            simple = parse_stocks_file(os.path.join(BASE_DIR, "Stocks.txt"))
             return {sid: {"cost": cost, "shares": None} for sid, cost in simple.items()}
         except Exception:
             return {}
@@ -63,8 +67,8 @@ def run_backtest(backtest_date_str):
     print("載入歷史特徵矩陣...")
     df = pd.read_parquet(DATA_PATH)
     
-    # ── 根據 train.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
-    from utils import filter_stocks_by_train_industries
+    # ── 根據 config.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
+    from scripts.utils import filter_stocks_by_train_industries
     before_cnt = df["stock_id"].nunique()
     df = filter_stocks_by_train_industries(df)
     after_cnt = df["stock_id"].nunique()
@@ -121,6 +125,13 @@ def run_backtest(backtest_date_str):
         X_valid = train_clean[train_clean["date"] >= split_date][feature_cols]
         y_valid = train_clean[train_clean["date"] >= split_date][label_col].astype(int)
 
+        # ── 載入中央控制面板 config 中的訓練執行緒設定 ────────────────────────
+        try:
+            from config import TRAIN_N_JOBS
+            n_jobs = TRAIN_N_JOBS
+        except ImportError:
+            n_jobs = -1
+
         model = lgb.LGBMClassifier(
             n_estimators=300,
             learning_rate=0.03,
@@ -129,7 +140,7 @@ def run_backtest(backtest_date_str):
             subsample=0.8,
             colsample_bytree=0.8,
             random_state=42 + days_ahead,
-            n_jobs=-1,
+            n_jobs=n_jobs,
             verbose=-1,
             objective="multiclass",
             num_class=3,
@@ -254,7 +265,7 @@ def run_backtest(backtest_date_str):
                 r2_s = f"{r2_p:>6.2f}" if pd.notna(r2_p) else "  --  "
                 r3_s = f"{r3_p:>6.2f}" if pd.notna(r3_p) else "  --  "
                 
-                # 計算勝率 (預測方向與實際漲跌方向一致的比例)
+                # 計算勝率
                 hits = 0
                 valid_days = 0
                 for p_val, r_val in [(p1, r1), (p2, r2), (p3, r3)]:

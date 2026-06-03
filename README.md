@@ -43,20 +43,20 @@
 ## 🔄 系統工作流程
 
 ```
-┌──────────────┐     ┌────────────────┐     ┌──────────────────┐
-│  數據爬蟲     │───▶│  貝葉斯因子調參 │───▶│   特徵工程重建    │
-│ scraper.py   │     │optimize_factors│     │feature_engineer  │
-└──────────────┘     └────────────────┘     └──────────────────┘
-                           ↓ best_factors.json      ↓ .parquet
-                     ┌──────────────┐        ┌──────────────────┐
-                     │  推理預測     │ ◀───  │   模型訓練        │
-                     │ inference.py │        │    train.py      │
-                     └──────────────┘        └──────────────────┘
-                           ↓ 多空分數
-                     ┌──────────────┐
-                     │  交易模擬回測 │
-                     │trading_sim.py│
-                     └──────────────┘
+┌──────────────┐     ┌─────────────────────┐     ┌───────────────────┐
+│  數據爬蟲     │───▶│   貝葉斯因子調參    │───▶│   特徵工程重建    │
+│  scraper.py  │     │ optimize_factors.py │     │feature_engineering│
+└──────────────┘     └─────────────────────┘     └───────────────────┘
+                            ↓ best_factors.json           ↓ .parquet
+                      ┌──────────────────┐       ┌───────────────────┐
+                      │     推理預測     │ ◀───  │     模型訓練      │
+                      │   inference.py   │       │     train.py      │
+                      └──────────────────┘       └───────────────────┘
+                            ↓ 多空分數
+                      ┌──────────────────┐
+                      │   交易模擬回測   │
+                      │  trading_sim.py  │
+                      └──────────────────┘
 ```
 
 ---
@@ -64,19 +64,19 @@
 ## ✨ 功能模組詳解
 
 <details>
-<summary><b>🕷️ 多源容錯爬蟲 (scraper.py)</b></summary>
+<summary><b>🕷️ 多源容錯爬蟲 (scripts/scraper.py)</b></summary>
 
+- 整合原 `main.py`、`patch_finmind.py`、`fetch_categories.py`、`check_data.py` 入口
 - 免 Token 抓取證交所收盤行情、三大法人買賣超、融資融券、借券餘額、當沖比例、外資持股、本益比、殖利率
 - 期交所台指期外資未平倉、集保所每週大戶持股
-- 整合 FinMind 月營收與三大財務報表（支援 `_FINMIND_CACHE_DAYS` 自訂天數快取，預設 7 天，可自由調校）
-- 具備失敗計數略過（`failed_dates.json`）與空值快取機制，節省 Token 與網路開銷
+- 整合 FinMind 月營收與三大財務報表（支援 `FINMIND_CACHE_DAYS` 自訂天數快取，預設 15 天，可由 `config.py` 自由調校）
+- 具備失敗計數略過（`failed_dates.json`）與空值快取機制，節省 Token 與網絡開銷
 - **限額自動跳過**：支援環境變數 `SKIP_ON_FINMIND_LIMIT = "1"`，遭遇 API 429/402 限制時拋出 `FinMindLimitExceeded` 並由主控 `Auto_RUN.py` 自動跳過爬蟲，不卡死流程。
-
 
 </details>
 
 <details>
-<summary><b>⚙️ 精密特徵工程 (feature_engineering.py)</b></summary>
+<summary><b>⚙️ 精密特徵工程 (scripts/feature_engineering.py)</b></summary>
 
 - **技術指標**：Moving Average、KD、RSI、MACD、布林通道、ATR、成交量比（參數均可由 Optuna 最佳化）
 - **法人籌碼**：外資/投信/自營買賣超、連續買超天數、滾動累積籌碼
@@ -87,7 +87,7 @@
 </details>
 
 <details>
-<summary><b>🔬 貝葉斯超參數最佳化 (optimize_factors.py)</b></summary>
+<summary><b>🔬 貝葉斯超參數最佳化 (scripts/optimize_factors.py)</b></summary>
 
 - Optuna TPE 框架自動搜尋技術指標最佳參數組合
 - 嚴格日期分界防止前視偏差（Lookahead Bias）
@@ -97,7 +97,7 @@
 </details>
 
 <details>
-<summary><b>🤖 智能推論預測 (inference.py)</b></summary>
+<summary><b>🤖 智能推論預測 (scripts/inference.py)</b></summary>
 
 - 讀取最新一天資料，載入 LightGBM 推論未來 1~3 天多空分數
 - 自動對齊持倉清單，計算即時浮動損益（需在 `Stocks.txt` 填入成本）
@@ -116,7 +116,6 @@
 - **真實 T+2 交割制度模擬**：細分「購買力（可用資金）」與「銀行實質餘額（T+2 扣/入款）」，賣出股票當天資金可立即滾動買入，但實質款項於兩日後才完成交割。
 - 支援零股交易精算，回測結束輸出多分頁 Excel 報表
 
-
 </details>
 
 ---
@@ -128,32 +127,30 @@ Stock/
 ├── 📂 data/                    # 原始 CSV、快取 JSON、特徵 Parquet
 ├── 📂 models/                  # LightGBM 訓練模型檔 + feature_cols.json
 ├── 📂 reports/                 # 回測輸出的 Excel / CSV 績效報表
-├── 📂 scripts/
-│   ├── check_data.py           # 資料完整性修復工具
+├── 📂 predictions/             # 每日推理結果存檔 (.txt)
+├── 📂 scratch/                 # 本地臨時/除錯腳本資料夾
+├── 📂 scripts/                 # 重構後所有邏輯與腳本的放置處
+│   ├── 📂 tools/
+│   │   └── clean_stocks.py     # 自選股清單 (Stocks.txt) 驗證與重複清理工具
+│   ├── scraper.py              # 多源容錯資料爬蟲 (整合下載、補件、檢驗、產業分類)
 │   ├── feature_engineering.py  # 核心特徵與標籤提取模組
-│   └── scraper.py              # 多源容錯資料爬蟲模組
+│   ├── train.py                # LightGBM 多天期分類模型訓練器
+│   ├── inference.py            # 多空分數預測排行榜 + 智慧限價掛單指引
+│   ├── optimize_factors.py     # Optuna 貝葉斯超參數最佳化器
+│   ├── backtest.py             # 時光機單日回測器 (樣本外評估)
+│   ├── utils.py                # 全系統共享股票解析工具
+│   └── StockSync.py            # 雲端自動備份上傳工具 (調用 rclone)
 ├── 📂 tests/
 │   ├── test_finmind.py         # FinMind 財報單元測試
-│   ├── test_pipeline.py        # 全流程整合測試（19 項 100% PASS）
+│   ├── test_pipeline.py        # 全流程整合測試 (18 項 100% PASS)
 │   └── test_scraper.py         # 證交所 API 單元測試
-├── 📂 predictions/             # 每日推理結果存檔 (.txt)
 ├── .agyignore                  # AI 開發排除過濾設定 (防干擾)
 ├── .gitignore                  # Git 版本控制忽略設定
 ├── AGENTS.md                   # AI Agent 架構與導航指南 (開發必讀)
-├── Auto_RUN.py                 # 一鍵順序執行全流程主控腳本 (完全解耦)
-├── auto_pipeline.py            # 一鍵式自動化調參-訓練-推理流水線
-├── backtest.py                 # 時光機單日回測器 (樣本外評估)
-├── clean_stocks.py             # 自選股清單 (Stocks.txt) 驗證與重複清理工具
-├── fetch_categories.py         # 產業分類與 ETF 下載工具
-├── inference.py                # 多空分數預測排行榜 + 智慧限價掛單指引
-├── main.py                     # 全市場資料下載與歷史庫初始化入口
-├── optimize_factors.py         # Optuna 貝葉斯超參數最佳化器
-├── patch_finmind.py            # FinMind 基本面個股缺漏強制補丁工具
-├── run_feature_engineering.py  # 獨立特徵工程執行入口
-├── StockSync.py                # 雲端自動備份上傳工具 (調用 rclone)
+├── Auto_RUN.py                 # 一鍵順序執行全流程主控腳本 (支援 CLI `--step` 路由)
+├── auto_pipeline.py            # 一鍵式自動化流水線入口 (支援 CLI `--step` 路由)
+├── config.py                   # 系統中央控制面板 (所有策略、爬蟲、調參參數皆在此設定)
 ├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
-├── train.py                    # LightGBM 多天期分類模型訓練器
-├── utils.py                    # 全系統共享股票解析工具
 ├── Stocks.txt                  # 自選股 / 實質持倉清單
 ├── best_factors.json           # 最佳化技術指標參數存檔
 ├── stock_categories.json       # 產業分類與 ETF 全系統共享對照表
@@ -190,78 +187,57 @@ pip install -r requirements.txt
 
 > 若要抓取基本面財務報表，請在根目錄建立 `FINMIND_TOKEN.txt` 並貼入 FinMind API Token（支援免費免登入額度）。
 
-### Step 3 — 初始化歷史資料庫
+### Step 3 — 系統配置設定 (config.py)
 
-首次下載本專案或需要回補最新歷史數據時，請執行 `main.py` 開啟全自動爬蟲下載股價、法人籌碼與基本面資料庫：
+專案已將所有分散於各檔案的設定參數，統一集中在根目錄的 [config.py](file:///D:/VScode_Stock/Stock/config.py) 中。在開始之前，您可以隨時打開此檔案修改：
+* `TRAIN_INDUSTRIES`：要加入訓練與交易的產業板塊 (自選股 `Stocks.txt` 必定保留)。
+* `BUY_THRESHOLD` / `SELL_THRESHOLD` / `STOP_LOSS_PCT`：買賣策略分數與停損門檻。
+* `START_DATE` / `FINMIND_FETCH_MODE`：爬蟲下載的時間起點與過濾模式。
+* `RUN_OPTIMIZATION` / `FEAT_N_JOBS` / `TRAIN_N_JOBS`：最佳化開關與多核心平行核心數設定。
+
+### Step 4 — 一鍵自動化執行與步驟路由
+
+#### 方案甲：一鍵主控執行（生產流程）
+執行 `Auto_RUN.py` 會自動進行一鍵生產流程：增量下載今日最新行情 ➔ 重建特徵工程與訓練模型 ➔ 產出推理排名與掛單建議 ➔ 雲端硬碟同步備份。
 
 ```powershell
-python main.py
-```
-
-> 💡 **爬蟲防呆與雙重快取機制**：
-> * **官方全市場爬蟲**：採取「成功歷史檔案永久跳過（不重複下載）」與「開市日自動判定」，並具備失敗達 3 次則寫入 `failed_dates.json` 永久略過的避雷防呆機制。
-> * **FinMind 基本面爬蟲**：採取「`_FINMIND_CACHE_DAYS` 自訂天數快取（預設 7 天）」與「確認無財報 / 局部缺漏 90 天快取」機制，極大化節省 API 比對的等待時間與 Token 額度。
-> 首次抓取歷史資料（依您的股票檔數而定）因需要建立完整歷史庫可能需要較長時間，後續每日增量回補均可在數秒至數分鐘內迅速完成。
-
-### Step 4 — 一鍵啟動全自動流水線與雲端同步
-
-本系統支援兩種自動化執行方式：
-
-#### 方案甲：一鍵主控執行 (完全解耦，最推薦)
-我們將所有功能腳本進行了完全解耦，並由 `Auto_RUN.py` 主控執行。它會依序啟動並監控以下步驟：
-1. 增量下載今日最新行情與法人籌碼數據 (`main.py`)
-2. 重建特徵工程與模型訓練 (`auto_pipeline.py`)
-3. 執行推理預測產出多空排行榜與建議下單指令 (`inference.py`)
-4. 調用 rclone 將最新預測 txt 建議單同步上傳至雲端硬碟備份 (`StockSync.py`)
-
-執行指令：
-```powershell
+# 1. 執行全套生產流程
 python Auto_RUN.py
+
+# 2. 僅執行特定生產步驟 (支援 -s 簡碼與簡寫值)
+python Auto_RUN.py --step download  # 僅增量下載今日最新資料 (亦可寫為 python Auto_RUN.py -s d)
+python Auto_RUN.py --step predict   # 僅重新建立特徵、訓練並產生明日下單建議 (亦可寫為 python Auto_RUN.py -s p)
+python Auto_RUN.py --step backup    # 僅執行雲端備份 (亦可寫為 python Auto_RUN.py -s b)
 ```
 
-#### 方案乙：分步單獨執行 (模組化執行)
-如果您只想執行特定的核心流程，可以直接單獨運行以下腳本：
+#### 方案乙：一鍵流水線執行（研發與最佳化流程）
+執行 `auto_pipeline.py` 會自動執行機器學習的研發流程：參數載入 ➔ 特徵矩陣重建 ➔ 模型訓練 ➔ 模型推理。
+
 ```powershell
-# 只執行：因子載入 → 特徵生成 → 模型訓練 → 推理預測 (不包含資料下載與雲端上傳)
+# 1. 執行完整研發流水線 (是否跑 Optuna 調參取決於 config.py 中的 RUN_OPTIMIZATION 設定)
 python auto_pipeline.py
 
-# 只執行：推理預測 (讀取現有特徵與模型，直接輸出今日排行榜與下單建議)
-python inference.py
+# 2. 僅執行特定研發步驟 (支援 -s 簡碼與簡寫值)
+python auto_pipeline.py --step optimize   # 單獨啟動 Optuna 調參 (亦可寫為 python auto_pipeline.py -s o)
+python auto_pipeline.py --step feature    # 單獨重建特徵矩陣 (亦可寫為 python auto_pipeline.py -s f)
+python auto_pipeline.py --step train      # 單獨訓練 LightGBM 模型 (亦可寫為 python auto_pipeline.py -s t)
+python auto_pipeline.py --step inference  # 單獨輸出今日推理結果 (亦可寫為 python auto_pipeline.py -s i)
+```
 
-# 只執行：雲端備份 (將 predictions/ 底下的預測建議 txt 上傳至雲端)
-python StockSync.py
+#### 方案丙：資料庫維護中心 (scripts/scraper.py)
+所有資料抓取、特定補件、完整性維護功能，統一整合在 `scraper.py` 的 CLI 參數中：
+```powershell
+python scripts/scraper.py                       # 正常增量下載
+python scripts/scraper.py -p 2330               # (或 --patch 2330) 手動強制補抓特定股票 (例如2330) 缺漏之財報
+python scripts/scraper.py -fc                   # (或 --fc / --fetch-categories) 重新抓取並更新全市場產業分類對照表
+python scripts/scraper.py -c                    # (或 --check) 執行損毀、異常、極端價格幽靈資料校驗與修復
 ```
 
 > [!WARNING]
 > #### ☁️ rclone 雲端備份環境與安全性注意事項
 > 
-> 1. **執行檔需另行下載**：`rclone` 本身是用 Go 語言編寫的獨立工具，`pip` 安裝的只是 Python 的封裝庫。您需要前往 [rclone 官網](https://rclone.org/downloads/) 下載適用於 Windows 的 `rclone.exe` 執行檔，並將其放入虛擬環境的 `venv/Scripts/` 目錄中，或者加入系統的環境變數 PATH 中。
+> 1. **執行檔需另行下載**：`rclone` 本身是用 Go 語言編寫的獨立工具，您需要前往 [rclone 官網](https://rclone.org/downloads/) 下載適用於 Windows 的 `rclone.exe` 執行檔，並將其放入虛擬環境的 `venv/Scripts/` 目錄中，或者加入系統的環境變數 PATH 中。
 > 2. **Token 與登入金鑰安全**：透過 `rclone config` 登入雲端硬碟後所產生的金鑰資訊會儲存於 `config` / `.config` 資料夾或 `rclone.conf` 設定檔中。**這些金鑰與權限 Token 屬於高度敏感私鑰，已自動列入 `.gitignore` 與 `.agyignore` 中，絕對禁止提交至 Git 倉庫，亦不可外洩或上傳雲端**。
-
-> [!IMPORTANT]
-> #### 💡 重新訓練與大數據調參流程 (最佳化與產業篩選的最優配置步驟)
->
-> 為了同時保有「全市場大盤避險視野」與「特定產業（如電子股）的超高預測勝率」，本系統設計了自動對齊與產業過濾機制。
->
-> #### 最佳配置與一鍵優化步驟：
-> 
-> 1. **訓練與交易端配置 (train.py)**：
->    * 在 `train.py` 中的 `TRAIN_INDUSTRIES` 中，勾選您要交易與學習的產業（例如只將電子科技類股設為 `True`，其餘設為 `False`）。
->    * *此配置會自動控制下游與上游所有環節（爬蟲下載、特徵生成、因子最佳化、模型訓練、推理預測、模擬交易回測），使其自動同步且只交易您指定的產業（Stocks.txt 自選股必定保留），避免下載不需要的 FinMind 財報資料浪費 API 額度。*
-> 
-> 2. **流水線自動對齊 (auto_pipeline.py)**：
->    * 特徵生成與爬蟲選取腳本 `auto_pipeline.py` 會自動導入並套用 `train.py` 內設定的 `TRAIN_INDUSTRIES` 篩選列表。您不需要在兩處重複配置。
-> 
-> 3. **一鍵執行重跑最佳化與訓練**：
->    * 當您需要重新進行 Optuna 貝葉斯調參時，只需在 `auto_pipeline.py` 中設定 `RUN_OPTIMIZATION = True`，然後執行：
->      ```powershell
->      python Auto_RUN.py
->      ```
->    * *系統將自動互鎖執行：自動以現有參數重建目標類股最新特徵 ➔ 啟動 Optuna 最佳化（自動以電子股評估勝率） ➔ 儲存最佳因子 best_factors.json ➔ 自動以最新最佳因子重建最終特徵檔 ➔ 訓練電子股專精模型 ➔ 推理預測。*
-> 
-> 4. **日常預測 (跳過最佳化)**：
->    * 日常增量更新時，將 `RUN_OPTIMIZATION` 設為 `False`，一鍵執行 `python Auto_RUN.py` 即可。系統會直接套用歷史最佳因子參數快速計算特徵、訓練並推理。
-
 
 ### Step 5 — 執行策略回測
 
@@ -278,7 +254,7 @@ python trading_sim.py --start 2025-01-02 --end 2025-12-30 --capital 500000 --max
 ### Step 6 — 執行系統整合測試
 
 ```powershell
-# 確認 19 項整合指標全數通過
+# 確認 18 項整合指標全數通過
 python tests/test_pipeline.py
 ```
 
@@ -288,12 +264,12 @@ python tests/test_pipeline.py
 
 | 參數 | 預設值 | 說明 |
 |------|--------|------|
-| `BUY_THRESHOLD` | `10.0%` | Day1 多空淨分數達此值才觸發買進 |
-| `SELL_THRESHOLD` | `0.0%` | Day3 多空淨分數低於此值觸發賣出 |
-| `STOP_LOSS_PCT` | `-8.0%` | 相對買進成本的固定停損線 |
-| `MAX_POSITIONS` | `5 檔` | 最大同時持股數 |
-| `FEE_RATE` | `0.1425%` | 單邊券商手續費 |
-| `TAX_RATE` | `0.3%` | 賣出證交稅（非當沖） |
+| `BUY_THRESHOLD` | `10.0%` | Day1 多空淨分數達此值才觸發買進 (在 config.py 中設定) |
+| `SELL_THRESHOLD` | `0.0%` | Day3 多空淨分數低於此值觸發賣出 (在 config.py 中設定) |
+| `STOP_LOSS_PCT` | `-8.0%` | 相對買進成本的固定停損線 (在 config.py 中設定) |
+| `MAX_POSITIONS` | `5 檔` | 最大同時持股數 (在 config.py 中設定) |
+| `FEE_RATE` | `0.1425%` | 單邊券商手續費 (在 config.py 中設定) |
+| `TAX_RATE` | `0.3%` | 賣出證交稅（非當沖，在 config.py 中設定） |
 | **總進出成本** | **≈ 0.585%** | 模型選股獲利需超越此值才有淨利 |
 
 ---
@@ -316,10 +292,10 @@ python tests/test_pipeline.py
 
 ## 🛡️ 開發規範
 
-- **新增特徵**：修改 `scripts/feature_engineering.py` 後，必須重新執行 `auto_pipeline.py` 重建特徵矩陣與重新訓練
-- **修改策略參數**：`trading_sim.py` 與 `inference.py` 頂端的常數區塊需同步修改，確保回測與實盤邏輯一致
-- **Stocks.txt 格式**：所有解析邏輯統一走 `utils.py`，勿在各模組重複實作
-- **提交前**：執行 `python tests/test_pipeline.py` 確認全數通過
+- **中央設定檔 (config.py)**：所有常數變數與機器學習核心配置均統一在 [config.py](file:///D:/VScode_Stock/Stock/config.py) 修改，禁止在單一模組腳本中硬編碼。
+- **新增特徵**：修改 `scripts/feature_engineering.py` 後，必須重新執行 `auto_pipeline.py --step feature` 重建特徵工程 parquet 檔並重新訓練。
+- **編輯自選股清單**：請直接修改 `Stocks.txt`。可以使用輔助工具 `python scripts/tools/clean_stocks.py` 自動清理重複或無效的股票代碼。
+- **提交前**：務必執行 `python tests/test_pipeline.py` 確認全數通過。
 
 ---
 

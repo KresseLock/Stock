@@ -12,77 +12,80 @@
 1. **方案 B (總體與板塊特徵)：** 特徵工程自動注入全市場日報酬平均、市場寬度（上漲比例）及其 5日/20日 滾動趨勢；同時透過 `stock_categories.json` 計算各產業板塊的每日平均表現與滾動強度，給予模型宏觀視野。
 2. **方案 C (絕對與相對混合標籤)：** 標籤設計強制規定強勢股（`Label=2`）除滿足相對排名前 20% 外，**未來絕對報酬率必須大於 0%**，否則歸為中性。
 3. **風控效果：** 這兩者與 `trading_sim.py` 的信心分數門檻相輔相成。在大盤大跌日，全市場多空分數會自適應下滑，系統會**自動判定無股可買而 100% 空倉避險（報酬率 0.00%）**，完美避開系統性崩盤！
-4. **產業過濾對齊與節流優化**：`auto_pipeline.py` 動態導入 `train.py` 中的 `TRAIN_INDUSTRIES` 設定，避免下載與特徵化不需訓練的產業，大幅節省 FinMind API 額度並確保全系統篩選一致。
-
+4. **產業過濾對齊與節流優化**：`auto_pipeline.py` 動態導入 `config.py` 中的 `TRAIN_INDUSTRIES` 設定，避免下載與特徵化不需訓練的產業，大幅節省 FinMind API 額度並確保全系統篩選一致。
 
 ### 核心流水線 (Pipeline) 流程
-`多源爬蟲 (Scraping)` -> `超參數最佳化 (Optuna)` -> `特徵工程 (ETL)` -> `模型訓練 (LightGBM)` -> `推論預測 (Inference)` -> `交易回測 (Simulation)`
+`多源爬蟲 (scraper.py)` -> `超參數最佳化 (optimize_factors.py)` -> `特徵工程 (feature_engineering.py)` -> `模型訓練 (train.py)` -> `推論預測 (inference.py)` -> `交易回測 (trading_sim.py)`
 
 ---
 
 ## 2. 核心模組與 Python 腳本對照表
 
-### ️ 資料獲取與清洗 (Data Scraping & ETL)
-- **`scripts/scraper.py`**: **核心爬蟲模組**。
+### ⚙️ 中央控制面板 (Centralized Panel)
+- **`config.py`**: **專案唯一設定檔**。所有訓練產業、交易門檻、爬蟲區間、超參數、資源核心數均在此設定。
+
+### 🕷️ 資料獲取與清洗 (Data Scraping & ETL)
+- **`scripts/scraper.py`**: **整合資料維護中心**。
   - **免費資料**: TWSE (股價、籌碼、資券、借券、本益比、當沖、外資持股、信用限額)、TAIFEX (外資台指期未平倉)、TDCC (每週大戶持股)。
   - **FinMind (需 Token)**: 月營收、三大報表、股利。
-  - **特色**: 具備嚴格的 9 檔案歷史跳過機制、12小時快取、FinMind 兩次確認空資料防呆機制 (`no_finmind_data.json`)，以及失敗略過機制 (`failed_dates.json`)。
-  - **限額容錯阻斷**：支援 `SKIP_ON_FINMIND_LIMIT="1"` 環境變數，觸發限速拋出 `FinMindLimitExceeded` 異常終止。
-- **`main.py`**: **歷史資料爬蟲入口腳本**。負責呼叫 `scraper.py` 執行全市場歷史股價與基本面資料的抓取。會捕獲 `FinMindLimitExceeded` 並以 `exit code 99` 退出以通知上層程序。
+  - **特色**: 具備嚴格的 9 檔案歷史跳過機制、15天快取、FinMind 空資料快取機制 (`no_finmind_data.json`)，以及失敗略過機制 (`failed_dates.json`)。
+  - **限額容錯阻斷**：支援 `SKIP_ON_FINMIND_LIMIT="1"` 環境變數，觸發限速拋出 `FinMindLimitExceeded` 異常終止，主控腳本捕獲並自動跳過。
+  - **CLI 整合**：
+    - 正常抓取 (無參數)：增量下載歷史資料庫。
+    - `-p <sid>` / `--patch <sid>`：針對性補抓特定股票 (例如2330) 缺漏之財報 (原 `patch_finmind.py`)。
+    - `-fc` / `--fc` / `--fetch-categories`：更新台股產業分類對照表 (原 `fetch_categories.py`)。
+    - `-c` / `--check`：掃描並刪除損毀或價格異常的歷史資料日 (原 `check_data.py`)。
 
-- **`fetch_categories.py`**: 抓取並更新台股產業分類及 ETF 清單至 `stock_categories.json`。
-- **`patch_finmind.py`**: **FinMind 針對性補抓工具**。當發現特定股票有財報缺漏時，可單獨強制補抓，無需重新執行整個市場的爬蟲。
-- **`scripts/check_data.py`**: **資料完整性修復工具**。自動掃描並刪除空檔或缺少核心欄位的異常檔案，讓爬蟲下次自動回補。
-
-### 特徵工程 (Feature Engineering)
+### ⚙️ 特徵工程 (Feature Engineering)
 - **`scripts/feature_engineering.py`**: **核心特徵生成模組**。
   - 計算個股技術指標：MA、KD、RSI、MACD、布林通道、ATR。
   - **總體與板塊情緒（方案 B）**：每日計算全市場平均報酬與上漲比例，並結合滾動均線；自動載入產業映射，每日計算板塊平均報酬與 rolling 情緒。
   - **混合型預測標籤（方案 C）**：預測未來 1~3 天收益率，強勢標籤（2）強制鎖定為絕對上漲股，最終輸出 `features_combined.parquet`。
-  - **效能優化**：Step 1 自動偵測當天是否有收盤價日報 CSV，**自動剔除國定假日與不開市交易日**，大幅減少 joblib 平行處理無效日期的開銷。
-- **`run_feature_engineering.py`**: 獨立執行特徵工程的測試入口腳本。
+  - **效能優化**：Step 1 自動偵測當天是否有收盤價日報 CSV，**自動剔除國定假日與不開市交易日**，大為節省 joblib 平行處理無效日期的開銷。
+  - **CLI 整合**：支援 `--backtest <YYYYMMDD>` 單日回測，快速驗證當天模型的預測精度。
 
-### 模型最佳化、訓練與預測 (Modeling & Inference)
-- **`optimize_factors.py`**: **特徵與超參數最佳化腳本**。使用 `Optuna` 框架，在不偷看未來的驗證集上，動態尋找勝率最高的技術指標參數組合並輸出 `best_factors.json`。
-  - **自動板塊篩選**：載入數據時會依據 `train.py` 中的 `TRAIN_INDUSTRIES` 進行股票過濾，確保尋找出來的最佳參數是專門契合您所勾選的產業特性。
-- **`train.py`**: **LightGBM 模型訓練腳本**。讀取 parquet 特徵檔，依照時間軸進行 strict 日期分位切割，訓練 LightGBM 模型並將特徵欄位儲存至 `models/feature_cols.json`。
-  - **訓練產業選擇 (`TRAIN_INDUSTRIES`)**：內建產業控制字典，可自由選擇欲訓練的板塊（例如僅訓練電子股），排除其他產業雜訊，同時無條件保留 `Stocks.txt` 自選股。
-- **`inference.py`**: **預測推論腳本**。載入最新一天資料與模型，推論目標清單股票未來 3 天的多空分數並印出排名表。
-  - **實戰倉位與板塊對齊**：自動與 `trading_sim.py` 的「最多 5 檔持倉上限、Day1 >= 10.0% 買入、Day3 < 0% 賣出、-8% 停損」策略對齊；同時自動以 `train.py` 設定過濾股票，只推薦您選中的產業。
+### 🤖 模型最佳化、訓練與預測 (Modeling & Inference)
+- **`scripts/optimize_factors.py`**: **特徵與超參數最佳化腳本**。使用 `Optuna` 框架，在不偷看未來的驗證集上，動態尋找勝率最高的技術指標參數組合並輸出 `best_factors.json`。
+  - **自動板塊篩選**：載入數據時會依據 `config.py` 中的 `TRAIN_INDUSTRIES` 進行股票過濾，確保尋找出來的最佳參數是專門契合勾選的產業特性。
+- **`scripts/train.py`**: **LightGBM 模型訓練腳本**。讀取 parquet 特徵檔，依照時間軸進行 strict 日期分位切割，訓練 LightGBM 模型並將特徵欄位儲存至 `models/feature_cols.json`。
+  - **訓練產業選擇 (`TRAIN_INDUSTRIES`)**：在 `config.py` 設定勾選欲訓練的板塊，排除其他產業雜訊，同時無條件保留 `Stocks.txt` 自選股。
+- **`scripts/inference.py`**: **預測推論腳本**。載入最新一天資料與模型，推論目標清單股票未來 3 天的多空分數並印出排名表。
+  - **實戰倉位與板塊對齊**：自動與策略的「最多 5 檔持倉上限、Day1 >= 10.0% 買入、Day3 < 0% 賣出、-8% 停損」策略對齊；同時自動以 `config.py` 設定過濾股票，只推薦您選中的產業。
   - **智慧下單建議**：自動區分 `Stocks.txt` 內實質持倉與自選股，動態計算明日可用空位，並在每日收盤後提供明日「開盤買進/賣出」具體掛單建議。
+- **`scripts/backtest.py`**: **時光機回測模式腳本**。指定單一基準日，以該日前的數據訓練模型，回測該日未來 3 天全市場及自選股的實質利潤與勝率。
 
-### 雲端備份與自動化控制 (Cloud Sync & Master Control)
-- **`StockSync.py`**: **雲端自動備份腳本**。使用 rclone 把 `predictions/` 下產生的預測建議文字檔同步拷貝至 Google Drive (StockSync 遠端)。
-- **`Auto_RUN.py`**: **一鍵自動化執行主控腳本**。以完全解耦的形式，依序呼叫並監控：`main.py` ➡️ `auto_pipeline.py` ➡️ `inference.py` ➡️ `StockSync.py`。
-  - **容錯推進**：執行子行程時會自動傳遞 `SKIP_ON_FINMIND_LIMIT="1"` 環境變數；當攔截到 `main.py` 的退出碼為 `99` (Token 用盡) 時，會顯示警告並順利繼續執行後續訓練與預測流程。
+### ☁️ 雲端備份與自動化控制 (Cloud Sync & Master Control)
+- **`scripts/StockSync.py`**: **雲端自動備份腳本**。使用 rclone 把 `predictions/` 下產生的預測建議文字檔同步拷貝至 Google Drive (RCLONE_REMOTE_NAME 遠端)。
+- **`Auto_RUN.py`**: **生產流程主控腳本**。一鍵順序執行全流程（scraper ➔ pipeline ➔ StockSync）。
+  - **CLI 步驟分流**：支援 `-s` / `--step` 參數，可帶入完整值或簡碼（`download`/`d`、`predict`/`p`、`backup`/`b`）執行單一步驟。
+- **`auto_pipeline.py`**: **機器學習研發流水線入口**。
+  - **CLI 步驟分流**：支援 `-s` / `--step` 參數，可帶入完整值或簡碼（`optimize`/`o`、`feature`/`f`、`train`/`t`、`inference`/`i`）執行單一模型訓練步驟。
 - **安全性與敏感資料防護**：
   - **`rclone.exe` 執行檔**：需另行下載，可放置於虛擬環境的 `venv/Scripts/` 目錄中以方便調用。
-  - **敏感金鑰防外洩**：任何包含 rclone 登入 OAuth Token 的 `config`、`.config` 資料夾或 `rclone.conf` 設定檔，**屬於極度敏感私鑰，已列入 Git 與 AI 忽略清單，絕對禁止提交與外洩**。
+  - **敏感金鑰防外洩**：任何包含 rclone 登入 OAuth Token 的 `config`、`.config` 資料夾或 `rclone.conf` 設定檔，**屬於極度敏感金鑰，已列入 Git 與 AI 忽略清單，絕對禁止提交與外洩**。
 
-### 實戰回測與模擬交易 (Simulation)
+### 📊 實戰回測與模擬交易 (Simulation)
 - **`trading_sim.py`**: **實戰級交易模擬回測器 (Out-of-Sample)**。
-  - 模擬真實交易：支持自訂時間區間、初始資金、買入多空信心分數門檻（預設 `>= 10%` 信心）、個股固定停損（如 `-8%`）或轉弱出場。
+  - 模擬真實交易：支持自訂時間區間、初始資金、買入多空信心分數門檻、個股固定停損（如 `-8%`）或轉弱出場。
   - **真實 T+2 交割機制模擬**：引進 `pending_settlements` 待交割帳戶，將資金拆分為「可用資金（購買力）」與「銀行實質餘額」，以正確計算台股賣股後資金同日再買入的實際運作，以及 T+2 交割時對銀行餘額和權益的真實影響。
-  - 資金與資產一致性：日終統一將當天發生的所有交易明細之 `Current_Cash` (可用資金/購買力)、`Stock_Value` 與 `Total_Equity` 更新為收盤後的最終狀態。
-  - 輸出與降級：支援 Excel 多分頁高規格匯出（含詳細的總資產、可用資金、實質餘額、待交割、持股市值等欄位），並內建 CSV 穩健降級機制。
+  - 資金與資產一致性：日終統一將當天發生的所有交易明細之 `Current_Cash`、`Stock_Value` 與 `Total_Equity` 更新為收盤後的最終狀態。
+  - 輸出與降級：支援 Excel 多分頁高規格匯出，並內建 CSV 穩健降級機制。
 
-- **`backtest.py`**: **時光機回測模式腳本**。指定單一基準日，以該日前的數據訓練模型，回測該日未來 3 天全市場及自選股的實質利潤與勝率。
-
-### ️ 共享核心工具與測試 (Utilities & Tests)
-- **`utils.py`**: **全系統共享股票解析與過濾工具**。
+### 🛠️ 共享核心工具與測試 (Utilities & Tests)
+- **`scripts/utils.py`**: **全系統共享股票解析與過濾工具**。
   - 統一 `Stocks.txt` 的解析邏輯（格式 A/B/C 成本與股數欄位），支援 subdirectory 與 fallback。
-  - 提供 `filter_stocks_by_train_industries(df)` 統一過濾器，自動以 `train.py` 的設定篩選 DataFrame 中的個股（支持 int/str 類型 stock_id 與自選股強制保留）。
-- **`clean_stocks.py`**: **自選股清單清理工具**。讀取 `Stocks.txt`，對照 `stock_categories.json` 過濾無效的股票代號，並自動處理重複項（保留欄位最詳細的項目）。
-- **`tests/test_pipeline.py`**: **全系統整合測試腳本**。驗證 19 項核心邏輯，包含日期切割、特徵檔完整性（排除 Level Bias 絕對值特徵，包含方案 B 特徵）、`utils.py` 解析器單元測試等。
+  - 提供 `filter_stocks_by_train_industries(df)` 統一過濾器，自動以 `config.py` 的設定篩選 DataFrame 中的個股（支持 int/str 類型 stock_id 與自選股強制保留）。
+- **`scripts/tools/clean_stocks.py`**: **自選股清單清理工具**。讀取 `Stocks.txt`，對照 `stock_categories.json` 過濾無效的股票代號，並自動處理重複項。
+- **`tests/test_pipeline.py`**: **全系統整合測試腳本**。驗證 18 項核心邏輯，包含日期切割、特徵檔完整性、`utils.py` 解析器單元測試等。
 - **`tests/test_scraper.py`**: **爬蟲單元測試腳本**。快速測試證交所與期交所 API 下載功能，自動整合 `skip_dates.json` 防呆略過機制。
-- **`tests/test_finmind.py`**: **FinMind 資料單元測試**。自動以 `__file__` 動態解析路徑，檢驗基本面資料與歷年修改時間。
+- **`tests/test_finmind.py`**: **FinMind 資料單元測試**。
 
 ---
 
 ## 3. 資料目錄結構與核心快取檔案 (Data & Cache)
 
 ### `data/` 目錄結構
-- **`raw_price/`**: 每日收盤行情與成交量 (`*_price.csv`，來自 TWSE `MI_INDEX`)。核心開市判斷基準。
+- **`raw_price/`**: 每日收盤行情與成交量 (`*_price.csv`，來自 TWSE `MI_INDEX`)。
 - **`raw_chips/`**: 籌碼與交易面資料。三大法人買賣超 (`*_chips.csv`)、當沖統計 (`*_daytrading.csv`)、外資持股比例 (`*_fini_holding.csv`)。
 - **`raw_margin/`**: 信用交易資料。融資融券餘額 (`*_margin.csv`)、借券餘額 (`*_sbl.csv`)、額度總量管制 (`*_credit_limit.csv`)。
 - **`raw_twse_per/`**: 個股官方本益比、殖利率及淨值比 (`*_twse_per.csv`)。
@@ -96,12 +99,12 @@
 3. **`models/feature_cols.json`**: 記錄模型訓練當下的所有特徵名稱，確保推論特徵順序與數量 100% 一致。
 4. **`data/failed_dates.json`**: TWSE/TAIFEX 的失敗計數器。失敗超過 3 次則判定為「無開市/假補班」並永久略過。
 5. **`data/no_finmind_data.json`**: FinMind 股票空值快取（快取 90 天）。
-6. **`data/skip_dates.json`**: 官方爬蟲跳過快取，記錄無資料或格式異常的日期，並註記 `reason`（如 `no_data`, `unexpected_format`）以供除錯。
+6. **`data/skip_dates.json`**: 官方爬蟲跳過快取，記錄無資料或格式異常的日期，並註記 `reason`以供除錯。
 7. **`data/missing_fm_datasets.json`**: FinMind 局部財報缺漏快取。
 
 ---
 
 ## 4. 未來擴展方向與 AI 注意事項
-1. **資料維護**: 若發現特徵檔中缺少某項資料，請優先檢查 `scraper.py` 的跳過機制，並利用 `check_data.py` 將損毀的 CSV 清除。
-2. **參數動態命名**: 在新增技術指標時，請務必與 `optimize_factors.py` 聯動，確保 `feature_engineering.py` 所產生的特徵欄位名稱是動態且可被模型讀取的。
-3. **GPU Sentiment (規劃中)**: 未來可引入本地 Llama 模型，分析新聞情緒並將其轉化為情緒因子併入特徵矩陣中。
+1. **資料維護**: 若發現特徵檔中缺少某項資料，請優先檢查 `scraper.py` 的跳過機制，並利用 `scraper.py --check` 進行檢驗與修復。
+2. **常數宣告限制**: 任何常數、參數或調參範圍變數，都必須宣告在 [config.py](file:///D:/VScode_Stock/Stock/config.py) 中，嚴禁在個別腳本中進行分散式寫死。
+3. **參數動態命名**: 在新增技術指標時，請務必與 `optimize_factors.py` 聯動，確保 `feature_engineering.py` 所產生的特徵欄位名稱是動態且可被模型讀取的。

@@ -1,9 +1,7 @@
+# -*- coding: utf-8 -*-
 """
 train.py — LightGBM 模型訓練程式 (預測未來 3 天)
 ====================================================
-修正：
-  - 使用日期百分位切割訓練/測試集，避免同一天的股票資料被切割到不同集合 (Data Leakage)
-  - 訓練完成後將 feature_cols 存成 models/feature_cols.json，供 inference.py 使用固定欄位
 """
 import json
 import os
@@ -15,38 +13,26 @@ if hasattr(sys.stdout, 'reconfigure'):
 import lightgbm as lgb
 import pandas as pd
 import numpy as np
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-N_JOBS = -1
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 統一設定路徑與環境
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+    
 DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 FEATURE_COLS_PATH = os.path.join(MODEL_DIR, "feature_cols.json")
 
-# ── 步驟 4 設定：訓練產業選擇 ────────────────────────
-# 設定 True 代表要將該產業的股票納入 LightGBM 的訓練集。
-# 設定 False 代表排除該產業 (模型不會從該產業學習規律)。
-# 註：無論如何設定，Stocks.txt 裡面的自選股「一定」會保留在訓練集中。
-TRAIN_INDUSTRIES = {
-    "半導體業": True,        "電子零組件業": True,      "電腦及週邊設備業": True,
-    "光電業": True,          "電子通路業": True,        "其他電子業": True,
-    "電子工業": True,        "通信網路業": True,        "資訊服務業": True,
-    "電子商務業": True,     "生技醫療業": False,       "化學工業": False,
-    "化學生技醫療": False,   "塑膠工業": False,         "橡膠工業": False,
-    "電機機械": True,       "汽車工業": False,         "航運業": False,
-    "鋼鐵工業": False,       "建材營造": False,         "玻璃陶瓷": False,
-    "水泥工業": False,       "造紙工業": False,         "紡織纖維": False,
-    "食品工業": False,       "農業科技業": False,       "農業科技": False,
-    "貿易百貨": False,       "觀光事業": False,         "觀光餐旅": False,
-    "金融保險": False,       "金融業": False,           "油電燃氣業": False,
-    "綠能環保": False,       "綠能環保類": False,       "居家生活": False,
-    "居家生活類": False,     "運動休閒": False,         "運動休閒類": False,
-    "數位雲端": False,       "數位雲端類": False,       "文化創意業": False,
-    "存託憑證": False,       "創新板股票": False,       "創新版股票": False,
-    "ETF": False,            "其他電子類": False,       "其他": False,
-}
 os.makedirs(MODEL_DIR, exist_ok=True)
+
+# ── 載入中央控制面板 config ──────────────────────────────────
+try:
+    from config import TRAIN_INDUSTRIES, TRAIN_N_JOBS
+    N_JOBS = TRAIN_N_JOBS
+except ImportError:
+    TRAIN_INDUSTRIES = {}
+    N_JOBS = -1
+
 
 def train_model(df, feature_cols, target_col, days_ahead):
     print(f"\n" + "="*50)
@@ -68,7 +54,7 @@ def train_model(df, feature_cols, target_col, days_ahead):
     X_valid, y_valid = valid_df[feature_cols], valid_df[target_col].astype(int)
     X_test, y_test   = test_df[feature_cols],  test_df[target_col].astype(int)
     
-    # 改為分類模型，並降低深度與樹的數量，加入 class_weight="balanced"
+    # 分類模型
     model = lgb.LGBMClassifier(
         n_estimators=300,
         learning_rate=0.03,
@@ -143,11 +129,16 @@ def main():
                 allowed_stocks.update(categories[ind_name].keys())
                 
         # 載入 Stocks.txt 自選股並確保其一定保留在訓練集中
-        from utils import load_target_stocks
         try:
+            # 優先加載 scripts/utils.py
+            from scripts.utils import load_target_stocks
             allowed_stocks.update(load_target_stocks("Stocks.txt"))
-        except Exception as e:
-            print(f"  [警告] 載入 Stocks.txt 自選股失敗: {e}")
+        except ImportError:
+            try:
+                from utils import load_target_stocks
+                allowed_stocks.update(load_target_stocks("Stocks.txt"))
+            except Exception as e:
+                print(f"  [警告] 載入 Stocks.txt 自選股失敗: {e}")
             
         # 過濾資料
         before_count = df["stock_id"].nunique()
@@ -163,7 +154,7 @@ def main():
     ret_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     for col in label_cols:
         if col not in df.columns:
-            print(f"[錯誤] 缺少標籤欄位 {col}，請重新執行 python run_feature_engineering.py")
+            print(f"[錯誤] 缺少標籤欄位 {col}，請重新執行特徵工程。")
             return
             
     df = df.dropna(subset=label_cols).copy()
@@ -171,13 +162,13 @@ def main():
     numeric_cols = df.select_dtypes(include=[np.number, bool]).columns
     feature_cols = [c for c in numeric_cols if c not in ignore_cols]
     
-    # 統一將特徵轉為 float32，避免 inference.py 推論時因 bool/float 型別不一致報錯
+    # 統一將特徵轉為 float32
     df[feature_cols] = df[feature_cols].astype(np.float32)
     
     print(f"  總樣本數: {len(df)}")
     print(f"  特徵數量: {len(feature_cols)}")
     
-    # 儲存 feature_cols，供 inference.py 使用固定欄位清單，避免動態推導不一致
+    # 儲存 feature_cols
     with open(FEATURE_COLS_PATH, "w", encoding="utf-8") as f:
         json.dump(feature_cols, f, ensure_ascii=False, indent=2)
     print(f"  特徵欄位清單已儲存至: {FEATURE_COLS_PATH}")

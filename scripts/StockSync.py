@@ -9,14 +9,20 @@ import os
 import subprocess
 import sys
 
+# 統一設定路徑與環境
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 # ╔══════════════════════════════════════════════════════╗
 # ║                  雲端與路徑設定                      ║
 # ╚══════════════════════════════════════════════════════╝
-# 您剛才在 rclone config 設定的遠端名稱
-RCLONE_REMOTE_NAME = "StockSync"
-
-# 雲端硬碟的目標目錄名稱
-RCLONE_DEST_PATH = "StockData"
+# 載入 config.py 的設定，若無則使用預設值
+try:
+    from config import RCLONE_REMOTE_NAME, RCLONE_DEST_PATH
+except ImportError:
+    RCLONE_REMOTE_NAME = "StockSync"
+    RCLONE_DEST_PATH = "StockData"
 
 
 def check_rclone_installed() -> bool:
@@ -41,12 +47,11 @@ def main():
         sys.exit(1)
 
     # 2. 定義本地預測資料夾路徑
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    pred_dir = os.path.join(base_dir, "predictions")
+    pred_dir = os.path.join(BASE_DIR, "predictions")
 
     if not os.path.exists(pred_dir):
         print(f"[錯誤] 本地找不到 predictions 資料夾：{pred_dir}")
-        print("  請先執行推理程式 (python inference.py) 以產生預測結果。")
+        print("  請先執行推理程式 (python scripts/inference.py) 以產生預測結果。")
         sys.exit(1)
 
     # 3. 計算並列出本地要上傳的 txt 檔案

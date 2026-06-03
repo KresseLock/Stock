@@ -1,6 +1,7 @@
 import os
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 統一將 BASE_DIR 設定為專案根目錄 (即 scripts/ 的上一層)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def parse_stocks_file(file_path: str = "Stocks.txt") -> dict:
     """
@@ -19,10 +20,10 @@ def parse_stocks_file(file_path: str = "Stocks.txt") -> dict:
         fp = os.path.join(BASE_DIR, file_path)
         
     if not os.path.exists(fp):
-        # 降級嘗試：如果是相對路徑且調用自 scripts/ 子目錄，往上一層尋找
-        parent_fp = os.path.join(BASE_DIR, "..", file_path)
-        if os.path.exists(parent_fp):
-            fp = parent_fp
+        # 備用降級防呆：往上一層或同級目錄尋找
+        alt_fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), file_path)
+        if os.path.exists(alt_fp):
+            fp = alt_fp
             
     if not os.path.exists(fp):
         return watchlist
@@ -71,10 +72,10 @@ def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
         fp = os.path.join(BASE_DIR, file_path)
         
     if not os.path.exists(fp):
-        # 降級嘗試：往上一層尋找
-        parent_fp = os.path.join(BASE_DIR, "..", file_path)
-        if os.path.exists(parent_fp):
-            fp = parent_fp
+        # 備用降級防呆
+        alt_fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), file_path)
+        if os.path.exists(alt_fp):
+            fp = alt_fp
             
     if not os.path.exists(fp):
         return detailed_watchlist
@@ -105,18 +106,26 @@ def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
 
 def filter_stocks_by_train_industries(df, target_col="stock_id") -> "pd.DataFrame":
     """
-    根據 train.py 中的 TRAIN_INDUSTRIES 設定與 stock_categories.json 檔案，
+    根據 config.py 中的 TRAIN_INDUSTRIES 設定與 stock_categories.json 檔案，
     以及 Stocks.txt，過濾 DataFrame 中的股票。
     """
     import numpy as np
     import json
     
-    # 延遲載入 train 模組的 TRAIN_INDUSTRIES 避免循環引用
+    # 從中央控制面板 config 載入 TRAIN_INDUSTRIES
     try:
-        from train import TRAIN_INDUSTRIES
+        from config import TRAIN_INDUSTRIES
     except ImportError:
-        print("[utils] 無法載入 train 中的 TRAIN_INDUSTRIES，跳過過濾")
-        return df
+        # 降級嘗試 (適用於移位後的 scripts/ 子目錄執行)
+        try:
+            import sys
+            PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if PARENT_DIR not in sys.path:
+                sys.path.insert(0, PARENT_DIR)
+            from config import TRAIN_INDUSTRIES
+        except ImportError:
+            print("[utils] 無法載入 config 中的 TRAIN_INDUSTRIES，跳過過濾")
+            return df
 
     cat_path = os.path.join(BASE_DIR, "stock_categories.json")
     if not os.path.exists(cat_path):
@@ -149,4 +158,3 @@ def filter_stocks_by_train_industries(df, target_col="stock_id") -> "pd.DataFram
         return df_filtered
         
     return df
-

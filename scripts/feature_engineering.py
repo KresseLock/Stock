@@ -684,3 +684,141 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
 
     print(f"  特徵矩陣建置完成！共 {df.shape[0]} 筆樣本，{df.shape[1]-2} 個特徵欄位。")
     print(f"  存至: {output_path}")
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+    import sys
+    
+    # 確保 sys.path 包含上層根目錄
+    PARENT_DIR = os.path.dirname(BASE_DIR)
+    if PARENT_DIR not in sys.path:
+        sys.path.insert(0, PARENT_DIR)
+        
+    try:
+        from config import START_DATE, END_DATE, FEAT_N_JOBS
+    except ImportError:
+        START_DATE = datetime.date(2020, 1, 1)
+        END_DATE = datetime.date.today()
+        FEAT_N_JOBS = -1
+
+    parser = argparse.ArgumentParser(description="台股特徵工程核心模組")
+    parser.add_argument("--backtest", type=str, help="指定日期執行單日預測與真實漲跌方向驗證 (時光機模式，格式: YYYYMMDD)")
+    args = parser.parse_args()
+
+    # 載入最佳參數 best_factors.json (若存在)
+    best_factors_path = os.path.join(PARENT_DIR, "best_factors.json")
+    if os.path.exists(best_factors_path):
+        try:
+            with open(best_factors_path, "r", encoding="utf-8") as f:
+                factors = json.load(f)
+            params = factors.get("best_params_for_run_feature_engineering", {})
+            if params:
+                print(f"[提示] 偵測到 best_factors.json，已載入最佳化因子參數進行特徵工程。")
+                MA_WINDOWS        = params.get("MA_WINDOWS", MA_WINDOWS)
+                RSI_PERIOD        = params.get("RSI_PERIOD", RSI_PERIOD)
+                ATR_PERIOD        = params.get("ATR_PERIOD", ATR_PERIOD)
+                KD_PERIOD         = params.get("KD_PERIOD", KD_PERIOD)
+                MACD_FAST         = params.get("MACD_FAST", MACD_FAST)
+                MACD_SLOW         = params.get("MACD_SLOW", MACD_SLOW)
+                MACD_SIGNAL       = params.get("MACD_SIGNAL", MACD_SIGNAL)
+                BOLL_WINDOW       = params.get("BOLL_WINDOW", BOLL_WINDOW)
+                BOLL_STD_MULT     = params.get("BOLL_STD_MULT", BOLL_STD_MULT)
+                VOL_MA_WINDOW     = params.get("VOL_MA_WINDOW", VOL_MA_WINDOW)
+                CHIPS_SUM_WINDOWS = params.get("CHIPS_SUM_WINDOWS", CHIPS_SUM_WINDOWS)
+        except Exception as e:
+            print(f"[警告] 無法載入 best_factors.json ({e})，將使用預設因子參數。")
+
+    target_stocks = load_target_stocks("Stocks.txt")
+    print("=" * 60)
+    print("  特徵工程提取工具啟動 (僅使用本地現有數據)")
+    print("=" * 60)
+    print(f"  目標股票檔數 : {len(target_stocks)} 檔")
+    print(f"  均線週期設定 : {MA_WINDOWS}")
+    print(f"  RSI 週期     : {RSI_PERIOD}")
+    print(f"  並行核心數   : {FEAT_N_JOBS}")
+    print("=" * 60)
+
+    try:
+        # 重算特徵工程
+        N_JOBS = FEAT_N_JOBS
+        process_all_history_features(START_DATE, END_DATE, override_target_stocks=target_stocks)
+        print("-" * 60)
+        print("  [完成] 特徵值提取與 Parquet 檔案建置完成！")
+    except Exception as e:
+        import traceback
+        print(f"\n[錯誤] 特徵工程執行失敗: {e}")
+        traceback.print_exc()
+
+    # 時光機單日驗證回測模式
+    if args.backtest:
+        print("\n" + "=" * 60)
+        print(f"  [時光機驗證模式] 基準日: {args.backtest}")
+        print("=" * 60)
+        try:
+            import lightgbm as lgb
+            bt_date = pd.to_datetime(args.backtest, format="%Y%m%d")
+            parquet_path = os.path.join(PARENT_DIR, "data", "features", "features_combined.parquet")
+            if not os.path.exists(parquet_path):
+                print("[錯誤] 找不到特徵 Parquet 檔案，無法執行回測")
+            else:
+                df_all = pd.read_parquet(parquet_path)
+                df_all["date"] = pd.to_datetime(df_all["date"])
+                
+                # 篩選最近交易日
+                avail_dates = sorted(df_all["date"].unique())
+                if bt_date not in avail_dates:
+                    closes = [d for d in avail_dates if d <= bt_date]
+                    if not closes:
+                        raise ValueError(f"指定日期 {args.backtest} 之前無資料")
+                    bt_date = closes[-1]
+                    print(f"  [提示] 自動對齊交易日: {bt_date.date()}")
+
+                lbl_cols = [f"next_ret_{d}" for d in FORECAST_DAYS]
+                ign_cols = ["stock_id", "date"] + lbl_cols
+                num_cols = df_all.select_dtypes(include=[np.number, bool]).columns
+                feat_cols = [c for c in num_cols if c not in ign_cols]
+
+                train_df = df_all[df_all["date"] < bt_date].dropna(subset=lbl_cols)
+                test_df  = df_all[df_all["date"] == bt_date].copy()
+
+                if train_df.empty or test_df.empty:
+                    print("[錯誤] 訓練集或測試集為空，請確認日期範圍。")
+                else:
+                    X_tr = train_df[feat_cols]
+                    X_te = test_df[feat_cols]
+                    all_correct = []
+                    
+                    for day in FORECAST_DAYS:
+                        label = f"next_ret_{day}"
+                        y_tr = train_df[label]
+                        # 簡單擬合回歸器
+                        model = lgb.LGBMRegressor(n_estimators=100, learning_rate=0.03, max_depth=4, random_state=42+day, n_jobs=-1, verbose=-1)
+                        model.fit(X_tr, y_tr)
+                        preds = model.predict(X_te)
+
+                        print(f"  ── 預測第 {day} 天 ({bt_date.date()} 後 {day} 個交易日) ──")
+                        print(f"  {'股票':<6} | {'預測漲跌':<10} | {'實際漲跌':<10} | {'方向':<8}")
+                        print(f"  {'-'*50}")
+                        for idx, (_, row) in enumerate(test_df.iterrows()):
+                            sid = row["stock_id"]
+                            p_ret = preds[idx]
+                            a_ret = row.get(label, np.nan)
+                            p_str = f"+{p_ret*100:.2f}%" if p_ret > 0 else f"{p_ret*100:.2f}%"
+                            a_str = f"+{a_ret*100:.2f}%" if a_ret > 0 else f"{a_ret*100:.2f}%"
+                            if np.isnan(a_ret):
+                                cor_str = "無真實資料"
+                            else:
+                                is_cor = np.sign(p_ret) == np.sign(a_ret)
+                                cor_str = "[O] 正確" if is_cor else "[X] 錯誤"
+                                all_correct.append(is_cor)
+                            print(f"  {sid:<6} | {p_str:<10} | {a_str:<10} | {cor_str}")
+                        print()
+                        
+                    valid = [x for x in all_correct if x is not None]
+                    if valid:
+                        win = sum(valid) / len(valid) * 100
+                        print(f"  [回測總結] 基準日預測方向勝率: {win:.1f}%  ({sum(valid)}/{len(valid)} 正確)")
+        except Exception as e:
+            print(f"[錯誤] 時光機回測失敗: {e}")
