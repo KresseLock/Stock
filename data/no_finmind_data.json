@@ -226,5 +226,9 @@
   "2391": {
     "status": "pending",
     "first_seen": "2026-06-03"
+  },
+  "2418": {
+    "status": "pending",
+    "first_seen": "2026-06-03"
   }
 }
