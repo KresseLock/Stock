@@ -119,11 +119,26 @@ def run_backtest(backtest_date_str):
             print(f"  [警告] 訓練天數過少 ({len(unique_dates)}天)，跳過 Day {days_ahead}")
             continue
             
+        # 計算樣本權重：如果未來 3 天內有任一天大跌 <= -5%，給予 2.0 倍懲罰權重
+        ret_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
+        if all(c in train_clean.columns for c in ret_cols):
+            min_future_ret = train_clean[ret_cols].min(axis=1)
+            train_clean["sample_weight"] = np.where(min_future_ret <= -0.05, 2.0, 1.0)
+        else:
+            train_clean["sample_weight"] = 1.0
+            
         split_date = unique_dates[int(len(unique_dates) * 0.8)]
-        X_train = train_clean[train_clean["date"] < split_date][feature_cols]
-        y_train = train_clean[train_clean["date"] < split_date][label_col].astype(int)
-        X_valid = train_clean[train_clean["date"] >= split_date][feature_cols]
-        y_valid = train_clean[train_clean["date"] >= split_date][label_col].astype(int)
+        
+        train_part = train_clean[train_clean["date"] < split_date]
+        valid_part = train_clean[train_clean["date"] >= split_date]
+        
+        X_train = train_part[feature_cols]
+        y_train = train_part[label_col].astype(int)
+        w_train = train_part["sample_weight"].values
+        
+        X_valid = valid_part[feature_cols]
+        y_valid = valid_part[label_col].astype(int)
+        w_valid = valid_part["sample_weight"].values
 
         # ── 載入中央控制面板 config 中的訓練執行緒設定 ────────────────────────
         try:
@@ -150,7 +165,9 @@ def run_backtest(backtest_date_str):
         print(f"  訓練 Day {days_ahead} 模型中... ", end="", flush=True)
         model.fit(
             X_train, y_train,
+            sample_weight=w_train,
             eval_set=[(X_valid, y_valid)],
+            eval_sample_weight=[w_valid],
             eval_metric="multi_logloss",
             callbacks=[lgb.early_stopping(stopping_rounds=20, verbose=False)]
         )

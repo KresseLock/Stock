@@ -200,10 +200,10 @@ def step4_train():
     train_module.main()
 
 
-def step5_inference():
+def step5_inference(target_date_str=None):
     """步驟 5: 推理預測"""
     import scripts.inference as inference_module
-    inference_module.main()
+    inference_module.main(target_date_str)
 
 
 def main():
@@ -214,6 +214,12 @@ def main():
         choices=["optimize", "o", "feature", "f", "train", "t", "inference", "i", "all", "a"], 
         default="all",
         help="執行單一指定步驟 (optimize/o | feature/f | train/t | inference/i | all/a)"
+    )
+    parser.add_argument(
+        "-d", "--date",
+        type=str,
+        default=None,
+        help="指定推理/預測的基準日期 (格式: YYYYMMDD 或 YYYY-MM-DD)"
     )
     args = parser.parse_args()
 
@@ -264,7 +270,7 @@ def main():
 
     elif target_step == "inference":
         _banner("5", "單獨執行：推理預測 — 未來 3 天走勢排行榜與下單建議")
-        step5_inference()
+        step5_inference(args.date)
 
     else:
         # 預設執行完整流程
@@ -314,7 +320,7 @@ def main():
 
         _banner("5", "推理預測 — 未來 3 天走勢排行榜")
         t0 = time.time()
-        step5_inference()
+        step5_inference(args.date)
         print(f"  [耗時] {time.time()-t0:.1f} 秒")
 
         # 總結

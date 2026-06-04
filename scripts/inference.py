@@ -72,12 +72,15 @@ def round_to_tick(price: float) -> float:
     return rounded
 
 
-def main():
+def main(target_date_str=None):
     if not os.path.exists(DATA_PATH):
         print(f"[錯誤] 找不到特徵檔: {DATA_PATH}")
         return
 
     df = pd.read_parquet(DATA_PATH)
+    
+    # 確保 date 欄位為 Timestamp 類型以利時間比對與計算
+    df["date"] = pd.to_datetime(df["date"])
     
     # ── 根據 config.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
     try:
@@ -90,7 +93,40 @@ def main():
         print(f"  [警告] 篩選過濾器執行失敗 ({e})，使用全特徵進行推理")
     # ──────────────────────────────────────────────────────────
     
-    latest_date = df["date"].max()
+    # 若未在函式引數傳入指定日期，則嘗試從命令列參數解析
+    if target_date_str is None:
+        import argparse
+        parser = argparse.ArgumentParser(description="推理預測")
+        parser.add_argument("-d", "--date", type=str, default=None, help="指定推理的基準日期 (格式: YYYYMMDD 或 YYYY-MM-DD)")
+        args, _ = parser.parse_known_args()
+        target_date_str = args.date
+
+    if target_date_str:
+        try:
+            target_date = pd.to_datetime(target_date_str)
+        except Exception:
+            print(f"[錯誤] 日期格式解析失敗 ({target_date_str})，請使用 YYYY-MM-DD 或 YYYYMMDD。")
+            return
+        
+        available_dates = sorted(df["date"].unique())
+        available_timestamps = [pd.Timestamp(d) for d in available_dates]
+        target_timestamp = pd.Timestamp(target_date)
+        
+        if target_timestamp not in available_timestamps:
+            closes = [d for d in available_timestamps if d <= target_timestamp]
+            if not closes:
+                print(f"[錯誤] 指定日期 {target_date_str} 之前無資料。")
+                print(f"  可用資料日期區間: {min(available_timestamps).strftime('%Y-%m-%d')} ~ {max(available_timestamps).strftime('%Y-%m-%d')}")
+                return
+            latest_date = closes[-1]
+            print(f"  [提示] 找不到指定日期 {target_date_str}，自動對齊至最近交易日: {latest_date.strftime('%Y-%m-%d')}")
+        else:
+            latest_date = target_timestamp
+            print(f"  [指定推理日期] 使用指定日期: {latest_date.strftime('%Y-%m-%d')}")
+    else:
+        latest_date = pd.Timestamp(df["date"].max())
+        print(f"  [最新推理日期] 自動使用最新日期: {latest_date.strftime('%Y-%m-%d')}")
+        
     date_str = latest_date.strftime("%Y%m%d")
 
     watchlist = load_watchlist_detailed()

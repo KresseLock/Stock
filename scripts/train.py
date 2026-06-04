@@ -39,6 +39,16 @@ def train_model(df, feature_cols, target_col, days_ahead):
     print(f"  [開始訓練] 預測未來 {days_ahead} 天 (標籤: {target_col})")
     print("="*50)
     
+    # 根據策略 2 (損失權重)：若未來 3 天內有任一天大跌 <= -5%，給予 2.0 倍懲罰權重以抑止 MDD
+    df = df.copy()
+    ret_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
+    if all(c in df.columns for c in ret_cols):
+        # 找出未來3天內的最低報酬率 (最大跌幅)
+        min_future_ret = df[ret_cols].min(axis=1)
+        df["sample_weight"] = np.where(min_future_ret <= -0.05, 2.0, 1.0)
+    else:
+        df["sample_weight"] = 1.0
+    
     # 以日期分位數切割：70% 訓練, 10% 驗證, 20% 測試
     df = df.sort_values("date").reset_index(drop=True)
     unique_dates = sorted(df["date"].unique())
@@ -53,6 +63,9 @@ def train_model(df, feature_cols, target_col, days_ahead):
     X_train, y_train = train_df[feature_cols], train_df[target_col].astype(int)
     X_valid, y_valid = valid_df[feature_cols], valid_df[target_col].astype(int)
     X_test, y_test   = test_df[feature_cols],  test_df[target_col].astype(int)
+    
+    w_train = train_df["sample_weight"].values
+    w_valid = valid_df["sample_weight"].values
     
     # 分類模型
     model = lgb.LGBMClassifier(
@@ -72,7 +85,9 @@ def train_model(df, feature_cols, target_col, days_ahead):
     
     model.fit(
         X_train, y_train,
+        sample_weight=w_train,
         eval_set=[(X_valid, y_valid)],
+        eval_sample_weight=[w_valid],
         eval_metric="multi_logloss",
         callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=False)]
     )

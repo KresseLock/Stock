@@ -35,6 +35,12 @@ MAX_POSITIONS  = 5         # 最大持倉上限檔數
 FEE_RATE       = 0.001425  # 單邊券商手續費
 TAX_RATE       = 0.003     # 賣出證交稅 (非當沖)
 
+# ── 2.1 系統性風控與移動止盈參數 (新版) ───────────────────────────
+MKT_PANIC_MA5     = -0.010 # 大盤 5 日滾動平均報酬率避險門檻 (-1.0% 代表 -0.010)
+MKT_PANIC_BREADTH = 0.30   # 全市場上漲家數比例避險門檻 (30% 代表 0.30)
+TS_ACTIVATION_PCT = 10.0   # 個股浮盈達到此百分比才開啟移動止盈 (%)
+TS_PULLBACK_PCT   = -6.0   # 啟動後自最高收盤價回撤此百分比執行止盈 (%)
+
 # ── 3. 數據爬蟲與時間區間設定 (原 main.py & auto_pipeline.py 共享) ──
 # limited: 只下載 TRAIN_INDUSTRIES=True 產業與自選股 (節省 Token) | all: 全市場
 FINMIND_FETCH_MODE = "limited"

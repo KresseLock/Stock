@@ -272,13 +272,21 @@ def make_objective(df_base: pd.DataFrame, bt_date: pd.Timestamp,
             y_train = train_df[label].astype(int)
             y_test  = test_df[label].astype(int)
             
+            # 計算樣本權重：如果未來 3 天內有任一天大跌 <= -5%，給予 2.0 倍懲罰權重
+            weight_ret_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
+            if all(c in train_df.columns for c in weight_ret_cols):
+                min_future_ret = train_df[weight_ret_cols].min(axis=1)
+                w_train = np.where(min_future_ret <= -0.05, 2.0, 1.0)
+            else:
+                w_train = np.ones(len(train_df))
+            
             model = lgb.LGBMClassifier(
                 n_estimators=100, learning_rate=0.03, max_depth=4,
                 num_leaves=15, subsample=0.8, colsample_bytree=0.8,
                 random_state=42, n_jobs=1, verbose=-1,
                 class_weight="balanced"
             )
-            model.fit(X_tr, y_train)
+            model.fit(X_tr, y_train, sample_weight=w_train)
             
             preds_proba = model.predict_proba(X_te)
             if preds_proba.shape[1] == 3:

@@ -41,6 +41,7 @@ Thumbs.db
 predictions/
 sample_data/
 reports/
+!reports/stress_test_report.md
 
 # ==========================================
 # 標準 Python 忽略設定 (GitHub 官方範本)

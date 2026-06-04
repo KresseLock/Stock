@@ -22,7 +22,7 @@ import argparse
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def run_script(script_path: str, is_scraper: bool = False) -> bool:
+def run_script(script_path: str, is_scraper: bool = False, skip_on_limit: str = None, extra_args: list = None) -> bool:
     """執行指定的 Python 腳本並監控結果"""
     full_path = os.path.join(BASE_DIR, script_path)
     if not os.path.exists(full_path):
@@ -36,11 +36,18 @@ def run_script(script_path: str, is_scraper: bool = False) -> bool:
     t_start = time.time()
     try:
         # 使用當前虛擬環境的 Python 執行檔執行子腳本，並將輸出實時印出到終端機
-        # 加入環境變數以指示 FinMind API 遇到流量限制時直接跳過，不等待 1 小時
         env = os.environ.copy()
-        env["SKIP_ON_FINMIND_LIMIT"] = "1"
+        if skip_on_limit is not None:
+            env["SKIP_ON_FINMIND_LIMIT"] = skip_on_limit
+        else:
+            # 不指定時（如完整流程），優先讀取既有環境變數設定；若無設定則預設為 "1" (直接跳過以利自動化)
+            if "SKIP_ON_FINMIND_LIMIT" not in env:
+                env["SKIP_ON_FINMIND_LIMIT"] = "1"
         
-        subprocess.run([sys.executable, full_path], check=True, env=env)
+        cmd = [sys.executable, full_path]
+        if extra_args:
+            cmd.extend(extra_args)
+        subprocess.run(cmd, check=True, env=env)
         t_elapsed = time.time() - t_start
         print(f"\n[成功] {script_path} 執行完成！耗時: {t_elapsed:.1f} 秒")
         return True
@@ -61,18 +68,28 @@ def main():
     parser.add_argument(
         "-s", "--step",
         type=str,
-        choices=["download", "d", "predict", "p", "backup", "b", "all", "a"],
+        choices=["download", "d", "D", "predict", "p", "P", "backup", "b", "B", "all", "a", "A"],
         default="all",
-        help="執行指定步驟 (download/d | predict/p | backup/b | all/a)"
+        help="執行指定步驟 (download/d/D | predict/p/P | backup/b/B | all/a/A)"
+    )
+    parser.add_argument(
+        "-d", "--date",
+        type=str,
+        default=None,
+        help="指定推理/預測的基準日期 (格式: YYYYMMDD 或 YYYY-MM-DD，僅在預測/predict/pipeline步驟中生效)"
     )
     args = parser.parse_args()
 
     # 簡碼對齊映射
     step_map = {
         "d": "download",
+        "D": "download",
         "p": "predict",
+        "P": "predict",
         "b": "backup",
+        "B": "backup",
         "a": "all",
+        "A": "all",
         "download": "download",
         "predict": "predict",
         "backup": "backup",
@@ -88,14 +105,19 @@ def main():
     print(f"  啟動時間: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  目標步驟: {target_step.upper()}")
 
+    extra_args = []
+    if args.date:
+        extra_args = ["--date", args.date]
+
     if target_step == "download":
-        success = run_script(os.path.join("scripts", "scraper.py"), is_scraper=True)
+        # 單獨下載模式下，強制 skip_on_limit="0" (若額度滿了則等待 1 小時後繼續抓取，不直接跳過)
+        success = run_script(os.path.join("scripts", "scraper.py"), is_scraper=True, skip_on_limit="0")
         if not success:
             sys.exit(1)
 
     elif target_step == "predict":
         # 執行 auto_pipeline.py
-        success = run_script("auto_pipeline.py")
+        success = run_script("auto_pipeline.py", extra_args=extra_args)
         if not success:
             sys.exit(1)
 
@@ -107,14 +129,14 @@ def main():
     else:
         # 執行完整流程
         steps = [
-            (os.path.join("scripts", "scraper.py"), True),
-            ("auto_pipeline.py", False),
-            (os.path.join("scripts", "StockSync.py"), False)
+            (os.path.join("scripts", "scraper.py"), True, None),
+            ("auto_pipeline.py", False, extra_args),
+            (os.path.join("scripts", "StockSync.py"), False, None)
         ]
         
-        for idx, (script, is_scr) in enumerate(steps, 1):
+        for idx, (script, is_scr, e_args) in enumerate(steps, 1):
             print(f"\n>>> 進入第 {idx}/{len(steps)} 階段...")
-            success = run_script(script, is_scraper=is_scr)
+            success = run_script(script, is_scraper=is_scr, skip_on_limit=None, extra_args=e_args)
             if not success:
                 print("\n" + "!" * 75)
                 print(f"  [中斷警告] 流程在執行到 {script} 時發生錯誤中斷！")

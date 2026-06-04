@@ -71,7 +71,7 @@
 - 期交所台指期外資未平倉、集保所每週大戶持股
 - 整合 FinMind 月營收與三大財務報表（支援 `FINMIND_CACHE_DAYS` 自訂天數快取，預設 15 天，可由 `config.py` 自由調校）
 - 具備失敗計數略過（`failed_dates.json`）與空值快取機制，節省 Token 與網絡開銷
-- **限額自動跳過**：支援環境變數 `SKIP_ON_FINMIND_LIMIT = "1"`，遭遇 API 429/402 限制時拋出 `FinMindLimitExceeded` 並由主控 `Auto_RUN.py` 自動跳過爬蟲，不卡死流程。
+- **限額智慧控制**：遭遇 API 429/402 限制時，若為全流程執行（Auto_RUN）會拋出 `FinMindLimitExceeded` 並自動跳過爬蟲不卡死流程；若為單獨執行下載（-s d），主控會自動改為「原地等待 1 小時重置」以確保資料抓完。
 
 </details>
 
@@ -113,8 +113,19 @@
 - 模擬真實手續費（0.1425%）與證交稅（0.3%）
 - 個股固定停損（-8%）+ 信號轉弱出場雙重保護
 - 剩餘現金動態配倉（不固定每檔金額，依剩餘槽位均分）
-- **真實 T+2 交割制度模擬**：細分「購買力（可用資金）」與「銀行實質餘額（T+2 扣/入款）」，賣出股票當天資金可立即滾動買入，但實質款項於兩日後才完成交割。
+- **動態參數覆蓋**：支援透過 CLI 參數覆蓋大盤避險紅燈與停損門檻，以便於回測探索
+- **真實 T+2 交割機制模擬**：細分「購買力（可用資金）」與「銀行實質餘額（T+2 扣/入款）」，賣出股票當天資金可立即滾動買入，但實質款項於兩日後才完成交割。
 - 支援零股交易精算，回測結束輸出多分頁 Excel 報表
+
+</details>
+
+<details>
+<summary><b>🛡️ 多週期壓力測試器 (scripts/risk_stress_test.py)</b></summary>
+
+- 整合歷史五大關鍵市場時期（2020新冠海嘯、2021牛市、2022大熊市、2024牛市、2026震盪市）與六年全牛熊大週期。
+- 提供多組風控方案（嚴格保守、平衡穩健、放寬激進、無風控）在多個時段的報酬率、最大回撤及卡瑪比率對比。
+- 防止回測中的過度擬合，提供科學定量的風控決策基礎。
+- 自動將多週期壓力測試績效矩陣寫入並更新至 [reports/stress_test_report.md](file:///D:/VScode_Stock/Stock/reports/stress_test_report.md)。
 
 </details>
 
@@ -126,7 +137,7 @@
 Stock/
 ├── 📂 data/                    # 原始 CSV、快取 JSON、特徵 Parquet
 ├── 📂 models/                  # LightGBM 訓練模型檔 + feature_cols.json
-├── 📂 reports/                 # 回測輸出的 Excel / CSV 績效報表
+├── 📂 reports/                 # 績效報表與多週期壓力測試報告 (stress_test_report.md)
 ├── 📂 predictions/             # 每日推理結果存檔 (.txt)
 ├── 📂 scripts/                 # 重構後所有邏輯與腳本的放置處
 │   ├── 📂 tools/
@@ -136,6 +147,7 @@ Stock/
 │   ├── train.py                # LightGBM 多天期分類模型訓練器
 │   ├── inference.py            # 多空分數預測排行榜 + 智慧限價掛單指引
 │   ├── optimize_factors.py     # Optuna 貝葉斯超參數最佳化器
+│   ├── risk_stress_test.py     # 風控參數多週期壓力測試與回測工具
 │   ├── backtest.py             # 時光機單日回測器 (樣本外評估)
 │   ├── utils.py                # 全系統共享股票解析工具
 │   ├── stock_categories.json   # 產業分類與 ETF 全系統共享對照表
@@ -255,17 +267,17 @@ python scripts/scraper.py -c                    # 校驗與修復 (同 --check)
 > 1. **執行檔需另行下載**：`rclone` 本身是用 Go 語言編寫的獨立工具，您需要前往 [rclone 官網](https://rclone.org/downloads/) 下載適用於 Windows 的 `rclone.exe` 執行檔，並將其放入虛擬環境的 `venv/Scripts/` 目錄中，或者加入系統的環境變數 PATH 中。
 > 2. **Token 與登入金鑰安全**：透過 `rclone config` 登入雲端硬碟後所產生的金鑰資訊會儲存於 `config` / `.config` 資料夾或 `rclone.conf` 設定檔中。**這些金鑰與權限 Token 屬於高度敏感私鑰，已自動列入 `.gitignore` 與 `.agyignore` 中，絕對禁止提交至 Git 倉庫，亦不可外洩或上傳雲端**。
 
-### Step 5 — 執行策略回測
+回測結束後，報表自動輸出至 `reports/` 資料夾（Excel 多分頁格式）。
+
+### Step 5.1 — 執行風控參數多週期壓力測試
+
+若要檢驗大盤避險與停損門檻在長期歷史（尤其是大熊市）下的防禦力，以防風控過度敏感而踏空或放寬導致失控，可執行壓力測試腳本：
 
 ```powershell
-# 回測 2026 年上半年，初始資金 100 萬，最大持股 5 檔
-python trading_sim.py --start 2026-01-02 --end 2026-06-25 --capital 1000000 --max_pos 5
-
-# 回測 2025 全年，初始資金 50 萬
-python trading_sim.py --start 2025-01-02 --end 2025-12-30 --capital 500000 --max_pos 5
+python scripts/risk_stress_test.py
 ```
 
-回測結束後，報表自動輸出至 `reports/` 資料夾（Excel 多分頁格式）。
+測試完成後，會自動將各方案在各時期的回測績效矩陣寫入並更新至 [reports/stress_test_report.md](file:///D:/VScode_Stock/Stock/reports/stress_test_report.md) 報告中。
 
 ### Step 6 — 執行系統整合測試
 
@@ -283,6 +295,8 @@ python tests/test_pipeline.py
 | `BUY_THRESHOLD` | `10.0%` | Day1 多空淨分數達此值才觸發買進 (在 config.py 中設定) |
 | `SELL_THRESHOLD` | `0.0%` | Day3 多空淨分數低於此值觸發賣出 (在 config.py 中設定) |
 | `STOP_LOSS_PCT` | `-8.0%` | 相對買進成本的固定停損線 (在 config.py 中設定) |
+| `MKT_PANIC_MA5` | `-1.0%` | 大盤 5 日滾動平均報酬率避險門檻 (在 config.py 中設定) |
+| `MKT_PANIC_BREADTH` | `30.0%` | 全市場上漲家數比例避險門檻 (在 config.py 中設定) |
 | `MAX_POSITIONS` | `5 檔` | 最大同時持股數 (在 config.py 中設定) |
 | `FEE_RATE` | `0.1425%` | 單邊券商手續費 (在 config.py 中設定) |
 | `TAX_RATE` | `0.3%` | 賣出證交稅（非當沖，在 config.py 中設定） |
