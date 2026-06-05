@@ -139,6 +139,7 @@ Stock/
 │   ├── train.py                # LightGBM 多天期分類模型訓練器
 │   ├── inference.py            # 多空分數預測排行榜 + 智慧限價掛單指引
 │   ├── optimize_factors.py     # Optuna 貝葉斯超參數最佳化器
+│   ├── optimize_trading_params.py # 交易策略與避險參數最佳化器 (Optuna TPE)
 │   ├── backtest.py             # 時光機單日回測器 (樣本外評估)
 │   ├── utils.py                # 全系統共享股票解析與過濾工具
 │   ├── stock_categories.json   # 產業分類與 ETF 全系統共享對照表
@@ -153,6 +154,7 @@ Stock/
 ├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
 ├── Stocks.txt                  # 自選股 / 實質持倉清單
 ├── best_factors.json           # 最佳化技術指標參數存檔
+├── best_trading_params.json     # 最佳化交易與風控策略參數存檔
 ├── FINMIND_TOKEN.txt           # FinMind API 金鑰存放檔 (可選)
 └── requirements.txt            # Python 依賴套件清單
 ```
@@ -273,16 +275,195 @@ python scripts/backtest.py 2025-08-01
 
 ---
 
+#### 方案己：交易策略與避險參數自動調參器 (scripts/optimize_trading_params.py)
+
+利用 Optuna 的 TPE 貝葉斯最佳化演算法，在歷史訓練資料上自動搜尋最佳的避險與交易策略參數組合。本腳本採用**多市況魯棒性交叉驗證（Regime-Robust CV）**機制，將回測期依時間順序切分為 3 個子區間（如：2021多頭、2022空頭、2023-2025多空震盪），分別計算各區間的 Calmar 比率：
+* **若所有區間回報皆為正**：目標得分採用**調和平均值（Harmonic Mean）**，對任何單一表現差勁的區間進行重度懲罰。
+* **若有任何區間回報為負**：目標得分採用**最小值（Minimin）**，強制避開在空頭市場崩盤或震盪市中爆倉的配置。
+
+這能有效防止調參器因為單一「超級大牛市」的利潤而過度擬合出過於激進的策略，尋找出真正抗震、全天候的「黃金風控配置」。
+
+##### 1. 執行方式與參數說明
+
+本指令支援**簡寫（Short options）**與**完整長參數（Long options）**，且所有參數均有基於 `config.py` 的預設值：
+
+*   **預設執行**（讀取 `config.py` 中的 `OPTIMIZATION_TRIALS` 作為搜尋輪數，預設為 600 輪；結束時間為 `BACKTEST_DATE`，起始時間為截止日往回推 2.5 年，初始資金 1,000,000 元）：
+    ```powershell
+    python scripts/optimize_trading_params.py
+    ```
+
+*   **指定簡短參數執行**（搜尋 150 輪，從 2021-01-01 開始，2025-08-01 結束，初始資金 200 萬）：
+    ```powershell
+    python scripts/optimize_trading_params.py -t 150 -s 2021-01-01 -e 2025-08-01 -c 2000000
+    ```
+
+*   **指定長參數執行**（效果與上方簡短參數完全相同）：
+    ```powershell
+    python scripts/optimize_trading_params.py --trials 150 --start 2021-01-01 --end 2025-08-01 --capital 2000000
+    ```
+
+##### 2. 命令列參數清單
+
+| 短參數 | 長參數 | 類型 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- | :--- |
+| `-t` | `--trials` | `int` | `config.py` 中的 `OPTIMIZATION_TRIALS` (目前為 600) | 最佳化搜尋的總迭代輪數。 |
+| `-s` | `--start` | `str` | `BACKTEST_DATE` 往回推 2.5 年 | 模擬交易起始日期 (`YYYY-MM-DD`)。 |
+| `-e` | `--end` | `str` | `config.py` 中的 `BACKTEST_DATE` (目前為 `2025-08-01`) | 模擬交易結束日期 (`YYYY-MM-DD`)。 |
+| `-c` | `--capital`| `int` | `1000000` | 模擬交易的起始資金。 |
+| `-m` | `--max_pos`| `int` | `config.py` 中的 `MAX_POSITIONS` (目前為 5) | 同時持股的最大檔數限制。 |
+| `-j` | `--jobs` | `int` | `1` | 並行線程數 (交易模擬包含I/O與複雜邏輯，建議設為 `1`)。 |
+
+##### 3. 輸出結果與自動套用
+
+搜尋完成後，最佳參數與回測指標會自動輸出並覆蓋存檔於 `best_trading_params.json`。該檔案除了包含最佳的參數配置外，還會記錄**全區間整體績效**與**三個子區間個別的報酬率、最大回撤與得分**，供後續分析。
+
+`config.py` 在被任何模組（回測、模擬、推理）載入時，會自動偵測並讀取此 JSON 檔，動態覆寫內部的風控參數，使新參數立刻全系統生效。
+
+---
+
 > [!WARNING]
 > #### ☁️ rclone 雲端備份注意事項
 >
 > 1. **執行檔需另行下載**：前往 [rclone 官網](https://rclone.org/downloads/) 下載 `rclone.exe`，放入 `venv/Scripts/` 或加入系統 PATH。
 > 2. **金鑰安全**：`rclone config` 產生的金鑰已列入 `.gitignore` 與 `.agyignore`，**絕對禁止提交至 Git 倉庫或外洩**。
 
-### Step 5 — 執行系統整合測試
+### Step 5 — 雙階段參數最佳化研發流程（調參工作流）
+
+為了讓系統在實戰中達到最優表現，本專案設計了**因子最佳化**與**風控最佳化**的雙階段調參架構：
+
+1. **第一階段：技術指標與因子最佳化 (Optimize Factors)**
+   - **目的**：搜尋最適合目前選定板塊與自選股的技術指標週期參數（如均線長短、RSI/KD天數等），使機器學習模型預測最準確。
+   - **執行指令**：`python auto_pipeline.py -s o`
+   - **產出**：儲存最佳技術指標參數至 `best_factors.json`。
+   - **後續步驟**：執行特徵重建 `python auto_pipeline.py -s f` 與模型重新訓練 `python auto_pipeline.py -s t`，以將新因子應用到特徵數據與模型中。
+
+2. **第二階段：交易策略與避險風控最佳化 (Optimize Trading Params)**
+   - **目的**：在模型預測力固定下，搜尋最佳的實戰交易風控參數（如個股停損線、大盤避險紅燈、移動止盈啟動線），以最大化獲利率並抑制最大回撤 (MDD)。
+   - **執行指令**：`python scripts/optimize_trading_params.py`
+   - **產出**：儲存最佳風控與策略參數至 `best_trading_params.json`。
+   - **後續步驟**：此結果會由 `config.py` 在初始化時自動動態加載並覆寫預設常數，**全系統（回測、模擬、推理）將立即自動套用新風控值**，無須任何手動操作。
+
+### Step 6 — 量化研發與實盤生產工作流 (模式 A 與 模式 B)
+
+本系統將量化流程嚴格區分為**「模式 A：研究與策略驗證」**（以 2025-08-01 為界）與**「模式 B：實盤生產推理」**（動態滾動重訓）兩種運行模式。這種設計能有效防止過擬合與前視偏差，並在實盤時快速吸收最新市場特徵。
+
+---
+
+#### 1. 核心診斷與調參工具的定位、意義與執行時機
+
+本系統配備了兩個重要的研發工具，分別負責「訊號層」的診斷與「執行層」的優化：
+
+##### 🩺 訊號診斷器：`scripts/analyze_regime_stability.py`
+*   **存在的意義（Why）**：
+    機器學習模型（LightGBM）的預測力基於歷史特徵分佈。當市場從兩萬點暴漲至四萬點時（發生 **Regime Shift**，市場狀態轉變），原本有用的因子（例如均值回歸特徵）可能反轉為動量特徵，或者特徵數值分佈發生劇烈漂移。本工具專門計算 **RankIC、選股單調性（Monotonicity）、特徵漂移度（PSI）以及相關性漂移**，用來回答：*「模型目前的選股排序能力是否依然健康？是否發生因子失效？」*
+*   **何時執行與目的（When & Goal）**：
+    *   **在模式 A（研究期）中**：當您剛完成因子與模型訓練，準備評估其在「樣本外（OOS）超級牛市」中的表現時執行。目的在於驗證模型在**完全沒看過的市況下**是否仍具備選股超額收益（Alpha）。如果 OOS RankIC 依然顯著為正，說明模型底層邏輯健康。
+    *   **在模式 B（實盤期）中**：**每隔一個月，或當大盤發生重大暴跌、風格轉換時**手動執行。目的在於監控實盤運作中特徵漂移（PSI）是否超標。若 PSI >= 0.25 且 RankIC 顯著衰退，則代表需要回到模式 A 重新篩選或設計因子，而不是盲目重訓。
+
+##### 🎛️ 策略優化器：`scripts/optimize_trading_params.py`
+*   **存在的意義（Why）**：
+    交易執行層的風控參數（如個股停損、大盤避險紅燈、移動止盈）若只在單一市場狀態下測試，極易擬合出極端參數。例如：在熊市中停損過緊會導致頻繁被洗出場，在大牛市中避險過度敏感則會導致嚴重少賺。本工具採用 **Regime-Robust CV（多市況交叉驗證）**，以 `Score = Return - 2.0 * MDD` 的調和平均或最小值為指標，藉由 Optuna 貝葉斯尋優，找出能跨越不同市場週期的黃金風控配置。
+*   **何時執行與目的（When & Goal）**：
+    *   **在模式 A（研究期）中**：在用 `analyze_regime_stability.py` 診斷模型訊號健康後執行。**優化區間的結束時間必須鎖在 2025-08-01 之前**（例如 `-s 2021-01-02 -e 2025-08-01`），絕對不能讓 Optuna 偷看 2025-08-01 之後的超級牛市。目的是找出在歷史市況下的最優風控，然後在未知的樣本外（OOS）超級牛市上做回測，檢驗這組參數的泛化防禦力。
+    *   **在模式 B（實盤期）中**：在正式實盤上線前，或當市場經歷了大段未知市況（如 2025-08 ~ 2026-06 這段牛市）時執行一次**全週期（包含這段牛市）的優化**（例如 `-s 2023-01-01 -e 2026-06-01`）。目的是將這段高波動、高回報的全新市況納入 Optuna 的優化區間。避免優化器因為沒見過牛市的大波動，而擬合出過度保守的避險參數（例如過早觸發避險空倉或停損過緊），導致策略在實盤牛市中因頻繁停損或避險空倉而嚴重少賺。
+
+---
+
+#### 2. 🟢 模式 A：研究與策略驗證期 (Researcher Mode)
+
+*   **配置設定**：確認 [config.py](config.py) 中的 `BACKTEST_DATE = "20250801"`。
+*   **核心目的**：刻意保留 2025-08-01 至 2026-06-05 這段長達 10 個月、橫跨兩萬多點到四萬多點的超級牛市，作為**「模型完全沒看過的樣本外（OOS）乾淨測試集」**。在此模式下，您可以反覆調整因子與風控，並在 OOS 區間驗證策略防禦力。
+*   **工作流與執行步驟（含為什麼這樣做）**：
+    1.  **增量更新原始數據**：
+        ```powershell
+        python Auto_RUN.py --step download
+        ```
+    2.  **因子技術指標尋優**：
+        ```powershell
+        python auto_pipeline.py -s o
+        ```
+        *   *為什麼*：使用 Optuna 尋找最適合指定產業的技術指標參數（如均線窗口、KD週期），產生 `best_factors.json`。
+    3.  **重建特徵工程與訓練模型**：
+        ```powershell
+        python auto_pipeline.py -s f
+        python auto_pipeline.py -s t
+        ```
+        *   *為什麼*：模型訓練會嚴格截斷在 2025-08-01 之前，確保模型不會有前視偏差。
+    4.  **訊號層健康診斷**（`analyze_regime_stability.py`）：
+        ```powershell
+        python scripts/analyze_regime_stability.py
+        ```
+        *   *為什麼*：評估模型在 2025-08-01 之後 OOS 超級牛市中的 RankIC 與 Alpha。如果 RankIC > 0.02 且 Top 1% Alpha 依然顯著，代表模型選股排序能力極佳，可以進入策略調參；否則需重新設計特徵。
+    5.  **交易風控參數優化**（`optimize_trading_params.py`）：
+        ```powershell
+        python scripts/optimize_trading_params.py -s 2021-01-02 -e 2025-08-01 -c 2000000
+        ```
+        *   *為什麼*：搜尋結束日期必須鎖在 2025-08-01。讓 Optuna 在歷史多空震盪環境中優化出風控參數（如 `stop_loss = -8.0%`），不讓它偷看未來的超級牛市。
+    6.  **樣本外（OOS）模擬交易回測**（`trading_sim.py`）：
+        ```powershell
+        python trading_sim.py --start 2025-08-02 --end 2026-06-05 -c 2000000
+        ```
+        *   *為什麼*：使用步驟 5 優化出的 `best_trading_params.json`，在完全沒看過的 OOS 超級牛市區間執行模擬交易。如果此時的 Return 與 MDD（Return - 2.0*MDD）依然非常優異，代表整個量化系統的泛化能力極強，即可準備進入實盤。
+
+---
+
+#### 3. 🔵 模式 B：實盤生產推理期 (Production & Live Mode)
+
+當策略在模式 A 通過嚴格的樣本外驗證，準備每日獲取最新下單建議與部位管理時切換為此模式。
+
+*   **配置設定**：修改 [config.py](config.py) 中的 `BACKTEST_DATE = None`。
+*   **核心目的**：
+    *   在實盤生產中，大盤已經到了四萬點，個股股價與成交量級別與兩萬點時截然不同。如果模型依然只用 2025-08-01 之前的舊數據訓練，將無法識別 2025-08 ~ 2026-06 這段牛市新出現的因子特徵（如高價股與權值股的飆升型態），導致預測力大幅衰退。
+    *   因此，設為 `None` 後，系統會將訓練邊界改為**每日動態滾動（例如使用最新一天往前推 2.5 年）**，使模型每天都能吸收最新的市場知識。
+*   **日常運作與工作流**：
+    1.  **實盤上線前/定期執行風控優化**：
+        ```powershell
+        python scripts/optimize_trading_params.py -s 2023-01-01 -e 2026-06-01 -c 2000000
+        ```
+        *   *為什麼*：在進入實盤前，必須把 2025-08 ~ 2026-06 這段大牛市納入 Optuna 的優化區間。這樣優化器才能見識到牛市的真實波動度，優化出一套適合當下高點行情的「黃金風控配置」，避免因為避險過度敏感而在實盤中被震盪洗出場或錯失行情。
+    2.  **每日收盤後執行一鍵主控**（通常在 15:30 三大法人資料更新後）：
+        ```powershell
+        python Auto_RUN.py
+        ```
+        *   *為什麼*：這會一鍵自動完成所有生產流程：增量下載當日數據 -> 依據最新數據滾動重訓最新模型 -> 載入最新風控參數並推理出明日具體掛單建議 -> 調用 rclone 自動備份預測報告至 Google Drive，讓您可以用手機即時查看明日開盤買賣掛單。
+
+---
+
+#### 4. 🎛️ 一鍵全自動雙階段實驗腳本 ([run_workflow_experiment.py](file:///D:/Vscode_workspace/Stock/run_workflow_experiment.py))
+
+如果您希望一鍵自動執行模式 A 與模式 B 的所有研發步驟（包括因子調參、特徵工程、模型重訓、訊號診斷、策略調參和模擬交易），而不需要手動干預或等待，我們提供了一個一鍵式實驗控制腳本 [run_workflow_experiment.py](file:///D:/Vscode_workspace/Stock/run_workflow_experiment.py)。
+
+本腳本會在運行前自動備份您的中央配置 [config.py](file:///D:/Vscode_workspace/Stock/config.py) 與歷史參數，並在執行結束後（不論成功或失敗）**百分之百安全還原**，不影響您的實盤日常生產環境。
+
+##### ① 執行方式與參數
+```powershell
+# 1. 預設執行 (因子調參跑 30 輪，風控調參跑 100 輪，初始資金 200 萬，重新執行因子尋優)
+python run_workflow_experiment.py
+
+# 2. 自訂調參輪數與資金 (模式 A 因子調參 50 輪，風控調參 150 輪，初始資金 300 萬)
+python run_workflow_experiment.py -f 50 -t 150 -c 3000000
+
+# 3. 沿用現有 best_factors.json (跳過因子優化，僅重新訓練模型與優化交易風控，速度最快)
+python run_workflow_experiment.py --skip_factor_opt
+```
+
+##### ② 實驗產出報告與備份存檔
+執行完畢後，系統會自動在 `reports/` 目錄生成一份詳細的 Markdown 對比報告 [workflow_experiment_report.md](file:///D:/Vscode_workspace/Stock/reports/workflow_experiment_report.md)，其中包含：
+*   **關鍵績效指標對比**：模式 A（樣本外超級牛市）與模式 B（全週期含牛市）的區間報酬、最大回撤 (MDD) 與 Calmar 比率對比。
+*   **最佳化風控參數對比**：展示 Optuna 在兩模式下搜尋出的黃金參數差異（如大盤避險紅燈、個股停損線的漂移）。
+*   **獨立存檔參數與診斷**：
+    *   模式 A 訊號診斷報告存檔於 [reports/mode_a_regime_stability_report.txt](file:///D:/Vscode_workspace/Stock/reports/mode_a_regime_stability_report.txt)。
+    *   模式 A 風控參數存檔於 `best_trading_params_mode_a.json`。
+    *   模式 B 風控參數存檔於 `best_trading_params_mode_b.json`。
+
+---
+
+### Step 7 — 執行系統整合測試
+
+在提交程式碼或更動主要演算法前，請確保 18 項關鍵整合測試 100% 通過：
 
 ```powershell
-python tests/test_pipeline.py   # 18 項關鍵邏輯全數通過才可提交
+python tests/test_pipeline.py
 ```
 
 ---

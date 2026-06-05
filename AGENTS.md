@@ -14,6 +14,15 @@
 3. **風控優化：** 這兩者與 `trading_sim.py` 的信心分數門檻相輔相成。本系統經過 6年 (2020-2026) 全週期數據回測，調校出平衡穩健的黃金風控參數（5日均回報門檻 -1.0% / 上漲家數比例 30.0% / 個股停損 -8.0%），在大變動年份（如 2022 熊市）依然能有效保護資產，實現真正的絕對收益！
 4. **產業過濾對齊與節流優化**：`auto_pipeline.py` 動態導入 `config.py` 中的 `TRAIN_INDUSTRIES` 設定，避免下載與特徵化不需訓練的產業，大幅節省 FinMind API 額度並確保全系統篩選一致。
 
+### 雙階段參數最佳化研發流程（調參工作流）
+為防範前視偏差（Lookahead Bias）與對測試集過度擬合，最佳化調參應遵循以下雙階段工作流：
+1. **第一階段：技術指標與因子最佳化 (Feature Tuning)**
+   - 執行 `auto_pipeline.py -s o` (調用 `optimize_factors.py`)，在歷史訓練區間上通過 Optuna TPE 尋找最佳技術指標參數，輸出至 `best_factors.json`。
+   - 隨後必須執行 `auto_pipeline.py -s f` (重建特徵 parquet) 與 `auto_pipeline.py -s t` (重新訓練 LightGBM 模型)，將新因子套用到特徵與模型中。
+2. **第二階段：交易策略與避險風控最佳化 (Trading/Risk Tuning)**
+   - 執行 `scripts/optimize_trading_params.py`，載入已應用新因子的特徵 parquet 與模型，在相同歷史區間上搜尋能最大化平滑 Calmar 比率（報酬率 / 最大回撤）的交易風控參數組合，輸出至 `best_trading_params.json`。
+   - 此 JSON 檔會由 `config.py` 在載入時自動加載並覆寫常數，使全系統（回測、模擬、推理）即時自動套用新風控值。
+
 ### 核心流水線 (Pipeline) 流程
 `多源爬蟲 (scraper.py)` -> `超參數最佳化 (optimize_factors.py)` -> `特徵工程 (feature_engineering.py)` -> `模型訓練 (train.py)` -> `推論預測 (inference.py)` -> `交易回測 (trading_sim.py)`
 
@@ -71,6 +80,8 @@
   - **真實 T+2 交割機制模擬**：引進 `pending_settlements` 待交割帳戶，將資金拆分為「可用資金（購買力）」與「銀行實質餘額」，以正確計算台股賣股後資金同日再買入的實際運作，以及 T+2 交割時對銀行餘額和權益的真實影響。
   - 資金與資產一致性：日終統一將當天發生的所有交易明細之 `Current_Cash`、`Stock_Value` 與 `Total_Equity` 更新為收盤後的最終狀態。
   - 輸出與降級：支援 Excel 多分頁高規格匯出，並內建 CSV 穩健降級機制。
+- **`scripts/optimize_trading_params.py`**: **交易策略與避險參數自動調參器 (Optuna TPE)**。
+  - 貝葉斯超參數調參：使用 Optuna 自動化對 `trading_sim.py` 的風控與策略參數組合進行最佳化，以最大化平滑 Calmar 比率為目標，將最優參數結果輸出至 `best_trading_params.json`。
 
 ### 🛠️ 共享核心工具與測試 (Utilities & Tests)
 - **`scripts/utils.py`**: **全系統共享股票解析與過濾工具**。
@@ -96,12 +107,13 @@
 
 ### 核心設定與快取檔案 (.json)
 1. **`best_factors.json`**: 記錄 Optuna 找出的最佳技術指標參數，由 `feature_engineering.py` 自動讀取。
-2. **`scripts/stock_categories.json`**: 產業分類與 ETF 清單，為特徵工程的板塊情緒、爬蟲跳過 ETF 任務及交易模擬器股票名稱轉換 the 共用依據。
-3. **`models/feature_cols.json`**: 記錄模型訓練當下的所有特徵名稱，確保推論特徵順序與數量 100% 一致。
-4. **`data/failed_dates.json`**: TWSE/TAIFEX 的失敗計數器。失敗超過 3 次則判定為「無開市/假補班」並永久略過。
-5. **`data/no_finmind_data.json`**: FinMind 股票空值快取（快取 90 天）。
-6. **`data/skip_dates.json`**: 官方爬蟲跳過快取，記錄無資料或格式異常的日期，並註記 `reason`以供除錯。
-7. **`data/missing_fm_datasets.json`**: FinMind 局部財報缺漏快取。
+2. **`best_trading_params.json`**: 記錄 Optuna 找出的最佳交易策略與風控參數，作為策略調整與覆蓋依據。
+3. **`scripts/stock_categories.json`**: 產業分類與 ETF 清單，為特徵工程的板塊情緒、爬蟲跳過 ETF 任務及交易模擬器股票名稱轉換 the 共用依據。
+4. **`models/feature_cols.json`**: 記錄模型訓練當下的所有特徵名稱，確保推論特徵順序與數量 100% 一致。
+5. **`data/failed_dates.json`**: TWSE/TAIFEX 的失敗計數器。失敗超過 3 次則判定為「無開市/假補班」並永久略過。
+6. **`data/no_finmind_data.json`**: FinMind 股票空值快取（快取 90 天）。
+7. **`data/skip_dates.json`**: 官方爬蟲跳過快取，記錄無資料或格式異常的日期，並註記 `reason`以供除錯。
+8. **`data/missing_fm_datasets.json`**: FinMind 局部財報缺漏快取。
 
 ---
 

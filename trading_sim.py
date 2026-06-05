@@ -583,7 +583,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         print(f"匯出報表失敗: {e}")
         
     print("=" * 70)
-    return total_return, max_dd
+    return total_return, max_dd, history
 
 class CustomHelpParser(argparse.ArgumentParser):
     def error(self, message):

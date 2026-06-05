@@ -19,6 +19,17 @@ _lock = threading.Lock()
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+import signal
+def _force_exit_sigint(signum, frame):
+    print("\n[使用者中斷] 偵測到 Ctrl+C，強制終止所有執行緒並結束程式...", flush=True)
+    import os
+    os._exit(1)
+
+signal.signal(signal.SIGINT, _force_exit_sigint)
+
 # 隱藏 Optuna 的系統詳細 log，由我們自己控制輸出
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 

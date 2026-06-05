@@ -127,4 +127,37 @@ OPTUNA_BOUNDS = {
     "chips_w3_offset":  ( 5, 20),   # w3 = w2 + offset
 }
 
+# ── 11. 自動加載並套用最佳化交易風控參數 (若有 best_trading_params.json) ──
+import os
+import json
+import multiprocessing
+
+_base_dir = os.path.dirname(os.path.abspath(__file__))
+_best_params_path = os.path.join(_base_dir, "best_trading_params.json")
+if os.path.exists(_best_params_path):
+    try:
+        with open(_best_params_path, "r", encoding="utf-8") as _f:
+            _opt_data = json.load(_f)
+            _params = _opt_data.get("best_params", {})
+            
+            if "buy_threshold" in _params:
+                BUY_THRESHOLD = float(_params["buy_threshold"])
+            if "stop_loss" in _params:
+                STOP_LOSS_PCT = float(_params["stop_loss"])
+            if "panic_ma5" in _params:
+                MKT_PANIC_MA5 = float(_params["panic_ma5"])
+            if "panic_breadth" in _params:
+                MKT_PANIC_BREADTH = float(_params["panic_breadth"])
+            if "ts_activation" in _params:
+                TS_ACTIVATION_PCT = float(_params["ts_activation"])
+            if "ts_pullback" in _params:
+                TS_PULLBACK_PCT = float(_params["ts_pullback"])
+                
+            if multiprocessing.current_process().name == 'MainProcess':
+                print(f"[系統提示] 偵測到 {os.path.basename(_best_params_path)}，已自動套用最佳化交易風控參數。")
+    except Exception as _e:
+        if multiprocessing.current_process().name == 'MainProcess':
+            print(f"[警告] 讀取最佳化交易參數檔失敗: {_e}")
+
+
 
