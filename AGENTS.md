@@ -123,3 +123,4 @@
 1. **資料維護**: 若發現特徵檔中缺少某項資料，請優先檢查 `scraper.py` 的跳過機制，並利用 `scraper.py --check` 進行檢驗與修復。
 2. **常數宣告限制**: 任何常數、參數或調參範圍變數，都必須宣告在 [config.py](config.py) 中，嚴禁在個別腳本中進行分散式寫死。
 3. **參數動態命名**: 在新增技術指標時，請務必與 `optimize_factors.py` 聯動，確保 `feature_engineering.py` 所產生的特徵欄位名稱是動態且可被模型讀取的。
+4. **文件連結相對路徑規範**: 任何在專案說明文檔（如 `README.md`、`AGENTS.md`、`run_workflow_experiment_guide.md` 等）中新增、修改或提及專案內檔案的跳轉連結時，**必須且只能使用相對路徑**（例如 `[config.py](config.py)`），**嚴禁使用包含本地絕對路徑的 file:/// 協議**（例如 `[config.py](file:///D:/Vscode_workspace/Stock/config.py)`）。這能確保說明文檔在不同環境與開發者電腦之間具備完全的移植性。 (注意：此規範僅適用於專案內的說明文件，AI Agent 在與使用者交談的對話視窗中仍應遵循 file:/// 協議提供 clickable 連結)。

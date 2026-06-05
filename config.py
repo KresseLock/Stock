@@ -58,10 +58,10 @@ START_DATE = datetime.date(2020, 1, 1)  # 數據回溯起點 (建議至少 5 年
 FINMIND_CACHE_DAYS = 15                 # FinMind 基本面資料快取更新間隔天數
 
 # ── 4. 機器學習與平行資源設定 ─────────────────────────────────
-RUN_OPTIMIZATION      = False   # 是否在流水線執行時重新啟動 Optuna 調參
-OPTIMIZATION_TRIALS   = 600     # Optuna 最佳化最大輪數
-EARLY_STOPPING_ROUNDS = 200     # Optuna Early Stopping 輪數 (None 代表不提早結束)
-BACKTEST_DATE         = "20250801" # 訓練與測試的切分分界點 (樣本外評估起點)
+RUN_OPTIMIZATION      = True# 是否在流水線執行時重新啟動 Optuna 調參
+OPTIMIZATION_TRIALS   = 600# Optuna 最佳化最大輪數
+EARLY_STOPPING_ROUNDS = 250# Optuna Early Stopping 輪數 (None 代表不提早結束)
+BACKTEST_DATE         = "20250801"# 訓練與測試的切分分界點 (樣本外評估起點)
 
 FEAT_N_JOBS           = -1      # 特徵工程平行核心數 (-1 為最大核心)
 TRAIN_N_JOBS          = -1      # LightGBM 訓練核心數

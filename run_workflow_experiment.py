@@ -33,6 +33,12 @@ import time
 import json
 import argparse
 
+# 強制設定標準輸出/錯誤編碼為 UTF-8，防止 Windows 終端機 (CP950/Big5) 遇到 Emoji 拋出 UnicodeEncodeError
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # ── 1. 實驗核心配置 (最上面易於手動調整的變數，也支援執行時 CLI 參數覆蓋) ────────
 # ⚙️ 因子最佳化設定 (scripts/optimize_factors.py)
 FACTOR_TRIALS         = 600        # 因子最佳化最大搜尋輪數 (預設較少以利快速驗證)
@@ -200,7 +206,7 @@ def main():
         
     backup_trading_exists = False
     if os.path.exists(BEST_TRADING_PARAMS_PATH):
-        shutil.copy2(BEST_TRADING_PARAMS_PATH, BEST_TRADING_BAK)
+        shutil.copy2(BEST_TRADING_PARAMS_PATH, BEST_TRADING_PARAMS_BAK)
         backup_trading_exists = True
         print(f"  已備份 best_trading_params.json -> best_trading_params.json.workflow.bak")
 
@@ -384,9 +390,9 @@ def main():
             os.remove(BEST_FACTORS_BAK)
             print("  已還原 best_factors.json 并清理臨時備份")
             
-        if backup_trading_exists and os.path.exists(BEST_TRADING_BAK):
-            shutil.copy2(BEST_TRADING_BAK, BEST_TRADING_PARAMS_PATH)
-            os.remove(BEST_TRADING_BAK)
+        if backup_trading_exists and os.path.exists(BEST_TRADING_PARAMS_BAK):
+            shutil.copy2(BEST_TRADING_PARAMS_BAK, BEST_TRADING_PARAMS_PATH)
+            os.remove(BEST_TRADING_PARAMS_BAK)
             print("  已還原 best_trading_params.json 并清理臨時備份")
             
     print("\n" + "=" * 80)

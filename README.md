@@ -431,11 +431,11 @@ python scripts/backtest.py 2025-08-01
 
 ---
 
-#### 4. 🎛️ 一鍵全自動雙階段實驗腳本 ([run_workflow_experiment.py](file:///D:/Vscode_workspace/Stock/run_workflow_experiment.py))
+#### 4. 🎛️ 一鍵全自動雙階段實驗腳本 ([run_workflow_experiment.py](run_workflow_experiment.py))
 
-如果您希望一鍵自動執行模式 A 與模式 B 的所有研發步驟（包括因子調參、特徵工程、模型重訓、訊號診斷、策略調參和模擬交易），而不需要手動干預或等待，我們提供了一個一鍵式實驗控制腳本 [run_workflow_experiment.py](file:///D:/Vscode_workspace/Stock/run_workflow_experiment.py)。
+如果您希望一鍵自動執行模式 A 與模式 B 的所有研發步驟（包括因子調參、特徵工程、模型重訓、訊號診斷、策略調參和模擬交易），而不需要手動干預或等待，我們提供了一個一鍵式實驗控制腳本 [run_workflow_experiment.py](run_workflow_experiment.py)。
 
-本腳本會在運行前自動備份您的中央配置 [config.py](file:///D:/Vscode_workspace/Stock/config.py) 與歷史參數，並在執行結束後（不論成功或失敗）**百分之百安全還原**，不影響您的實盤日常生產環境。
+本腳本會在運行前自動備份您的中央配置 [config.py](config.py) 與歷史參數，並在執行結束後（不論成功或失敗）**百分之百 safe 還原**，不影響您的實盤日常生產環境。
 
 ##### ① 執行方式與參數
 ```powershell
@@ -450,11 +450,11 @@ python run_workflow_experiment.py --skip_factor_opt
 ```
 
 ##### ② 實驗產出報告與備份存檔
-執行完畢後，系統會自動在 `reports/` 目錄生成一份詳細的 Markdown 對比報告 [workflow_experiment_report.md](file:///D:/Vscode_workspace/Stock/reports/workflow_experiment_report.md)，其中包含：
+執行完畢後，系統會自動在 `reports/` 目錄生成一份詳細的 Markdown 對比報告 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，其中包含：
 *   **關鍵績效指標對比**：模式 A（樣本外超級牛市）與模式 B（全週期含牛市）的區間報酬、最大回撤 (MDD) 與 Calmar 比率對比。
 *   **最佳化風控參數對比**：展示 Optuna 在兩模式下搜尋出的黃金參數差異（如大盤避險紅燈、個股停損線的漂移）。
 *   **獨立存檔參數與診斷**：
-    *   模式 A 訊號診斷報告存檔於 [reports/mode_a_regime_stability_report.txt](file:///D:/Vscode_workspace/Stock/reports/mode_a_regime_stability_report.txt)。
+    *   模式 A 訊號診斷報告存檔於 [reports/mode_a_regime_stability_report.txt](reports/mode_a_regime_stability_report.txt)。
     *   模式 A 風控參數存檔於 `best_trading_params_mode_a.json`。
     *   模式 B 風控參數存檔於 `best_trading_params_mode_b.json`。
 
