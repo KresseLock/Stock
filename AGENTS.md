@@ -69,6 +69,8 @@
   - **CLI 步驟分流**：支援 `-s` / `--step` 參數，可帶入完整值或簡碼（`download`/`d`、`predict`/`p`、`backup`/`b`）執行單一步驟。
 - **`auto_pipeline.py`**: **機器學習研發流水線入口**。
   - **CLI 步驟分流**：支援 `-s` / `--step` 參數，可帶入完整值或簡碼（`optimize`/`o`、`feature`/`f`、`train`/`t`、`inference`/`i`）執行單一模型訓練步驟。其中單獨執行 `optimize`/`o` 步驟時會自動無視 `config.py` 中的 `RUN_OPTIMIZATION` 限制強行啟動因子調參。
+- **`run_workflow_experiment.py`**: **雙階段實驗自動化控制台（沙盒時光機）**。一鍵完成模式 A（研究期，截斷 2025-08-01，包含因子最佳化、模型 A 訓練、訊號穩定性診斷、歷史風控調參、樣本外 OOS 回測）與模式 B（生產推理期，全數據重訓最新模型、全週期風控參數優化、全週期回測、推理預測）的所有研發流程。具備 `try...finally` 異常安全機制與 `Ctrl+C` 子進程主動關閉功能，100% 還原主系統，並另存各模式參數與績效對比報告。
+- **`run_workflow_experiment_guide.md`**: **雙階段自動化實驗指南**。詳細記述實驗流程、CLI 參數、腳本調用關係、數據流向與參數套用發布行動指南。
 - **安全性與敏感資料防護**：
   - **`rclone.exe` 執行檔**：需另行下載，可放置於虛擬環境的 `venv/Scripts/` 目錄中以方便調用。
   - **敏感金鑰防外洩**：任何包含 rclone 登入 OAuth Token 的 `config`、`.config` 資料夾或 `rclone.conf` 設定檔，**屬於極度敏感金鑰，已列入 Git 與 AI 忽略清單，絕對禁止提交與外洩**。

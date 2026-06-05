@@ -151,6 +151,8 @@ Stock/
 ├── Auto_RUN.py                 # 一鍵順序執行全流程主控腳本
 ├── auto_pipeline.py            # 一鍵式自動化流水線入口
 ├── config.py                   # 系統中央控制面板
+├── run_workflow_experiment.py  # 一鍵全自動雙階段實驗主控腳本
+├── run_workflow_experiment_guide.md # 實驗主控台使用說明與架構指南
 ├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
 ├── Stocks.txt                  # 自選股 / 實質持倉清單
 ├── best_factors.json           # 最佳化技術指標參數存檔
