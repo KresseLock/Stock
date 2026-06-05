@@ -227,6 +227,52 @@ python scripts/scraper.py -fc        # 重新更新全市場產業分類對照�
 python scripts/scraper.py -c         # 掃描並刪除損毀或異常的歷史資料
 ```
 
+#### 方案丁：實戰級量化模擬交易器 (trading_sim.py)
+
+用於在指定歷史區間中進行 **Out-of-Sample（樣本外）資金與交易模擬**。本回測器完整模擬了真實的台股 T+2 交割機制（細分購買力與銀行實質餘額）、手續費與稅金、個股停損、移動止盈與大盤避險紅綠燈關卡。
+
+預設參數會自動由 `config.py` 讀取，但您可以透過 CLI 參數動態覆蓋進行參數實驗：
+
+```powershell
+# 1. 以預設參數執行模擬 (預設區間: 2026-01-01 ~ 2026-06-30，初始資金: 100萬，最大持股: 5檔)
+python trading_sim.py
+
+# 2. 指定回測期間、初始資金與最大持倉上限
+python trading_sim.py -s 2026-01-02 -e 2026-05-30 -c 2000000 -m 8
+
+# 3. 實驗不同的風控與策略參數 (動態覆蓋 config.py 的預設參數)
+python trading_sim.py --buy_threshold 12.0 --stop_loss -7.0 --panic_ma5 -0.008 --panic_breadth 0.25
+```
+
+**參數選項說明：**
+- `-s, --start <YYYY-MM-DD>`：回測起始日期（預設值為 `SIM_DEFAULT_START`）
+- `-e, --end <YYYY-MM-DD>`：回測結束日期（預設值為 `SIM_DEFAULT_END`）
+- `-c, --capital <整數>`：回測初始資金（預設值為 `SIM_DEFAULT_CAPITAL`）
+- `-m, --max_pos <整數>`：最大持倉上限檔數（預設值為 `MAX_POSITIONS`）
+- `--panic_ma5 <浮點數>`：大盤 5 日滾動平均報酬率避險門檻（例如 `-0.010` 代表 -1.0%）
+- `--panic_breadth <浮點數>`：全市場上漲比例避險門檻（例如 `0.30` 代表 30%）
+- `--buy_threshold <浮點數>`：Day1 多空淨分數買入門檻百分比（例如 `10.0`）
+- `--stop_loss <浮點數>`：個股固定停損百分比（例如 `-8.0`）
+- `--ts_activation <浮點數>`：移動止盈啟動門檻百分比（例如 `10.0`）
+- `--ts_pullback <浮點數>`：移動止盈回撤門檻百分比（例如 `-6.0`）
+
+---
+
+#### 方案戊：時光機樣本外單日回測器 (scripts/backtest.py)
+
+針對**單一基準日期 (D)** 的走步驗證（Walk-forward Validation）工具。它會將時間軸限制在日期 D 之前（防止前視偏差），自動訓練 Day1~Day3 的 LightGBM 分類模型，並直接在 D 之後的 3 個交易日上執行預測，輸出真實命中率。
+
+```powershell
+# 語法：python scripts/backtest.py <YYYYMMDD 或 YYYY-MM-DD>
+python scripts/backtest.py 2025-08-01
+```
+
+**回測產出說明：**
+- 輸出 Day1 ~ Day3 全市場預測方向勝率與嚴選 Top-20 (或 Top-3) 強勢股的命中率與平均獲利。
+- 自動加載 `Stocks.txt` 自選股，將其在該基準日產生的多空分數、預測漲跌、實際漲跌與方向預測結果完整以表格對比印出。
+
+---
+
 > [!WARNING]
 > #### ☁️ rclone 雲端備份注意事項
 >
