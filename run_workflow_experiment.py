@@ -166,6 +166,130 @@ def parse_sim_output(stdout_str):
     return ret_val, mdd_val
 
 
+def fmt_pct(val):
+    if val is None or val == "N/A":
+        return "未完成"
+    try:
+        return f"{float(val):+.2f}%"
+    except (ValueError, TypeError):
+        return str(val)
+
+
+def fmt_mdd(val):
+    if val is None or val == "N/A":
+        return "未完成"
+    try:
+        return f"-{float(val):.2f}%"
+    except (ValueError, TypeError):
+        return str(val)
+
+
+def fmt_calmar(ret, mdd):
+    if ret is None or mdd is None or ret == "N/A" or mdd == "N/A":
+        return "未完成"
+    try:
+        r = float(ret)
+        m = float(mdd)
+        if m == 0:
+            return "N/A"
+        return f"{r / m:.2f}"
+    except (ValueError, TypeError):
+        return "未完成"
+
+
+def fmt_param_val(val, suffix=""):
+    if val is None or val == "N/A":
+        return "未完成"
+    return f"{val}{suffix}"
+
+
+def write_experiment_report(res):
+    """將實驗結果對比寫入 Markdown 報告"""
+    report_dir = os.path.join(BASE_DIR, "reports")
+    os.makedirs(report_dir, exist_ok=True)
+    report_path = os.path.join(report_dir, "workflow_experiment_report.md")
+    
+    mode_a_p = res["mode_a"].get("params", {})
+    mode_b_p = res["mode_b"].get("params", {})
+    args_info = res["args"]
+    
+    report_content = f"""# 🇹🇼 台灣股市量化交易系統 ─ 模式 A 與 模式 B 雙階段自動化實驗報告
+
+本報告由自動化實驗腳本 `run_workflow_experiment.py` 於 {time.strftime('%Y-%m-%d %H:%M:%S')} 自動生成。本實驗旨在對比研發研究（模式 A）與實盤生產（模式 B）的表現，並提供風控參數對比。
+
+---
+
+## 📋 實驗設定 (Experiment Configurations)
+
+*   **因子最佳化搜尋設定 (Factor Search)**：最大輪數: `{args_info["factor_trials"]}` 輪 | 早停設定: `{args_info["factor_early_stopping"]}` 輪
+*   **風控最佳化搜尋設定 (Trading Search)**：最大輪數: `{args_info["trading_trials"]}` 輪 | 早停設定: `{args_info["trading_early_stopping"]}` 輪
+*   **模擬初始資金 (Capital)**：`{args_info["capital"]:,}` 元
+*   **模式 A 執行因子優化**：`{"否 (沿用歷史因子)" if args_info["skip_factor_opt"] else "是"}`
+
+---
+
+## 📊 關鍵績效指標對比 (Key Metrics)
+
+| 指標 / 模式 | 🟢 模式 A (研究模式 - 乾淨樣本外) | 🔵 模式 B (實盤模式 - 全數據包含牛市) |
+| :--- | :--- | :--- |
+| **訓練與測試分界** | 截斷於 2025-08-01 (樣本外測試) | `None` (每日滾動重訓至最新) |
+| **樣本內 (IS) 因子 RankIC** | `{res["mode_a"].get("is_rankic", "未完成")}` | 沿用模式 A 因子 |
+| **樣本外 (OOS) 牛市 RankIC**| `{res["mode_a"].get("oos_bull_rankic", "未完成")}` | N/A (模型已納入牛市訓練) |
+| **回測測試區間** | 2025-08-02 ~ 2026-06-05 (樣本外) | 2023-01-01 ~ 2026-06-05 (全週期) |
+| **回測累計報酬率 (%)** | `{fmt_pct(res["mode_a"].get("oos_return"))}` | `{fmt_pct(res["mode_b"].get("full_return"))}` |
+| **回測最大回撤 MDD (%)** | `{fmt_mdd(res["mode_a"].get("oos_mdd"))}` | `{fmt_mdd(res["mode_b"].get("full_mdd"))}` |
+| **Calmar 比率 (報酬/MDD)** | `{fmt_calmar(res["mode_a"].get("oos_return"), res["mode_a"].get("oos_mdd"))}` | `{fmt_calmar(res["mode_b"].get("full_return"), res["mode_b"].get("full_mdd"))}` |
+
+*註：模式 A 的回測區間屬於完全未見過的樣本外 (OOS) 測試集，代表策略在全新超級牛市下的防禦與獲利能力。模式 B 的回測區間為包含牛市與熊市的全週期回測，展現策略的長線穩健性。*
+
+---
+
+## ⚙️ 最佳化風控策略參數對比 (Optimized Trading Params)
+
+本部分對比 Optuna 在兩種模式下搜尋出的最佳交易參數。**這揭示了牛市與熊市/震盪市下，最優風控配置的結構性漂移：**
+
+| 風控參數 | 🟢 模式 A (未見過牛市的最佳化) | 🔵 模式 B (包含牛市的最佳化) | 參數說明 |
+| :--- | :--- | :--- | :--- |
+| **買入門檻 (`buy_threshold`)** | `{fmt_param_val(mode_a_p.get("buy_threshold"), "%")}` | `{fmt_param_val(mode_b_p.get("buy_threshold"), "%")}` | D1 多空預測分數觸發買進的百分比。 |
+| **個股停損 (`stop_loss`)** | `{fmt_param_val(mode_a_p.get("stop_loss"), "%")}` | `{fmt_param_val(mode_b_p.get("stop_loss"), "%")}` | 買入後的個股固定停損線。 |
+| **避險門檻 (`panic_ma5`)** | `{fmt_param_val(mode_a_p.get("panic_ma5"))}` | `{fmt_param_val(mode_b_p.get("panic_ma5"))}` | 大盤 5 日平均回報低於此值觸發避險紅燈。 |
+| **避險門檻 (`panic_breadth`)**| `{fmt_param_val(mode_a_p.get("panic_breadth"))}` | `{fmt_param_val(mode_b_p.get("panic_breadth"))}` | 全市場上漲比例低於此值觸發避險紅燈。 |
+| **移動止盈啟動 (`ts_activation`)**| `{fmt_param_val(mode_a_p.get("ts_activation"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_activation"), "%")}` | 個股利潤達到此值開啟移動追蹤止盈。 |
+| **移動止盈回撤 (`ts_pullback`)** | `{fmt_param_val(mode_a_p.get("ts_pullback"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_pullback"), "%")}` | 移動止盈開啟後自高點拉回多少執行停利。 |
+
+### 💡 研究員核心分析與結論：
+1. **為什麼模式 A 與模式 B 的最優風控參數存在差異？**
+   * 模式 A 優化時，Optuna 看不到 2025-08-01 之後的兩萬點到四萬點大牛市，因此其優化出的風控引數更加傾向於**「防守震盪與熊市」**。
+   * 模式 B 將 2025-08 ~ 2026-06 的超級牛市納入優化眼界。在強多頭市場中，大盤避險紅燈門檻（`panic_breadth` 和 `panic_ma5`）通常會被優化得更加寬容，個股停損（`stop_loss`）與移動止盈回撤（`ts_pullback`）也會更寬，以適應牛市個股的劇烈波動，防止被輕易洗出場，最大化捕捉趨勢利潤。
+2. **策略健康度判斷：**
+   * 若模式 A 在 OOS 區間的 `oos_return` 表現良好且 `oos_mdd` 受控，證明策略具備極強的**樣本外泛化能力**，非過擬合。
+   * 正式實盤上線時，推薦**以模式 B 訓練出的最新模型**作為預測大腦（擁有最新特徵），並套用**模式 B 產出的 `best_trading_params_mode_b.json` 風控參數**進行每日交易，以在當下大牛市中獲得最契合市場波動的收益。
+
+---
+"""
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(report_content)
+    print(f"  [進度更新] 實驗分析報告已寫入: {report_path}")
+
+
+def save_progress(results):
+    """保存當前實驗進度 JSON 並重新生成 Markdown 報告"""
+    report_dir = os.path.join(BASE_DIR, "reports")
+    os.makedirs(report_dir, exist_ok=True)
+    
+    # 1. 寫入 JSON 檔
+    progress_json_path = os.path.join(report_dir, "workflow_experiment_results.json")
+    try:
+        with open(progress_json_path, "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+        print(f"  [進度更新] 實驗結果 JSON 已存檔: {progress_json_path}")
+    except Exception as e:
+        print(f"  [警告] 儲存進度 JSON 失敗: {e}")
+        
+    # 2. 寫入 Markdown 報告
+    write_experiment_report(results)
+
+
 def main():
     parser = argparse.ArgumentParser(description="模式 A & 模式 B 自動化量化工作流實驗器")
     parser.add_argument("-f", "--factor_trials", type=int, default=FACTOR_TRIALS, help="因子調參最大搜尋輪數")
@@ -174,6 +298,7 @@ def main():
     parser.add_argument("-te", "--trading_early_stopping", type=str, default=str(TRADING_EARLY_STOPPING), help="風控調參早停輪數 (None 代表不啟用)")
     parser.add_argument("-c", "--capital", type=int, default=CAPITAL, help="回測與優化的初始資金")
     parser.add_argument("--skip_factor_opt", action="store_true", help="模式 A 跳過因子優化，直接沿用現有 best_factors.json")
+    parser.add_argument("--fresh", action="store_true", help="強制重新執行所有步驟，忽略現有的 checkpoint 與中間 JSON 檔")
     args = parser.parse_args()
     
     # 參數標準化 (處理 'None')
@@ -187,10 +312,26 @@ def main():
     print(f"  * 風控調參 (Trading): 最大 {args.trading_trials} 輪 | 早停門檻: {trad_es_str} 輪")
     print(f"  * 初始模擬資金 (Capital)       : {args.capital:,} 元")
     print(f"  * 模式 A 執行因子最佳化          : {'否 (沿用現有)' if args.skip_factor_opt else '是'}")
+    print(f"  * 續傳 / 復原機制啟動          : {'否 (強制重新執行)' if args.fresh else '是 (優先讀取 Checkpoints)'}")
     print("=" * 80)
     
     # ── 1. 安全備份 ────────────────────────────────────────────────────────
     print("\n[步驟 1/4] 安全備份設定與資料檔...")
+    
+    # 檢查是否有上次殘留的備份，有的話先還原，避免覆蓋正確的備份
+    if os.path.exists(CONFIG_BAK):
+        print("  [還原] 偵測到上次中斷留下的 config.py.workflow.bak，正在自動還原原始設定檔...")
+        shutil.copy2(CONFIG_BAK, CONFIG_PATH)
+        
+    if os.path.exists(BEST_FACTORS_BAK):
+        print("  [還原] 偵測到上次中斷留下的 best_factors.json.workflow.bak，正在自動還原...")
+        shutil.copy2(BEST_FACTORS_BAK, BEST_FACTORS_PATH)
+        
+    if os.path.exists(BEST_TRADING_PARAMS_BAK):
+        print("  [還原] 偵測到上次中斷留下的 best_trading_params.json.workflow.bak，正在自動還原...")
+        shutil.copy2(BEST_TRADING_PARAMS_BAK, BEST_TRADING_PARAMS_PATH)
+
+    # 現在可以安全進行備份
     if os.path.exists(CONFIG_PATH):
         shutil.copy2(CONFIG_PATH, CONFIG_BAK)
         print(f"  已備份 config.py -> config.py.workflow.bak")
@@ -224,6 +365,24 @@ def main():
         "mode_b": {}
     }
     
+    # ── 1.1 讀取現有實驗進度 ──────────────────────────────────────────────
+    progress_json_path = os.path.join(BASE_DIR, "reports", "workflow_experiment_results.json")
+    if os.path.exists(progress_json_path) and not args.fresh:
+        print(f"\n[續傳/復原] 偵測到已有實驗進度檔 {progress_json_path}，正在載入上次進度...")
+        try:
+            with open(progress_json_path, "r", encoding="utf-8") as f:
+                loaded_results = json.load(f)
+                # 合併 args_info 以外的進度
+                if "mode_a" in loaded_results:
+                    results["mode_a"] = loaded_results["mode_a"]
+                if "mode_b" in loaded_results:
+                    results["mode_b"] = loaded_results["mode_b"]
+                print("  已載入的進度數據:")
+                print(f"    模式 A 已完成: {list(results['mode_a'].keys())}")
+                print(f"    模式 B 已完成: {list(results['mode_b'].keys())}")
+        except Exception as e:
+            print(f"  [警告] 讀取進度檔失敗: {e}，將從頭開始執行。")
+
     try:
         # ── 2. 模式 A 流程 (研究與策略驗證期) ──────────────────────────────────
         print("\n" + "=" * 80)
@@ -236,141 +395,213 @@ def main():
         update_config_var("OPTIMIZATION_TRIALS", str(args.factor_trials))
         update_config_var("EARLY_STOPPING_ROUNDS", fact_es_str)
         
-        # A2. 如果不沿用因子，先移開現有的 best_factors.json，讓 Optuna 重頭搜尋
-        if not args.skip_factor_opt and os.path.exists(BEST_FACTORS_PATH):
-            os.remove(BEST_FACTORS_PATH)
-            print("  已暫時移除 best_factors.json，以便進行全新的模式 A 因子搜尋")
-            
-        # A3. 因子優化與特徵重建
-        if not args.skip_factor_opt:
-            run_cmd([sys.executable, "auto_pipeline.py", "-s", "o"], "模式 A：因子技術指標最佳化")
-            
-        run_cmd([sys.executable, "auto_pipeline.py", "-s", "f"], "模式 A：重建特徵矩陣 (截斷 2025-08-01)")
+        # Checkpoint: 檢查是否已有備份的最佳因子
+        factor_mode_a_saved = os.path.join(BASE_DIR, "best_factors_mode_a.json")
+        has_checkpoint_factor = os.path.exists(factor_mode_a_saved) and not args.fresh
         
-        # A4. 訓練模型 A (僅使用 2025-08-01 以前的數據)
-        run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], "模式 A：訓練 LightGBM 模型 (僅限樣本內)")
+        if has_checkpoint_factor:
+            print(f"\n[續傳/復原] 偵測到已存在的模式 A 最佳因子檔 {factor_mode_a_saved}，直接載入並跳過優化...")
+            shutil.copy2(factor_mode_a_saved, BEST_FACTORS_PATH)
+        else:
+            # A2. 如果不沿用因子，先移開現有的 best_factors.json，讓 Optuna 重頭搜尋
+            if not args.skip_factor_opt:
+                if os.path.exists(BEST_FACTORS_PATH):
+                    os.remove(BEST_FACTORS_PATH)
+                    print("  已暫時移除 best_factors.json，以便進行全新的模式 A 因子搜尋")
+                
+                # A3. 因子優化
+                run_cmd([sys.executable, "auto_pipeline.py", "-s", "o"], "模式 A：因子技術指標最佳化")
+                if os.path.exists(BEST_FACTORS_PATH):
+                    shutil.copy2(BEST_FACTORS_PATH, factor_mode_a_saved)
+                    print(f"  已將模式 A 最佳因子另存至 best_factors_mode_a.json")
+            else:
+                print("  [設定] 跳過模式 A 因子優化 (沿用現有因子)")
+                if os.path.exists(BEST_FACTORS_PATH):
+                    shutil.copy2(BEST_FACTORS_PATH, factor_mode_a_saved)
+
+        # A4 & A5 & A5.1. 訓練模型 A & 訊號診斷
+        stability_summary_path = os.path.join(BASE_DIR, "reports", "mode_a_regime_stability_report.txt")
+        has_checkpoint_stability = os.path.exists(stability_summary_path) and not args.fresh
         
-        # A5. 執行 OOS 訊號診斷 (analyze_regime_stability.py)
-        run_cmd([sys.executable, "scripts/analyze_regime_stability.py"], "模式 A：樣本外 (OOS) 訊號健康與特徵漂移診斷")
-        
-        # 讀取穩定性診斷報告
-        stability_summary = "找不到報告"
-        if os.path.exists(STABILITY_REPORT_PATH):
-            with open(STABILITY_REPORT_PATH, "r", encoding="utf-8") as rf:
+        if has_checkpoint_stability:
+            print(f"\n[續傳/復原] 偵測到已存在的模式 A 診斷報告，將直接讀取並跳過模型 A 訓練與診斷...")
+            with open(stability_summary_path, "r", encoding="utf-8") as rf:
                 stability_summary = rf.read()
-            # 複製一份備份
-            shutil.copy2(STABILITY_REPORT_PATH, os.path.join(BASE_DIR, "reports", "mode_a_regime_stability_report.txt"))
-            print(f"  已將模式 A 診斷報告另存至 reports/mode_a_regime_stability_report.txt")
+        else:
+            # A3.2. 重建特徵矩陣
+            run_cmd([sys.executable, "auto_pipeline.py", "-s", "f"], "模式 A：重建特徵矩陣 (截斷 2025-08-01)")
             
+            # A4. 訓練模型 A
+            run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], "模式 A：訓練 LightGBM 模型 (僅限樣本內)")
+            
+            # A5. 執行 OOS 訊號診斷
+            run_cmd([sys.executable, "scripts/analyze_regime_stability.py"], "模式 A：樣本外 (OOS) 訊號健康與特徵漂移診斷")
+            
+            stability_summary = "找不到報告"
+            if os.path.exists(STABILITY_REPORT_PATH):
+                with open(STABILITY_REPORT_PATH, "r", encoding="utf-8") as rf:
+                    stability_summary = rf.read()
+                shutil.copy2(STABILITY_REPORT_PATH, stability_summary_path)
+                print(f"  已將模式 A 診斷報告另存至 reports/mode_a_regime_stability_report.txt")
+        
         # 解析關鍵 RankIC 指標
         ic_oos_bull = re.search(r"OOS Bull \(.+?\) RankIC:\s*([+-]?\d+\.?\d*)", stability_summary)
         ic_is_all = re.search(r"IS All \(.+?\) RankIC:\s*([+-]?\d+\.?\d*)", stability_summary)
         
         results["mode_a"]["is_rankic"] = ic_is_all.group(1) if ic_is_all else "N/A"
         results["mode_a"]["oos_bull_rankic"] = ic_oos_bull.group(1) if ic_oos_bull else "N/A"
+        save_progress(results)
         
-        # A6. 移除舊的交易參數以防干擾風控優化
-        if os.path.exists(BEST_TRADING_PARAMS_PATH):
-            os.remove(BEST_TRADING_PARAMS_PATH)
-            
-        # A7. 更新 config 中的早停設定為風控專用
-        update_config_var("EARLY_STOPPING_ROUNDS", trad_es_str)
+        # A8. 執行風控參數最佳化
+        trading_mode_a_saved = os.path.join(BASE_DIR, "best_trading_params_mode_a.json")
+        has_checkpoint_trading_a = os.path.exists(trading_mode_a_saved) and not args.fresh
         
-        # A8. 執行風控參數最佳化 (鎖定 2025-08-01 以前，嚴禁偷看牛市)
-        run_cmd([
-            sys.executable, "scripts/optimize_trading_params.py",
-            "-t", str(args.trading_trials),
-            "-s", "2021-01-02",
-            "-e", "2025-08-01",
-            "-c", str(args.capital)
-        ], "模式 A：交易與風控參數最佳化 (Optuna)")
-        
-        # 讀取模式 A 風控優化結果
         mode_a_params = {}
-        if os.path.exists(BEST_TRADING_PARAMS_PATH):
-            with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:
+        if has_checkpoint_trading_a:
+            print(f"\n[續傳/復原] 偵測到已存在的模式 A 風控參數 {trading_mode_a_saved}，直接載入並跳過優化...")
+            shutil.copy2(trading_mode_a_saved, BEST_TRADING_PARAMS_PATH)
+            with open(trading_mode_a_saved, "r", encoding="utf-8") as f:
                 mode_a_data = json.load(f)
                 mode_a_params = mode_a_data.get("best_params", {})
-            # 備份模式 A 的風控參數
-            shutil.copy2(BEST_TRADING_PARAMS_PATH, os.path.join(BASE_DIR, "best_trading_params_mode_a.json"))
-            print(f"  已將模式 A 風控參數另存至 best_trading_params_mode_a.json")
+        else:
+            # 移除舊的交易參數以防干擾風控優化
+            if os.path.exists(BEST_TRADING_PARAMS_PATH):
+                os.remove(BEST_TRADING_PARAMS_PATH)
+                
+            # 更新 config 中的早停設定為風控專用
+            update_config_var("EARLY_STOPPING_ROUNDS", trad_es_str)
             
+            run_cmd([
+                sys.executable, "scripts/optimize_trading_params.py",
+                "-t", str(args.trading_trials),
+                "-s", "2021-01-02",
+                "-e", "2025-08-01",
+                "-c", str(args.capital)
+            ], "模式 A：交易與風控參數最佳化 (Optuna)")
+            
+            if os.path.exists(BEST_TRADING_PARAMS_PATH):
+                with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:
+                    mode_a_data = json.load(f)
+                    mode_a_params = mode_a_data.get("best_params", {})
+                shutil.copy2(BEST_TRADING_PARAMS_PATH, trading_mode_a_saved)
+                print(f"  已將模式 A 風控參數另存至 best_trading_params_mode_a.json")
+                
         results["mode_a"]["params"] = mode_a_params
+        save_progress(results)
         
         # A9. 在樣本外超級牛市進行模擬交易 (2025-08-02 ~ 2026-06-05)
-        # 注意：此時 config.py 中的 BACKTEST_DATE 仍為 "20250801"，所以 trading_sim.py 載入的是 Model A (訓練截至 2025-08-01)
-        sim_stdout, _ = run_cmd([
-            sys.executable, "trading_sim.py",
-            "-s", "2025-08-02",
-            "-e", "2026-06-05",
-            "-c", str(args.capital)
-        ], "模式 A：樣本外 (OOS) 超級牛市模擬交易回測 (Model A)")
+        has_checkpoint_sim_a = ("oos_return" in results["mode_a"]) and ("oos_mdd" in results["mode_a"]) and not args.fresh
         
-        ret_a, mdd_a = parse_sim_output(sim_stdout)
-        results["mode_a"]["oos_return"] = ret_a
-        results["mode_a"]["oos_mdd"] = mdd_a
-        
+        if has_checkpoint_sim_a:
+            print(f"\n[續傳/復原] 偵測到已存在的模式 A 模擬交易結果，跳過模擬交易回測...")
+        else:
+            # 確保 BACKTEST_DATE 設為 "20250801" 以加載模型 A
+            update_config_var("BACKTEST_DATE", '"20250801"')
+            
+            sim_stdout, _ = run_cmd([
+                sys.executable, "trading_sim.py",
+                "-s", "2025-08-02",
+                "-e", "2026-06-05",
+                "-c", str(args.capital)
+            ], "模式 A：樣本外 (OOS) 超級牛市模擬交易回測 (Model A)")
+            
+            ret_a, mdd_a = parse_sim_output(sim_stdout)
+            results["mode_a"]["oos_return"] = ret_a
+            results["mode_a"]["oos_mdd"] = mdd_a
+            save_progress(results)
+            
         # ── 3. 模式 B 流程 (實盤生產推理期) ──────────────────────────────────
         print("\n" + "=" * 80)
         print("   🔵 進入 [模式 B]：實盤生產推理期 (動態滾動重訓)")
         print("=" * 80)
         
-        # B1. 更新 config 變數
-        update_config_var("BACKTEST_DATE", "None")
-        update_config_var("RUN_OPTIMIZATION", "False") # 沿用模式 A 的最佳因子
+        # B6. 執行全週期風控參數優化
+        trading_mode_b_saved = os.path.join(BASE_DIR, "best_trading_params_mode_b.json")
+        has_checkpoint_trading_b = os.path.exists(trading_mode_b_saved) and not args.fresh
         
-        # B2. 重建特徵工程 (動態計算一年前的交易日邊界)
-        run_cmd([sys.executable, "auto_pipeline.py", "-s", "f"], "模式 B：重建特徵工程 (全數據覆蓋)")
-        
-        # B3. 重訓模型 B (包含牛市數據)
-        run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], "模式 B：重訓 LightGBM 模型 (包含超級牛市)")
-        
-        # B4. 移除模式 A 的最佳交易參數以防干擾模式 B 優化
-        if os.path.exists(BEST_TRADING_PARAMS_PATH):
-            os.remove(BEST_TRADING_PARAMS_PATH)
-            
-        # B5. 更新 config 中的早停設定為風控專用
-        update_config_var("EARLY_STOPPING_ROUNDS", trad_es_str)
-        
-        # B6. 執行全週期風控參數優化 (覆蓋整個牛市)
-        run_cmd([
-            sys.executable, "scripts/optimize_trading_params.py",
-            "-t", str(args.trading_trials),
-            "-s", "2023-01-01",
-            "-e", "2026-06-01",
-            "-c", str(args.capital)
-        ], "模式 B：交易與風控參數全週期最佳化 (Optuna)")
-        
-        # 讀取模式 B 風控優化結果
         mode_b_params = {}
-        if os.path.exists(BEST_TRADING_PARAMS_PATH):
-            with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:
+        if has_checkpoint_trading_b:
+            print(f"\n[續傳/復原] 偵測到已存在的模式 B 風控參數 {trading_mode_b_saved}，直接載入並跳過優化與模型重訓...")
+            shutil.copy2(trading_mode_b_saved, BEST_TRADING_PARAMS_PATH)
+            with open(trading_mode_b_saved, "r", encoding="utf-8") as f:
                 mode_b_data = json.load(f)
                 mode_b_params = mode_b_data.get("best_params", {})
-            # 備份模式 B 的風控參數
-            shutil.copy2(BEST_TRADING_PARAMS_PATH, os.path.join(BASE_DIR, "best_trading_params_mode_b.json"))
-            print(f"  已將模式 B 風控參數另存至 best_trading_params_mode_b.json")
+        else:
+            # B1. 更新 config 變數
+            update_config_var("BACKTEST_DATE", "None")
+            update_config_var("RUN_OPTIMIZATION", "False") # 沿用模式 A 的最佳因子
             
+            # B2. 重建特徵工程
+            run_cmd([sys.executable, "auto_pipeline.py", "-s", "f"], "模式 B：重建特徵工程 (全數據覆蓋)")
+            
+            # B3. 重訓模型 B (包含牛市數據)
+            run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], "模式 B：重訓 LightGBM 模型 (包含超級牛市)")
+            
+            # B4. 移除模式 A 的最佳交易參數以防干擾模式 B 優化
+            if os.path.exists(BEST_TRADING_PARAMS_PATH):
+                os.remove(BEST_TRADING_PARAMS_PATH)
+                
+            # B5. 更新 config 中的早停設定為風控專用
+            update_config_var("EARLY_STOPPING_ROUNDS", trad_es_str)
+            
+            # B6. 執行全週期風控參數優化 (覆蓋整個牛市)
+            run_cmd([
+                sys.executable, "scripts/optimize_trading_params.py",
+                "-t", str(args.trading_trials),
+                "-s", "2023-01-01",
+                "-e", "2026-06-01",
+                "-c", str(args.capital)
+            ], "模式 B：交易與風控參數全週期最佳化 (Optuna)")
+            
+            if os.path.exists(BEST_TRADING_PARAMS_PATH):
+                with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:
+                    mode_b_data = json.load(f)
+                    mode_b_params = mode_b_data.get("best_params", {})
+                shutil.copy2(BEST_TRADING_PARAMS_PATH, trading_mode_b_saved)
+                print(f"  已將模式 B 風控參數另存至 best_trading_params_mode_b.json")
+                
         results["mode_b"]["params"] = mode_b_params
+        save_progress(results)
         
         # B7. 執行全週期模擬交易回測 (2023-01-01 ~ 2026-06-05)
-        # 注意：此時 config.py 的 BACKTEST_DATE 為 None，且載入的是 Model B (最新重訓模型)
-        sim_stdout_b, _ = run_cmd([
-            sys.executable, "trading_sim.py",
-            "-s", "2023-01-01",
-            "-e", "2026-06-05",
-            "-c", str(args.capital)
-        ], "模式 B：全週期 (含大牛市) 模擬交易回測 (Model B)")
+        has_checkpoint_sim_b = ("full_return" in results["mode_b"]) and ("full_mdd" in results["mode_b"]) and not args.fresh
         
-        ret_b, mdd_b = parse_sim_output(sim_stdout_b)
-        results["mode_b"]["full_return"] = ret_b
-        results["mode_b"]["full_mdd"] = mdd_b
-        
+        if has_checkpoint_sim_b:
+            print(f"\n[續傳/復原] 偵測到已存在的模式 B 模擬交易結果，跳過模擬交易回測...")
+        else:
+            # 確保 config 變數為 Mode B
+            update_config_var("BACKTEST_DATE", "None")
+            
+            sim_stdout_b, _ = run_cmd([
+                sys.executable, "trading_sim.py",
+                "-s", "2023-01-01",
+                "-e", "2026-06-05",
+                "-c", str(args.capital)
+            ], "模式 B：全週期 (含大牛市) 模擬交易回測 (Model B)")
+            
+            ret_b, mdd_b = parse_sim_output(sim_stdout_b)
+            results["mode_b"]["full_return"] = ret_b
+            results["mode_b"]["full_mdd"] = mdd_b
+            save_progress(results)
+            
         # B8. 執行推理預測，產生明天的買賣建議
-        run_cmd([sys.executable, "auto_pipeline.py", "-s", "i"], "模式 B：模型推理預測，產生明日實盤下單建議")
+        has_checkpoint_infer_b = results["mode_b"].get("inference_completed") and not args.fresh
         
-        # ── 4. 產出實驗報告 ──────────────────────────────────────────────────
-        write_experiment_report(results)
+        if has_checkpoint_infer_b:
+            print(f"\n[續傳/復原] 偵測到已完成模式 B 推理預測，跳過推理...")
+        else:
+            # 確保 config 變數為 Mode B
+            update_config_var("BACKTEST_DATE", "None")
+            
+            run_cmd([sys.executable, "auto_pipeline.py", "-s", "i"], "模式 B：模型推理預測，產生明日實盤下單建議")
+            results["mode_b"]["inference_completed"] = True
+            save_progress(results)
+            
+        # ── 4. 產出最終實驗報告 ──────────────────────────────────────────────
+        print("\n" + "=" * 80)
+        print("   🎉 全自動化實驗流程順利完成！對比分析報告已輸出。 🎉")
+        print("   報告位置: reports/workflow_experiment_report.md")
+        print("=" * 80 + "\n")
         
     except Exception as ex:
         print(f"\n[嚴重異常] 實驗被異常中斷: {ex}")
@@ -394,80 +625,6 @@ def main():
             shutil.copy2(BEST_TRADING_PARAMS_BAK, BEST_TRADING_PARAMS_PATH)
             os.remove(BEST_TRADING_PARAMS_BAK)
             print("  已還原 best_trading_params.json 并清理臨時備份")
-            
-    print("\n" + "=" * 80)
-    print("   🎉 全自動化實驗流程順利完成！對比分析報告已輸出。 🎉")
-    print("   報告位置: reports/workflow_experiment_report.md")
-    print("=" * 80 + "\n")
-
-
-def write_experiment_report(res):
-    """將實驗結果對比寫入 Markdown 報告"""
-    report_dir = os.path.join(BASE_DIR, "reports")
-    os.makedirs(report_dir, exist_ok=True)
-    report_path = os.path.join(report_dir, "workflow_experiment_report.md")
-    
-    mode_a_p = res["mode_a"].get("params", {})
-    mode_b_p = res["mode_b"].get("params", {})
-    args_info = res["args"]
-    
-    report_content = f"""# 🇹🇼 台灣股市量化交易系統 ─ 模式 A 與 模式 B 雙階段自動化實驗報告
-
-本報告由自動化實驗腳本 `run_workflow_experiment.py` 於 {time.strftime('%Y-%m-%d %H:%M:%S')} 自動生成。本實驗旨在對比研發研究（模式 A）與實盤生產（模式 B）的表現，並提供風控參數對比。
-
----
-
-## 📋 實驗設定 (Experiment Configurations)
-
-*   **因子最佳化搜尋設定 (Factor Search)**：最大輪數: `{args_info["factor_trials"]}` 輪 | 早停設定: `{args_info["factor_early_stopping"]}` 輪
-*   **風控最佳化搜尋設定 (Trading Search)**：最大輪數: `{args_info["trading_trials"]}` 輪 | 早停設定: `{args_info["trading_early_stopping"]}` 輪
-*   **模擬初始資金 (Capital)**：`{args_info["capital"]:,}` 元
-*   **模式 A 執行因子優化**：`{"否 (沿用歷史因子)" if args_info["skip_factor_opt"] else "是"}`
-
----
-
-## 📊 關鍵績效指標對比 (Key Metrics)
-
-| 指標 / 模式 | 🟢 模式 A (研究模式 - 乾淨樣本外) | 🔵 模式 B (實盤模式 - 全數據包含牛市) |
-| :--- | :--- | :--- |
-| **訓練與測試分界** | 截斷於 2025-08-01 (樣本外測試) | `None` (每日滾動重訓至最新) |
-| **樣本內 (IS) 因子 RankIC** | `{res["mode_a"].get("is_rankic", "N/A")}` | 沿用模式 A 因子 |
-| **樣本外 (OOS) 牛市 RankIC**| `{res["mode_a"].get("oos_bull_rankic", "N/A")}` | N/A (模型已納入牛市訓練) |
-| **回測測試區間** | 2025-08-02 ~ 2026-06-05 (樣本外) | 2023-01-01 ~ 2026-06-05 (全週期) |
-| **回測累計報酬率 (%)** | `{res["mode_a"].get("oos_return", 0.0):+.2f}%` | `{res["mode_b"].get("full_return", 0.0):+.2f}%` |
-| **回測最大回撤 MDD (%)** | `-{res["mode_a"].get("oos_mdd", 0.0):.2f}%` | `-{res["mode_b"].get("full_mdd", 0.0):.2f}%` |
-| **Calmar 比率 (報酬/MDD)** | `{res["mode_a"].get("oos_return", 0.0) / (res["mode_a"].get("oos_mdd", 1.0) or 1.0):.2f}` | `{res["mode_b"].get("full_return", 0.0) / (res["mode_b"].get("full_mdd", 1.0) or 1.0):.2f}` |
-
-*註：模式 A 的回測區間屬於完全未見過的樣本外 (OOS) 測試集，代表策略在全新超級牛市下的防禦與獲利能力。模式 B 的回測區間為包含牛市與熊市的全週期回測，展現策略的長線穩健性。*
-
----
-
-## ⚙️ 最佳化風控策略參數對比 (Optimized Trading Params)
-
-本部分對比 Optuna 在兩種模式下搜尋出的最佳交易參數。**這揭示了牛市與熊市/震盪市下，最優風控配置的結構性漂移：**
-
-| 風控參數 | 🟢 模式 A (未見過牛市的最佳化) | 🔵 模式 B (包含牛市的最佳化) | 參數說明 |
-| :--- | :--- | :--- | :--- |
-| **買入門檻 (`buy_threshold`)** | `{mode_a_p.get("buy_threshold", "N/A")}%` | `{mode_b_p.get("buy_threshold", "N/A")}%` | D1 多空預測分數觸發買進的百分比。 |
-| **個股停損 (`stop_loss`)** | `{mode_a_p.get("stop_loss", "N/A")}%` | `{mode_b_p.get("stop_loss", "N/A")}%` | 買入後的個股固定停損線。 |
-| **避險門檻 (`panic_ma5`)** | `{mode_a_p.get("panic_ma5", "N/A")}` | `{mode_b_p.get("panic_ma5", "N/A")}` | 大盤 5 日平均回報低於此值觸發避險紅燈。 |
-| **避險門檻 (`panic_breadth`)**| `{mode_a_p.get("panic_breadth", "N/A")}` | `{mode_b_p.get("panic_breadth", "N/A")}` | 全市場上漲比例低於此值觸發避險紅燈。 |
-| **移動止盈啟動 (`ts_activation`)**| `{mode_a_p.get("ts_activation", "N/A")}%` | `{mode_b_p.get("ts_activation", "N/A")}%` | 個股利潤達到此值開啟移動追蹤止盈。 |
-| **移動止盈回撤 (`ts_pullback`)** | `{mode_a_p.get("ts_pullback", "N/A")}%` | `{mode_b_p.get("ts_pullback", "N/A")}%` | 移動止盈開啟後自高點拉回多少執行停利。 |
-
-### 💡 研究員核心分析與結論：
-1. **為什麼模式 A 與模式 B 的最優風控參數存在差異？**
-   * 模式 A 優化時，Optuna 看不到 2025-08-01 之後的兩萬點到四萬點大牛市，因此其優化出的風控引數更加傾向於**「防守震盪與熊市」**。
-   * 模式 B 將 2025-08 ~ 2026-06 的超級牛市納入優化眼界。在強多頭市場中，大盤避險紅燈門檻（`panic_breadth` 和 `panic_ma5`）通常會被優化得更加寬容，個股停損（`stop_loss`）與移動止盈回撤（`ts_pullback`）也會更寬，以適應牛市個股的劇烈波動，防止被輕易洗出場，最大化捕捉趨勢利潤。
-2. **策略健康度判斷：**
-   * 若模式 A 在 OOS 區間的 `oos_return` 表現良好且 `oos_mdd` 受控，證明策略具備極強的**樣本外泛化能力**，非過擬合。
-   * 正式實盤上線時，推薦**以模式 B 訓練出的最新模型**作為預測大腦（擁有最新特徵），並套用**模式 B 產出的 `best_trading_params_mode_b.json` 風控參數**進行每日交易，以在當下大牛市中獲得最契合市場波動的收益。
-
----
-"""
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(report_content)
-    print(f"\n[成功] 實驗分析報告已寫入: {report_path}")
 
 
 if __name__ == "__main__":
