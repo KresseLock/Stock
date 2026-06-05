@@ -29,14 +29,33 @@ if BASE_DIR not in sys.path:
 
 # ── 載入中央控制面板 config ──────────────────────────────────
 try:
-    from config import BACKTEST_DATE, OPTIMIZATION_TRIALS, EARLY_STOPPING_ROUNDS, OPTUNA_N_JOBS
+    from config import (
+        BACKTEST_DATE, OPTIMIZATION_TRIALS, EARLY_STOPPING_ROUNDS, OPTUNA_N_JOBS,
+        LGBM_OPTUNA_N_ESTIMATORS, LGBM_LEARNING_RATE, LGBM_MAX_DEPTH,
+        LGBM_NUM_LEAVES, LGBM_SUBSAMPLE, LGBM_COLSAMPLE,
+        SAMPLE_WEIGHT_DROP_THRESHOLD, SAMPLE_WEIGHT_PENALTY,
+        OPTUNA_BOUNDS,
+    )
     MAX_ITERATIONS = OPTIMIZATION_TRIALS
     N_JOBS = OPTUNA_N_JOBS
+    BOUNDS = OPTUNA_BOUNDS  # 統一命名，內部繼續使用 BOUNDS 變數名副稱
 except ImportError:
     BACKTEST_DATE  = "20250801"
     MAX_ITERATIONS = 400
     EARLY_STOPPING_ROUNDS = None
     N_JOBS = min(os.cpu_count() or 1, 4)
+    LGBM_OPTUNA_N_ESTIMATORS = 100
+    LGBM_LEARNING_RATE = 0.03; LGBM_MAX_DEPTH = 4
+    LGBM_NUM_LEAVES = 15;      LGBM_SUBSAMPLE = 0.8; LGBM_COLSAMPLE = 0.8
+    SAMPLE_WEIGHT_DROP_THRESHOLD = -0.05; SAMPLE_WEIGHT_PENALTY = 2.0
+    BOUNDS = {
+        "ma_short": (3, 9), "ma_mid1_offset": (1, 15), "ma_mid2_offset": (1, 25),
+        "ma_long_offset": (10, 80), "rsi_period": (7, 30), "kd_period": (5, 20),
+        "atr_period": (7, 28), "macd_fast": (6, 18), "macd_slow_offset": (5, 35),
+        "macd_signal": (5, 15), "boll_window": (10, 35), "boll_std_x100": (150, 300),
+        "vol_ma": (3, 15), "chips_w1": (2, 7), "chips_w2_offset": (2, 10),
+        "chips_w3_offset": (5, 20),
+    }
 
 # 預測哪幾天的勝率作為評分基準
 FORECAST_DAYS  = [1, 2, 3]
@@ -44,36 +63,6 @@ FORECAST_DAYS  = [1, 2, 3]
 # 最佳化結果儲存路徑 (保存在根目錄)
 RESULT_PATH    = os.path.join(BASE_DIR, "best_factors.json")
 
-# ── 參數搜尋邊界 ─────────────────────────────────────────
-BOUNDS = {
-    # 均線 (短 → 中1 → 中2 → 長，採偏移量設計)
-    "ma_short":         ( 3,  9),   # 短均線絕對值
-    "ma_mid1_offset":   ( 1, 15),   # 中均線1 = ma_short + offset
-    "ma_mid2_offset":   ( 1, 25),   # 中均線2 = ma_mid1  + offset
-    "ma_long_offset":   (10, 80),   # 長均線  = ma_mid2  + offset
-
-    # 振盪指標 (絕對值)
-    "rsi_period":       ( 7, 30),
-    "kd_period":        ( 5, 20),
-    "atr_period":       ( 7, 28),
-
-    # MACD (慢線 = 快線 + 偏移量，保證 fast < slow)
-    "macd_fast":        ( 6, 18),
-    "macd_slow_offset": ( 5, 35),   # 慢線 = fast + offset
-    "macd_signal":      ( 5, 15),
-
-    # 布林通道
-    "boll_window":      (10, 35),
-    "boll_std_x100":    (150, 300), # 實際值 = boll_std_x100 / 100.0 (1.5 ~ 3.0)
-
-    # 成交量均線
-    "vol_ma":           ( 3, 15),
-
-    # 籌碼視窗 (採偏移量設計)
-    "chips_w1":         ( 2,  7),
-    "chips_w2_offset":  ( 2, 10),   # w2 = w1 + offset
-    "chips_w3_offset":  ( 5, 20),   # w3 = w2 + offset
-}
 
 
 import re
@@ -137,10 +126,12 @@ def compute_ta(df: pd.DataFrame, p: dict) -> pd.DataFrame:
         c, h, l, v, o = (g[col].astype(float) for col in ["close","high","low","volume","open"])
 
         new_features = {}
-        # 均線
+        # 均線與乖離率 (bias)
         short, long_ = p["ma_short"], p["ma_long"]
         for w in [p["ma_short"], p["ma_mid1"], p["ma_mid2"], p["ma_long"]]:
-            new_features[f"ma{w}"] = c.rolling(w, min_periods=1).mean()
+            ma_val = c.rolling(w, min_periods=1).mean()
+            new_features[f"ma{w}"] = ma_val
+            new_features[f"bias{w}"] = (c - ma_val) / (ma_val + 1e-9)  # 乖離率，與 feature_engineering.py 對齊
         new_features["ma_short_over_long"] = new_features[f"ma{short}"] / (new_features[f"ma{long_}"] + 1e-9)
 
         # 布林通道
@@ -215,7 +206,8 @@ _STABLE_NON_TA_COLS = [
     "fini_net", "sitc_net", "dealer_net", "inst_net_total",
     "margin_bal", "short_bal", "sbl_bal", "sbl_sell",
     "big_holder_pct", "small_holder_pct", "holder_hhi",
-    "revenue", "EPS", "GrossProfit", "OperatingIncome", "IncomeAfterTaxes", "Revenue",
+    # 注意: FinMind 財報欄位名稱均為大寫 (Revenue, EPS...)  移除錯誤的小寫 "revenue"
+    "Revenue", "EPS", "GrossProfit", "OperatingIncome", "IncomeAfterTaxes",
     "TotalAssets", "Liabilities", "Equity",
     "CashFlowsFromOperatingActivities", "CashProvidedByInvestingActivities", "CashFlowsProvidedFromFinancingActivities",
     "cash_dividend",
@@ -276,13 +268,17 @@ def make_objective(df_base: pd.DataFrame, bt_date: pd.Timestamp,
             weight_ret_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
             if all(c in train_df.columns for c in weight_ret_cols):
                 min_future_ret = train_df[weight_ret_cols].min(axis=1)
-                w_train = np.where(min_future_ret <= -0.05, 2.0, 1.0)
+                w_train = np.where(min_future_ret <= SAMPLE_WEIGHT_DROP_THRESHOLD, SAMPLE_WEIGHT_PENALTY, 1.0)
             else:
                 w_train = np.ones(len(train_df))
             
             model = lgb.LGBMClassifier(
-                n_estimators=100, learning_rate=0.03, max_depth=4,
-                num_leaves=15, subsample=0.8, colsample_bytree=0.8,
+                n_estimators=LGBM_OPTUNA_N_ESTIMATORS,
+                learning_rate=LGBM_LEARNING_RATE,
+                max_depth=LGBM_MAX_DEPTH,
+                num_leaves=LGBM_NUM_LEAVES,
+                subsample=LGBM_SUBSAMPLE,
+                colsample_bytree=LGBM_COLSAMPLE,
                 random_state=42, n_jobs=1, verbose=-1,
                 class_weight="balanced"
             )

@@ -34,6 +34,22 @@ DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 FEAT_DIR = os.path.join(DATA_DIR, "features")
 os.makedirs(FEAT_DIR, exist_ok=True)
 
+# ── 載入中央控制面板標籤設計參數 ──────────────────────────
+try:
+    import sys as _sys
+    _parent = os.path.dirname(BASE_DIR)
+    if _parent not in _sys.path:
+        _sys.path.insert(0, _parent)
+    from config import (
+        LABEL_STRONG_QUANTILE, LABEL_WEAK_QUANTILE,
+        LABEL_STRONG_MIN_RET, LABEL_WEAK_MAX_RET,
+    )
+except ImportError:
+    LABEL_STRONG_QUANTILE = 0.80   # 強勢股 (label=2) 横截面百分位排名門櫛 (前 20%)
+    LABEL_WEAK_QUANTILE   = 0.20   # 弱勢股 (label=0) 横截面百分位排名門櫛 (後 20%)
+    LABEL_STRONG_MIN_RET  = 0.00   # 強勢股絕對報酬率必須 > 此值 (空頭崩盤防線)
+    LABEL_WEAK_MAX_RET    = -0.02  # 絕對跌幅超過此值強制歸類弱勢 (大跌個股防線)
+
 # ══════════════════════════════════════════════════════
 # 可由外部覆寫的全域參數 (預設值)
 # 實際生效的值由 run_feature_engineering.py 的設定區決定
@@ -109,7 +125,7 @@ def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
         g[f"ma{w}"] = c.rolling(w, min_periods=1).mean()
         g[f"bias{w}"] = (c - g[f"ma{w}"]) / (g[f"ma{w}"] + 1e-9)  # 乖離率 (Bias Ratio)
     if len(MA_WINDOWS) >= 2:
-        short, long_ = MA_WINDOWS[0], MA_WINDOWS[2] if len(MA_WINDOWS) > 2 else MA_WINDOWS[-1]
+        short, long_ = MA_WINDOWS[0], MA_WINDOWS[-1]
         g["ma_short_over_long"] = g[f"ma{short}"] / (g[f"ma{long_}"] + 1e-9)
 
     # 布林通道
@@ -656,12 +672,12 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
             # 每天在橫截面上針對未來的真實報酬做百分位排序
             rank = df.groupby("date")[ret_col].rank(pct=True)
             
-            # 混合標籤設計：
-            # 強勢股 (2): 相對排名前 20% 且「絕對報酬必須 > 0%」 (空頭崩盤時不勉強發出買入訊號)
-            is_strong = (rank >= 0.8) & (df[ret_col] > 0.0)
+            # 混合標籤設計 (方案 C)：
+            # 強勢股 (2): 相對排名前 LABEL_STRONG_QUANTILE 且「絕對報酬必須 > LABEL_STRONG_MIN_RET」 (空頭崩盤時不勉強發出買入訊號)
+            is_strong = (rank >= LABEL_STRONG_QUANTILE) & (df[ret_col] > LABEL_STRONG_MIN_RET)
             
-            # 弱勢股 (0): 相對排名後 20% 或「絕對報酬 < -2.0%」 (即便大盤都跌，大跌的個股依然是弱勢)
-            is_weak = (rank <= 0.2) | (df[ret_col] < -0.02)
+            # 弱勢股 (0): 相對排名後 LABEL_WEAK_QUANTILE 或「絕對報酬 < LABEL_WEAK_MAX_RET」 (大跌個股防線)
+            is_weak = (rank <= LABEL_WEAK_QUANTILE) | (df[ret_col] < LABEL_WEAK_MAX_RET)
             
             # 中性股 (1): 其他情況
             df[f"label_{d}"] = np.where(is_strong, 2, np.where(is_weak, 0, 1))
@@ -695,7 +711,9 @@ if __name__ == "__main__":
         sys.path.insert(0, PARENT_DIR)
         
     try:
-        from config import START_DATE, END_DATE, FEAT_N_JOBS
+        from config import START_DATE, FEAT_N_JOBS
+        # config.py 不定義 END_DATE，固定使用今日作為結束日期
+        END_DATE = datetime.date.today()
     except ImportError:
         START_DATE = datetime.date(2020, 1, 1)
         END_DATE = datetime.date.today()
@@ -819,4 +837,7 @@ if __name__ == "__main__":
                         win = sum(valid) / len(valid) * 100
                         print(f"  [回測總結] 基準日預測方向勝率: {win:.1f}%  ({sum(valid)}/{len(valid)} 正確)")
         except Exception as e:
-            print(f"[錯誤] 時光機回測失敗: {e}")
+            import traceback
+            print(f"[錯誤] 時光機回測失敗: {e}")
+            traceback.print_exc()
+

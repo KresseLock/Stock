@@ -21935,42 +21935,6 @@
     "reason": "no_data",
     "confirmed_at": "2026-05-31"
   },
-  "20200520": {
-    "reason": "anomaly",
-    "desc": "Extreme price anomaly detected (holiday ghost data)"
-  },
-  "20230510": {
-    "reason": "anomaly",
-    "desc": "Extreme price anomaly detected (holiday ghost data)"
-  },
-  "20230524": {
-    "reason": "anomaly",
-    "desc": "Extreme price anomaly detected (holiday ghost data)"
-  },
-  "20230719": {
-    "reason": "anomaly",
-    "desc": "Extreme price anomaly detected (holiday ghost data)"
-  },
-  "20240215": {
-    "reason": "anomaly",
-    "desc": "Extreme price anomaly detected (holiday ghost data)"
-  },
-  "20240219": {
-    "reason": "anomaly",
-    "desc": "Extreme price anomaly detected (holiday ghost data)"
-  },
-  "20240415": {
-    "reason": "anomaly",
-    "desc": "Extreme price anomaly detected (holiday ghost data)"
-  },
-  "20241217": {
-    "reason": "anomaly",
-    "desc": "Extreme price anomaly detected (holiday ghost data)"
-  },
-  "20250505": {
-    "reason": "anomaly",
-    "desc": "Extreme price anomaly detected (holiday ghost data)"
-  },
   "taifex_inst_20200102": {
     "reason": "no_data",
     "confirmed_at": "2026-06-01"
@@ -22230,5 +22194,41 @@
   "sbl_20260604": {
     "reason": "no_data",
     "confirmed_at": "2026-06-04"
+  },
+  "daytrading_20260605": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-05"
+  },
+  "fini_holding_20260605": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-05"
+  },
+  "credit_limit_20260605": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-05"
+  },
+  "chips_20251231": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-05"
+  },
+  "chips_20260127": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-05"
+  },
+  "twse_per_20260305": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-05"
+  },
+  "twse_per_20260415": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-05"
+  },
+  "chips_20260430": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-05"
+  },
+  "chips_20260513": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-05"
   }
 }

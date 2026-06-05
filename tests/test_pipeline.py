@@ -192,6 +192,7 @@ check("auto_pipeline._apply_best_params 對應", test_apply_best_params)
 def test_train_date_split():
     import numpy as np
     import pandas as pd
+    import random
     from scripts.train import train_model
     # 建立假資料：100 個日期 x 5 支股票 = 500 筆 (避免 LightGBM 因為資料過少而無法進行 Valid Split 導致報錯)
     dates = pd.date_range("2023-01-02", periods=100, freq="B")
@@ -199,10 +200,16 @@ def test_train_date_split():
     rows = []
     for d in dates:
         for s in stocks:
-            rows.append({"stock_id": s, "date": d,
-                         "feat1": np.random.randn(),
-                         "feat2": np.random.randn(),
-                         "next_ret_1": np.random.randn() * 0.01})
+            rows.append({
+                "stock_id": s,
+                "date": d,
+                "feat1": np.random.randn(),
+                "feat2": np.random.randn(),
+                "next_ret_1": np.random.randn() * 0.01,
+                "next_ret_2": np.random.randn() * 0.01,
+                "next_ret_3": np.random.randn() * 0.01,
+                "label_1": random.choice([0, 1, 2])
+            })
     df = pd.DataFrame(rows)
     # 驗證 train.py 的源碼中切割邏輯是否能實際運行不報錯
     import tempfile
@@ -210,7 +217,7 @@ def test_train_date_split():
         with tempfile.TemporaryDirectory() as tmp_dir:
             # 建立假 feature_cols 與目標
             features = ["feat1", "feat2"]
-            target = "next_ret_1"
+            target = "label_1"
             
             # 使用我們剛才建立的假 df (含 20 天)
             import scripts.train as train

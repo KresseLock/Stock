@@ -146,7 +146,7 @@ def main():
                 
         total_time = time.time() - t_total_start
         print("\n" + "=" * 75)
-        print(f"  🎉 [全流程執行成功] 總耗時: {total_time/60:.1f} 分鐘")
+        print(f"  [全流程執行成功] 總耗時: {total_time/60:.1f} 分鐘")
         print(f"  雲端同步已完成，您可以前往 Google Drive 查看最新結果！")
         print("=" * 75)
 

@@ -24,14 +24,20 @@ MODEL_DIR = os.path.join(BASE_DIR, "models")
 
 # ── 載入中央控制面板 config ──────────────────────────────────
 try:
-    from config import BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS, FEE_RATE, TAX_RATE
+    from config import (
+        BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS, FEE_RATE, TAX_RATE,
+        ORDER_MARKUP_HIGH_SCORE, ORDER_MARKUP_MID_SCORE,
+        ORDER_MARKUP_HIGH_PCT, ORDER_MARKUP_MID_PCT, ORDER_MARKUP_LOW_PCT,
+    )
 except ImportError:
-    BUY_THRESHOLD   = 10.0   
-    SELL_THRESHOLD  = 0.0    
-    STOP_LOSS_PCT   = -8.0   
+    BUY_THRESHOLD   = 10.0
+    SELL_THRESHOLD  = 0.0
+    STOP_LOSS_PCT   = -8.0
     FEE_RATE        = 0.001425
     TAX_RATE        = 0.003
     MAX_POSITIONS   = 5
+    ORDER_MARKUP_HIGH_SCORE = 30.0; ORDER_MARKUP_MID_SCORE  = 20.0
+    ORDER_MARKUP_HIGH_PCT   = 2.5;  ORDER_MARKUP_MID_PCT    = 2.0; ORDER_MARKUP_LOW_PCT = 1.5
 
 
 def load_watchlist_detailed() -> dict:
@@ -74,7 +80,7 @@ def round_to_tick(price: float) -> float:
 
 def main(target_date_str=None):
     if not os.path.exists(DATA_PATH):
-        print(f"[錯誤] 找不到特徵檔: {DATA_PATH}")
+        print(f"[錯誤] 找不到特徵檔: {DATA_PATH}。請先執行 auto_pipeline.py -s feature 生成特徵 Parquet 檔。")
         return
 
     df = pd.read_parquet(DATA_PATH)
@@ -88,7 +94,7 @@ def main(target_date_str=None):
         before_cnt = df["stock_id"].nunique()
         df = filter_stocks_by_train_industries(df)
         after_cnt = df["stock_id"].nunique()
-        print(f"  [推理過濾] 依 config 產業設定篩選：{after_cnt} 檔進行推理")
+        print(f"  [推理過濾] 依 config 產業設定篩選：{before_cnt} → {after_cnt} 檔進行推理")
     except Exception as e:
         print(f"  [警告] 篩選過濾器執行失敗 ({e})，使用全特徵進行推理")
     # ──────────────────────────────────────────────────────────
@@ -156,7 +162,7 @@ def main(target_date_str=None):
     for days in [1, 2, 3]:
         model_path = os.path.join(MODEL_DIR, f"lgbm_model_{days}.txt")
         if not os.path.exists(model_path):
-            print(f"[錯誤] 找不到模型 {model_path}")
+            print(f"[錯誤] 找不到模型 {model_path}。請先執行 auto_pipeline.py -s train 訓練並儲存模型。")
             return
         model = lgb.Booster(model_file=model_path)
         preds = model.predict(X_latest_market)
@@ -354,13 +360,13 @@ def main(target_date_str=None):
             d3    = row.Day3_net
             close_p = row.close
             
-            # 根據 D1 多空信心分數動態決定建議加價幅度 (D1 >= 30% 建議 +2.5%; >= 20% 建議 +2.0%; 否則 +1.5%)
-            if d1 >= 30.0:
-                target_pct = 2.5
-            elif d1 >= 20.0:
-                target_pct = 2.0
+            # 根據 D1 多空信心分數動態決定建議加價幅度 (D1 >= ORDER_MARKUP_HIGH_SCORE 建議高加價)
+            if d1 >= ORDER_MARKUP_HIGH_SCORE:
+                target_pct = ORDER_MARKUP_HIGH_PCT
+            elif d1 >= ORDER_MARKUP_MID_SCORE:
+                target_pct = ORDER_MARKUP_MID_PCT
             else:
-                target_pct = 1.5
+                target_pct = ORDER_MARKUP_LOW_PCT
             
             raw_target_price = close_p * (1 + target_pct / 100.0)
             target_price = round_to_tick(raw_target_price)

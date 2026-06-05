@@ -27,11 +27,26 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 
 # ── 載入中央控制面板 config ──────────────────────────────────
 try:
-    from config import TRAIN_INDUSTRIES, TRAIN_N_JOBS
+    from config import (
+        TRAIN_INDUSTRIES, TRAIN_N_JOBS,
+        LGBM_N_ESTIMATORS, LGBM_LEARNING_RATE, LGBM_MAX_DEPTH, LGBM_NUM_LEAVES,
+        LGBM_SUBSAMPLE, LGBM_COLSAMPLE, LGBM_EARLY_STOPPING,
+        SAMPLE_WEIGHT_DROP_THRESHOLD, SAMPLE_WEIGHT_PENALTY,
+    )
     N_JOBS = TRAIN_N_JOBS
 except ImportError:
     TRAIN_INDUSTRIES = {}
     N_JOBS = -1
+    LGBM_N_ESTIMATORS = 300; LGBM_LEARNING_RATE = 0.03; LGBM_MAX_DEPTH = 4
+    LGBM_NUM_LEAVES = 15;   LGBM_SUBSAMPLE = 0.8;      LGBM_COLSAMPLE = 0.8
+    LGBM_EARLY_STOPPING = 30
+    SAMPLE_WEIGHT_DROP_THRESHOLD = -0.05; SAMPLE_WEIGHT_PENALTY = 2.0
+
+# 共用過濾工具
+try:
+    from scripts.utils import filter_stocks_by_train_industries
+except ImportError:
+    from utils import filter_stocks_by_train_industries
 
 
 def train_model(df, feature_cols, target_col, days_ahead):
@@ -39,13 +54,12 @@ def train_model(df, feature_cols, target_col, days_ahead):
     print(f"  [開始訓練] 預測未來 {days_ahead} 天 (標籤: {target_col})")
     print("="*50)
     
-    # 根據策略 2 (損失權重)：若未來 3 天內有任一天大跌 <= -5%，給予 2.0 倍懲罰權重以抑止 MDD
+    # 根據策略 2 (損失權重)：若未來 3 天內有任一天大跌 <= SAMPLE_WEIGHT_DROP_THRESHOLD，給予懲罰權重以抑止 MDD
     df = df.copy()
     ret_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     if all(c in df.columns for c in ret_cols):
-        # 找出未來3天內的最低報酬率 (最大跌幅)
         min_future_ret = df[ret_cols].min(axis=1)
-        df["sample_weight"] = np.where(min_future_ret <= -0.05, 2.0, 1.0)
+        df["sample_weight"] = np.where(min_future_ret <= SAMPLE_WEIGHT_DROP_THRESHOLD, SAMPLE_WEIGHT_PENALTY, 1.0)
     else:
         df["sample_weight"] = 1.0
     
@@ -69,12 +83,12 @@ def train_model(df, feature_cols, target_col, days_ahead):
     
     # 分類模型
     model = lgb.LGBMClassifier(
-        n_estimators=300,
-        learning_rate=0.03,
-        max_depth=4,
-        num_leaves=15,
-        subsample=0.8,
-        colsample_bytree=0.8,
+        n_estimators=LGBM_N_ESTIMATORS,
+        learning_rate=LGBM_LEARNING_RATE,
+        max_depth=LGBM_MAX_DEPTH,
+        num_leaves=LGBM_NUM_LEAVES,
+        subsample=LGBM_SUBSAMPLE,
+        colsample_bytree=LGBM_COLSAMPLE,
         random_state=42 + days_ahead,
         n_jobs=N_JOBS,
         verbose=-1,
@@ -89,7 +103,7 @@ def train_model(df, feature_cols, target_col, days_ahead):
         eval_set=[(X_valid, y_valid)],
         eval_sample_weight=[w_valid],
         eval_metric="multi_logloss",
-        callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=False)]
+        callbacks=[lgb.early_stopping(stopping_rounds=LGBM_EARLY_STOPPING, verbose=False)]
     )
     
     # 預測「強勢上漲 (Class 2)」的機率
@@ -127,42 +141,17 @@ def main():
     print("=" * 50)
     
     if not os.path.exists(DATA_PATH):
-        print(f"[錯誤] 找不到特徵檔: {DATA_PATH}")
+        print(f"[錯誤] 找不到特徵檔: {DATA_PATH}。請先執行 auto_pipeline.py -s feature 生成特徵 Parquet 檔。")
         return
         
     df = pd.read_parquet(DATA_PATH)
     
-    # ── 根據 TRAIN_INDUSTRIES 過濾訓練集股票 ─────────────────────
-    cat_path = os.path.join(BASE_DIR, "scripts", "stock_categories.json")
-    if os.path.exists(cat_path):
-        with open(cat_path, "r", encoding="utf-8") as f:
-            categories = json.load(f)
-            
-        allowed_stocks = set()
-        for ind_name, is_enabled in TRAIN_INDUSTRIES.items():
-            if is_enabled and ind_name in categories:
-                allowed_stocks.update(categories[ind_name].keys())
-                
-        # 載入 Stocks.txt 自選股並確保其一定保留在訓練集中
-        try:
-            # 優先加載 scripts/utils.py
-            from scripts.utils import load_target_stocks
-            allowed_stocks.update(load_target_stocks("Stocks.txt"))
-        except ImportError:
-            try:
-                from utils import load_target_stocks
-                allowed_stocks.update(load_target_stocks("Stocks.txt"))
-            except Exception as e:
-                print(f"  [警告] 載入 Stocks.txt 自選股失敗: {e}")
-            
-        # 過濾資料
-        before_count = df["stock_id"].nunique()
-        df_filtered = df[df["stock_id"].isin(allowed_stocks)].copy()
-        after_count = df_filtered["stock_id"].nunique()
-        print(f"  [訓練篩選] 套用 TRAIN_INDUSTRIES 篩選：{after_count} 檔進行訓練。")
-        df = df_filtered
-    else:
-        print("  [警告] 找不到 stock_categories.json，不進行訓練產業篩選")
+    # ── 使用統一過濾器 filter_stocks_by_train_industries 筛選訓練集股票 ──────
+    # 注意: 此函式已處理 Stocks.txt 自選股強制保留 與 stock_id 類型對齊
+    before_count = df["stock_id"].nunique()
+    df = filter_stocks_by_train_industries(df)
+    after_count = df["stock_id"].nunique()
+    print(f"  [訓練篩選] 套用 TRAIN_INDUSTRIES 篩選：{after_count} 檔進行訓練。")
     # ──────────────────────────────────────────────────────────
     
     label_cols = ["label_1", "label_2", "label_3"]

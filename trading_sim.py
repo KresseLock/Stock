@@ -7,8 +7,25 @@ import lightgbm as lgb
 import json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
+
+# ── 載入中央控制面板接單加價幅度與回測預設値 (CLI 預設不在 run_simulation 內装載) ──
+try:
+    from config import (
+        ORDER_MARKUP_HIGH_SCORE, ORDER_MARKUP_MID_SCORE,
+        ORDER_MARKUP_HIGH_PCT, ORDER_MARKUP_MID_PCT, ORDER_MARKUP_LOW_PCT,
+        SIM_DEFAULT_START, SIM_DEFAULT_END, SIM_DEFAULT_CAPITAL,
+        MAX_POSITIONS,
+    )
+except ImportError:
+    ORDER_MARKUP_HIGH_SCORE = 30.0; ORDER_MARKUP_MID_SCORE = 20.0
+    ORDER_MARKUP_HIGH_PCT   = 2.5;  ORDER_MARKUP_MID_PCT   = 2.0; ORDER_MARKUP_LOW_PCT = 1.5
+    SIM_DEFAULT_START = "2026-01-01"; SIM_DEFAULT_END = "2026-06-30"; SIM_DEFAULT_CAPITAL = 1_000_000
+    MAX_POSITIONS = 5
 
 def get_tw_tick_size(price: float) -> float:
     if price < 10:
@@ -39,7 +56,7 @@ def load_models():
     for days in [1, 2, 3]:
         model_path = os.path.join(MODEL_DIR, f"lgbm_model_{days}.txt")
         if not os.path.exists(model_path):
-            print(f"[錯誤] 找不到預先訓練的模型: {model_path}。請先執行 train.py。")
+            print(f"[錯誤] 找不到預先訓練的模型: {model_path}。請先執行 auto_pipeline.py 進行模型訓練與生成。")
             sys.exit(1)
         models[days] = lgb.Booster(model_file=model_path)
     return models
@@ -69,7 +86,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     before_cnt = df["stock_id"].nunique()
     df = filter_stocks_by_train_industries(df)
     after_cnt = df["stock_id"].nunique()
-    print(f"  [模擬過濾] 依 train.py 產業設定篩選：{after_cnt} 檔進行回測模擬")
+    print(f"  [模擬過濾] 依 train.py 產業設定篩選：{before_cnt} → {after_cnt} 檔進行回測模擬")
     # ──────────────────────────────────────────────────────────
     
     try:
@@ -128,7 +145,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         with open(feature_cols_path, "r", encoding="utf-8") as f:
             feature_cols = json.load(f)
     else:
-        print("[錯誤] 找不到 feature_cols.json")
+        print(f"[錯誤] 找不到 {feature_cols_path}。請先執行 auto_pipeline.py。")
         return
 
     X_sim = df_sim.reindex(columns=feature_cols).astype(np.float32)
@@ -169,8 +186,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         STOP_LOSS_PCT     = -8.0
         FEE_RATE          = 0.001425
         TAX_RATE          = 0.003
-        MKT_PANIC_MA5     = -0.005
-        MKT_PANIC_BREADTH = 0.35
+        MKT_PANIC_MA5     = -0.010  # 與 config.py 黃金風控參數一致 (-1.0%)
+        MKT_PANIC_BREADTH = 0.30    # 與 config.py 黃金風控參數一致 (30%)
         TS_ACTIVATION_PCT = 10.0
         TS_PULLBACK_PCT   = -6.0
 
@@ -284,8 +301,9 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                     trailing_stop_price = pos['max_close_price'] * (1.0 + TS_PULLBACK_PCT / 100.0)  # 自最高收盤回撤一定趴數
                     # 我們在 T 日收盤發現跌破止盈點，則在今日 (T+1) 執行賣出
                     # 這裡為了簡化，在昨天的收盤價跌破昨日高點回撤線時，今天開盤直接賣
-                    prev_close = prev_data.loc[sid, 'close'] if 'close' in prev_data.columns else close_prev
-                    if not pd.isna(prev_close) and prev_close <= trailing_stop_price:
+                    # 使用 pos['current_price'] 作為安全 fallback，避免 close_prev 未定義的 NameError
+                    prev_close = prev_data.loc[sid, 'close'] if 'close' in prev_data.columns else pos.get('current_price', 0)
+                    if not pd.isna(prev_close) and prev_close > 0 and prev_close <= trailing_stop_price:
                         triggered_trailing_stop = True
                 
                 # 賣出判定優先級
@@ -361,13 +379,13 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             if pd.isna(open_T1) or open_T1 <= 0 or pd.isna(low_T1) or low_T1 <= 0:
                 continue
                 
-            # 根據 D1 分數動態決定加價幅度 (對齊 scripts/inference.py)
-            if day1_score >= 30.0:
-                target_pct = 2.5
-            elif day1_score >= 20.0:
-                target_pct = 2.0
+            # 根據 D1 分數動態決定加價幅度 (與 scripts/inference.py 對齊，共用 config.py ORDER_MARKUP_* 常數)
+            if day1_score >= ORDER_MARKUP_HIGH_SCORE:
+                target_pct = ORDER_MARKUP_HIGH_PCT
+            elif day1_score >= ORDER_MARKUP_MID_SCORE:
+                target_pct = ORDER_MARKUP_MID_PCT
             else:
-                target_pct = 1.5
+                target_pct = ORDER_MARKUP_LOW_PCT
                 
             raw_target_price = close_prev * (1 + target_pct / 100.0)
             limit_price = round_to_tick(raw_target_price)
@@ -572,21 +590,21 @@ class CustomHelpParser(argparse.ArgumentParser):
         print(f"\n[參數輸入錯誤] {message}")
         print("=" * 70)
         print(" 正確的執行範例:")
-        print("   python trading_sim.py --start 2026-01-02 --end 2026-06-25 --capital 1000000 --max_pos 5\n")
+        print(f"   python trading_sim.py -s {SIM_DEFAULT_START} -e {SIM_DEFAULT_END} -c {SIM_DEFAULT_CAPITAL} -m {MAX_POSITIONS}\n")
         print("參數說明:")
-        print("  --start    回測起始日期 (預設: 2026-01-01，格式: YYYY-MM-DD)")
-        print("  --end      回測結束日期 (預設: 2026-06-30，格式: YYYY-MM-DD)")
-        print("  --capital  初始資金 (預設: 1000000)")
-        print("  --max_pos  最大持股檔數 (預設: 5)")
+        print(f"  -s, --start    回測起始日期 (預設: {SIM_DEFAULT_START}，格式: YYYY-MM-DD)")
+        print(f"  -e, --end      回測結束日期 (預設: {SIM_DEFAULT_END}，格式: YYYY-MM-DD)")
+        print(f"  -c, --capital  初始資金 (預設: {SIM_DEFAULT_CAPITAL})")
+        print(f"  -m, --max_pos  最大持股檔數 (預設: {MAX_POSITIONS})")
         print("=" * 70 + "\n")
         sys.exit(2)
 
 if __name__ == "__main__":
     parser = CustomHelpParser(description="量化模型自動交易回測")
-    parser.add_argument("--start", type=str, default="2026-01-01", help="回測起始日期 (YYYY-MM-DD)")
-    parser.add_argument("--end", type=str, default="2026-06-30", help="回測結束日期 (YYYY-MM-DD)")
-    parser.add_argument("--capital", type=int, default=1000000, help="初始資金")
-    parser.add_argument("--max_pos", type=int, default=5, help="最大持股檔數")
+    parser.add_argument("-s", "--start", type=str, default=SIM_DEFAULT_START, help="回測起始日期 (YYYY-MM-DD)")
+    parser.add_argument("-e", "--end",   type=str, default=SIM_DEFAULT_END,   help="回測結束日期 (YYYY-MM-DD)")
+    parser.add_argument("-c", "--capital", type=int, default=SIM_DEFAULT_CAPITAL, help="初始資金")
+    parser.add_argument("-m", "--max_pos", type=int, default=MAX_POSITIONS, help="最大持股檔數")
     parser.add_argument("--panic_ma5", type=float, default=None, help="大盤 5 日滾動平均報酬率避險門檻 (例如 -0.005)")
     parser.add_argument("--panic_breadth", type=float, default=None, help="全市場上漲家數比例避險門檻 (例如 0.35)")
     parser.add_argument("--buy_threshold", type=float, default=None, help="買入多空淨分數門檻 (%)")

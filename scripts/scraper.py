@@ -303,7 +303,7 @@ def _fetch_twse_json(url: str):
             
             # 攔截維護時間 (1:30 PM - 1:45 PM) 或其他伺服器維護 智慧等待
             if any(k in stat for k in ["暫停查詢", "結算時間", "維護"]):
-                print(f"\n    ⏳ [系統提示] 證交所伺服器結算或維護中 (原因: {stat})，暫停 30 分鐘後自動重試...", end="", flush=True)
+                print(f"\n    [系統提示] 證交所伺服器結算或維護中 (原因: {stat})，暫停 30 分鐘後自動重試...", end="", flush=True)
                 time.sleep(1800)
                 continue
 

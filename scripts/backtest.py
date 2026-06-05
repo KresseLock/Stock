@@ -22,6 +22,21 @@ if BASE_DIR not in sys.path:
 
 DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 
+# ── 載入中央控制面板 config ──────────────────────────────────
+try:
+    from config import (
+        TRAIN_N_JOBS,
+        LGBM_N_ESTIMATORS, LGBM_LEARNING_RATE, LGBM_MAX_DEPTH, LGBM_NUM_LEAVES,
+        LGBM_SUBSAMPLE, LGBM_COLSAMPLE, LGBM_BT_EARLY_STOPPING,
+        SAMPLE_WEIGHT_DROP_THRESHOLD, SAMPLE_WEIGHT_PENALTY,
+    )
+except ImportError:
+    TRAIN_N_JOBS = -1
+    LGBM_N_ESTIMATORS = 300; LGBM_LEARNING_RATE = 0.03; LGBM_MAX_DEPTH = 4
+    LGBM_NUM_LEAVES = 15;   LGBM_SUBSAMPLE = 0.8;      LGBM_COLSAMPLE = 0.8
+    LGBM_BT_EARLY_STOPPING = 20
+    SAMPLE_WEIGHT_DROP_THRESHOLD = -0.05; SAMPLE_WEIGHT_PENALTY = 2.0
+
 
 def load_watchlist_detailed() -> dict:
     try:
@@ -61,7 +76,7 @@ def run_backtest(backtest_date_str):
         return
 
     if not os.path.exists(DATA_PATH):
-        print(f"[錯誤] 找不到特徵檔: {DATA_PATH}。請先執行 run_feature_engineering.py")
+        print(f"[錯誤] 找不到特徵檔: {DATA_PATH}。請先執行 python auto_pipeline.py --step feature 重建特徵矩陣。")
         return
 
     print("載入歷史特徵矩陣...")
@@ -72,7 +87,7 @@ def run_backtest(backtest_date_str):
     before_cnt = df["stock_id"].nunique()
     df = filter_stocks_by_train_industries(df)
     after_cnt = df["stock_id"].nunique()
-    print(f"  [時光機過濾] 依 train.py 產業設定篩選：{after_cnt} 檔進行時光機回測")
+    print(f"  [時光機過濾] 依 train.py 產業設定篩選：{before_cnt} → {after_cnt} 檔進行時光機回測")
     # ──────────────────────────────────────────────────────────
     
     target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
@@ -123,7 +138,7 @@ def run_backtest(backtest_date_str):
         ret_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
         if all(c in train_clean.columns for c in ret_cols):
             min_future_ret = train_clean[ret_cols].min(axis=1)
-            train_clean["sample_weight"] = np.where(min_future_ret <= -0.05, 2.0, 1.0)
+            train_clean["sample_weight"] = np.where(min_future_ret <= SAMPLE_WEIGHT_DROP_THRESHOLD, SAMPLE_WEIGHT_PENALTY, 1.0)
         else:
             train_clean["sample_weight"] = 1.0
             
@@ -140,22 +155,16 @@ def run_backtest(backtest_date_str):
         y_valid = valid_part[label_col].astype(int)
         w_valid = valid_part["sample_weight"].values
 
-        # ── 載入中央控制面板 config 中的訓練執行緒設定 ────────────────────────
-        try:
-            from config import TRAIN_N_JOBS
-            n_jobs = TRAIN_N_JOBS
-        except ImportError:
-            n_jobs = -1
-
+        # ── 載入中央控制面板 config 中的訓練執行緒設定 ────────────────────
         model = lgb.LGBMClassifier(
-            n_estimators=300,
-            learning_rate=0.03,
-            max_depth=4,
-            num_leaves=15,
-            subsample=0.8,
-            colsample_bytree=0.8,
+            n_estimators=LGBM_N_ESTIMATORS,
+            learning_rate=LGBM_LEARNING_RATE,
+            max_depth=LGBM_MAX_DEPTH,
+            num_leaves=LGBM_NUM_LEAVES,
+            subsample=LGBM_SUBSAMPLE,
+            colsample_bytree=LGBM_COLSAMPLE,
             random_state=42 + days_ahead,
-            n_jobs=n_jobs,
+            n_jobs=TRAIN_N_JOBS,
             verbose=-1,
             objective="multiclass",
             num_class=3,
@@ -169,7 +178,7 @@ def run_backtest(backtest_date_str):
             eval_set=[(X_valid, y_valid)],
             eval_sample_weight=[w_valid],
             eval_metric="multi_logloss",
-            callbacks=[lgb.early_stopping(stopping_rounds=20, verbose=False)]
+            callbacks=[lgb.early_stopping(stopping_rounds=LGBM_BT_EARLY_STOPPING, verbose=False)]
         )
         print("完成")
 
@@ -372,9 +381,6 @@ def run_backtest(backtest_date_str):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("用法: python backtest.py <YYYYMMDD>")
-        sys.exit(1)
     parser = argparse.ArgumentParser(description="時光機回測工具")
     parser.add_argument("date", type=str, help="欲進行預測的基準日期 (格式: YYYYMMDD 或 YYYY-MM-DD)")
     args = parser.parse_args()
