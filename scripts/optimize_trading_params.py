@@ -53,13 +53,18 @@ except ImportError as e:
 # 計算預設的訓練期（Optuna 最佳化區間）
 # 為了避免前視偏差與對樣本外數據（Test Set）進行過度擬合，
 # 最佳化區間預設截止於 BACKTEST_DATE（樣本外評估的分界點）
-try:
-    dt_end = datetime.datetime.strptime(BACKTEST_DATE, "%Y%m%d")
-except ValueError:
+dt_end = None
+if BACKTEST_DATE is not None:
     try:
-        dt_end = datetime.datetime.strptime(BACKTEST_DATE, "%Y-%m-%d")
+        dt_end = datetime.datetime.strptime(str(BACKTEST_DATE), "%Y%m%d")
     except ValueError:
-        dt_end = datetime.datetime(2025, 8, 1)
+        try:
+            dt_end = datetime.datetime.strptime(str(BACKTEST_DATE), "%Y-%m-%d")
+        except ValueError:
+            pass
+
+if dt_end is None:
+    dt_end = datetime.datetime(2025, 8, 1)
 
 # 預設結束時間：BACKTEST_DATE
 default_end_date = dt_end.strftime("%Y-%m-%d")

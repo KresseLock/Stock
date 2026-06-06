@@ -32,6 +32,7 @@ import subprocess
 import time
 import json
 import argparse
+import threading
 
 # 強制設定標準輸出/錯誤編碼為 UTF-8，防止 Windows 終端機 (CP950/Big5) 遇到 Emoji 拋出 UnicodeEncodeError
 if hasattr(sys.stdout, 'reconfigure'):
@@ -41,16 +42,16 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 # ── 1. 實驗核心配置 (最上面易於手動調整的變數，也支援執行時 CLI 參數覆蓋) ────────
 # ⚙️ 因子最佳化設定 (scripts/optimize_factors.py)
-FACTOR_TRIALS         = 600        # 因子最佳化最大搜尋輪數 (預設較少以利快速驗證)
-FACTOR_EARLY_STOPPING = 250        # 因子最佳化早停輪數 (無進度達此輪數自動終止，None 代表不啟用)
+FACTOR_TRIALS         = 400        # 因子最佳化最大搜尋輪數 (預設較少以利快速驗證)
+FACTOR_EARLY_STOPPING = 150        # 因子最佳化早停輪數 (無進度達此輪數自動終止，None 代表不啟用)
 
 # 🎛️ 交易風控最佳化設定 (scripts/optimize_trading_params.py)
-TRADING_TRIALS         = 600      # 風控最佳化最大搜尋輪數 (預設 100 輪以兼顧效率與品質)
-TRADING_EARLY_STOPPING = 250       # 風控最佳化早停輪數 (無進步達此輪數自動終止，None 代表不啟用)
+TRADING_TRIALS         = 400      # 風控最佳化最大搜尋輪數 (預設 100 輪以兼顧效率與品質)
+TRADING_EARLY_STOPPING = 150       # 風控最佳化早停輪數 (無進步達此輪數自動終止，None 代表不啟用)
 
 # 💰 模擬交易基本設定
 CAPITAL        = 2000000          # 回測與優化的初始資金 (200 萬)
-RUN_FACTOR_OPT = True             # 模式 A 是否重新執行因子最佳化 (False 則沿用現有 best_factors.json)
+# 注意：是否跳過模式 A 因子調參，請使用 CLI 參數 --skip_factor_opt，而非在此修改
 
 # 路徑定義
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -110,6 +111,10 @@ def run_cmd(cmd_list, description=""):
     start_time = time.time()
     process = None
     try:
+        # 強制子進程使用 UTF-8 編碼輸出
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        
         # 創建 subprocess
         process = subprocess.Popen(
             cmd_list,
@@ -118,19 +123,28 @@ def run_cmd(cmd_list, description=""):
             text=True,
             encoding="utf-8",
             errors="ignore",
-            cwd=BASE_DIR
+            cwd=BASE_DIR,
+            env=env
         )
         
         lines = []
-        # 實時輸出
-        while True:
-            line = process.stdout.readline()
-            if not line and process.poll() is not None:
-                break
-            if line:
-                sys.stdout.write("    " + line)
-                sys.stdout.flush()
-                lines.append(line)
+        
+        def reader():
+            try:
+                for line in process.stdout:
+                    sys.stdout.write("    " + line)
+                    sys.stdout.flush()
+                    lines.append(line)
+            except Exception:
+                pass
+
+        # 啟動背景線程讀取輸出，避免阻塞主線程的信號處理
+        t = threading.Thread(target=reader, daemon=True)
+        t.start()
+        
+        # 主線程以 time.sleep 進行非阻塞式循環等待，以確保 Ctrl+C (KeyboardInterrupt) 可以在 Windows 上被即時捕獲
+        while t.is_alive() or process.poll() is None:
+            time.sleep(0.1)
                 
         rc = process.wait()
         elapsed = time.time() - start_time
@@ -424,9 +438,14 @@ def main():
         has_checkpoint_stability = os.path.exists(stability_summary_path) and not args.fresh
         
         if has_checkpoint_stability:
-            print(f"\n[續傳/復原] 偵測到已存在的模式 A 診斷報告，將直接讀取並跳過模型 A 訓練與診斷...")
             with open(stability_summary_path, "r", encoding="utf-8") as rf:
                 stability_summary = rf.read()
+            if "All" not in stability_summary:
+                print("  [提示] 偵測到舊版診斷報告（缺少 'All' 行），將重新執行模型 A 訓練與診斷...")
+                has_checkpoint_stability = False
+                
+        if has_checkpoint_stability:
+            print(f"\n[續傳/復原] 偵測到已存在的模式 A 診斷報告，將直接讀取並跳過模型 A 訓練與診斷...")
         else:
             # A3.2. 重建特徵矩陣
             run_cmd([sys.executable, "auto_pipeline.py", "-s", "f"], "模式 A：重建特徵矩陣 (截斷 2025-08-01)")
@@ -445,8 +464,8 @@ def main():
                 print(f"  已將模式 A 診斷報告另存至 reports/mode_a_regime_stability_report.txt")
         
         # 解析關鍵 RankIC 指標
-        ic_oos_bull = re.search(r"OOS Bull \(.+?\) RankIC:\s*([+-]?\d+\.?\d*)", stability_summary)
-        ic_is_all = re.search(r"IS All \(.+?\) RankIC:\s*([+-]?\d+\.?\d*)", stability_summary)
+        ic_is_all = re.search(r"IS\s*\|\s*All\s*\|\s*\d+\s*\|\s*([+-]?\d+\.?\d*)", stability_summary)
+        ic_oos_bull = re.search(r"OOS\s*\|\s*Bull\s*\|\s*\d+\s*\|\s*([+-]?\d+\.?\d*)", stability_summary)
         
         results["mode_a"]["is_rankic"] = ic_is_all.group(1) if ic_is_all else "N/A"
         results["mode_a"]["oos_bull_rankic"] = ic_oos_bull.group(1) if ic_oos_bull else "N/A"
@@ -491,7 +510,11 @@ def main():
         
         # A9. 在樣本外超級牛市進行模擬交易 (2025-08-02 ~ 2026-06-05)
         has_checkpoint_sim_a = ("oos_return" in results["mode_a"]) and ("oos_mdd" in results["mode_a"]) and not args.fresh
-        
+        # 修正：若模擬結果為 0.0 (先前編碼解析錯誤導致)，則強制重新執行以獲取正確數據
+        if has_checkpoint_sim_a and results["mode_a"].get("oos_return") == 0.0 and results["mode_a"].get("oos_mdd") == 0.0:
+            print("  [提示] 偵測到模擬交易結果為 0.0% (可能為先前編碼解析錯誤的無效數據)，將重新執行模擬...")
+            has_checkpoint_sim_a = False
+            
         if has_checkpoint_sim_a:
             print(f"\n[續傳/復原] 偵測到已存在的模式 A 模擬交易結果，跳過模擬交易回測...")
         else:
@@ -522,6 +545,7 @@ def main():
         mode_b_params = {}
         if has_checkpoint_trading_b:
             print(f"\n[續傳/復原] 偵測到已存在的模式 B 風控參數 {trading_mode_b_saved}，直接載入並跳過優化與模型重訓...")
+            print(f"  [警告] 此時 models/lgbm_model_*.txt 應為上次執行將留下的模式 B 模型，如果您變更過模型請使用 --fresh 強制重跟。")
             shutil.copy2(trading_mode_b_saved, BEST_TRADING_PARAMS_PATH)
             with open(trading_mode_b_saved, "r", encoding="utf-8") as f:
                 mode_b_data = json.load(f)
@@ -565,7 +589,11 @@ def main():
         
         # B7. 執行全週期模擬交易回測 (2023-01-01 ~ 2026-06-05)
         has_checkpoint_sim_b = ("full_return" in results["mode_b"]) and ("full_mdd" in results["mode_b"]) and not args.fresh
-        
+        # 修正：若模擬結果為 0.0 (先前編碼解析錯誤導致)，則強制重新執行以獲取正確數據
+        if has_checkpoint_sim_b and results["mode_b"].get("full_return") == 0.0 and results["mode_b"].get("full_mdd") == 0.0:
+            print("  [提示] 偵測到模擬交易結果為 0.0% (可能為先前編碼解析錯誤的無效數據)，將重新執行模擬...")
+            has_checkpoint_sim_b = False
+            
         if has_checkpoint_sim_b:
             print(f"\n[續傳/復原] 偵測到已存在的模式 B 模擬交易結果，跳過模擬交易回測...")
         else:

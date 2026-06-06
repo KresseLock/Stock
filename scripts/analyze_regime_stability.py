@@ -177,6 +177,18 @@ def main():
         Spread_t_stat=("ls_spread", lambda x: np.mean(x) / (np.std(x) / np.sqrt(len(x))) if np.std(x) > 0 else 0.0)
     ).reset_index()
     
+    # 計算整體 IS 與 OOS (All)
+    overall_summary = df_daily.groupby("is_oos").agg(
+        Days=("date", "count"),
+        Mean_RankIC=("rank_ic", "mean"),
+        Mean_LS_Spread=("ls_spread", lambda x: np.mean(x) * 100),
+        Spread_t_stat=("ls_spread", lambda x: np.mean(x) / (np.std(x) / np.sqrt(len(x))) if np.std(x) > 0 else 0.0)
+    ).reset_index()
+    overall_summary["regime"] = "All"
+    
+    regime_summary = pd.concat([regime_summary, overall_summary], ignore_index=True)
+    regime_summary = regime_summary.sort_values(["is_oos", "regime"]).reset_index(drop=True)
+    
     # ── 5. 精細尾部排序 (Top 1%, 5%, 10% vs Market Alpha) ──
     tail_summary = []
     for grp in ["IS", "OOS"]:

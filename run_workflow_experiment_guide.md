@@ -13,6 +13,20 @@
 *   **🔵 模式 B (生產模式 - 全數據覆蓋)**：
     模型每天重訓並吸收包含最新大牛市的完整特徵。同時，風控優化器也在包含這段牛市的全週期上調參，用以**優化出一組最契合當前大波動行情的黃金避險參數**，防止避險過度敏感而在牛市中少賺。
 
+### 台股市場背景（為何需要雙模式）
+
+台股近年歷經典型的多空輪轉，直接影響風控參數的最佳值：
+
+| 年份 | 市況 | 指數區間 | 對風控的意義 |
+| :--- | :--- | :--- | :--- |
+| 2022 | 標準熊市，趨勢向下 | ~18,000 → ~12,600 | 停損要緊、避險要靈敏 |
+| 2023 | 絕地反彈復甦年 (+26.8%) | ~12,600 → ~17,900 | 中性，需兼顧攻守 |
+| 2024 | 超級牛市＋劇烈洗盤（全球第二強）| ~17,900 → ~23,000 | 停損需放寬、追漲需積極 |
+| 2025~2026 | 破紀錄狂牛（22,000 → 45,000+）| ~22,000 → ~45,000+ | 保守參數極易被正常回檔洗出場 |
+
+> [!IMPORTANT]
+> 模式 A 的風控參數是在**含有 2022 熊市的歷史數據**上調出來的，天然偏保守。在 2025 年這波急漲行情中，保守的停損（-7%）和避險紅燈（breadth < 17%）幾乎每次正常回檔都會觸發，導致頻繁出場後眼看大盤繼續上漲。**這是預期行為，不代表策略失敗。** 模式 B 的存在正是為了校正這個問題。
+
 ---
 
 ## 🔌 2. 系統調用架構圖
@@ -50,17 +64,18 @@ flowchart TD
 
 本腳本提供了靈活的命令列參數，方便您在不修改代碼的情況下調整實驗規模：
 
-| 短參數 | 長參數 | 類型 | 預設值 | 說明 |
+| 短參數 | 長參數 | 類型 | 預設値 | 說明 |
 | :--- | :--- | :--- | :--- | :--- |
-| `-f` | `--factor_trials` | `int` | `30` | 模式 A 中 `optimize_factors.py` 的最大搜尋輪數。 |
-| `-fe`| `--factor_early_stopping`| `str`| `"15"` | 因子搜尋無進展多少輪後自動終止 (`None` 代表不啟用)。 |
-| `-t` | `--trading_trials` | `int` | `100` | 模式 A / 模式 B 中 `optimize_trading_params.py` 的最大搜尋輪數。 |
-| `-te`| `--trading_early_stopping`| `str`| `"30"` | 風控搜尋無進展多少輪後自動終止 (`None` 代表不啟用)。 |
+| `-f` | `--factor_trials` | `int` | `400` | 模式 A 中 `optimize_factors.py` 的最大搜尋輪數。 |
+| `-fe`| `--factor_early_stopping`| `str`| `"150"` | 因子搜尋無進展多少輪後自動終止 (`None` 代表不啟用)。 |
+| `-t` | `--trading_trials` | `int` | `400` | 模式 A / 模式 B 中 `optimize_trading_params.py` 的最大搜尋輪數。 |
+| `-te`| `--trading_early_stopping`| `str`| `"150"` | 風控搜尋無進展多少輪後自動終止 (`None` 代表不啟用)。 |
 | `-c` | `--capital` | `int` | `2000000`| 模擬交易與風控調參時的初始資金量。 |
 | ❌ | `--skip_factor_opt` | `bool`| `False` | 模式 A 中是否跳過因子調參，直接沿用現有的 `best_factors.json`。 |
+| ❌ | `--fresh` | `bool`| `False` | 強制重新執行所有步驟，忽略現有的 Checkpoint 與中間 JSON 檔。 |
 
 > [!TIP]
-> 預設的因子搜尋設為 `30` 輪、風控搜尋設為 `100` 輪，是為了讓您能在數十分鐘內快速跑完完整實驗。在進行正式的研究與發表前，建議將風控調參設定為 `200` ~ `600` 輪以獲得最優解。
+> 預設的因子搜尋設為 `400` 輪（早停 `150`）、風控搜尋設為 `400` 輪（早停 `150`），適合過夜跑完完整的高品質實驗。如需快速驗證流程，可執行 `python run_workflow_experiment.py -f 30 -fe 15 -t 100 -te 30` 縮短至數十分鐘。
 
 ---
 
@@ -155,18 +170,165 @@ flowchart TD
 
 當您執行完實驗並仔細評估了 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md) 後，如何將新參數上線？
 
-### 🔹 情境一：我想採用模式 B 優化出的黃金風控配置
+### 🔹 情境一：採用模式 B 優化出的黃金風控配置（推薦）
 這通常是最佳選擇，因為模式 B 經歷了最新大牛市的洗禮，其風控配置最適應當前市場：
-1. 在根目錄中，將 `best_trading_params_mode_b.json` 複製並**重新命名為 `best_trading_params.json`**（覆蓋原本的檔案）。
-2. 下午收盤後，照常執行 `python Auto_RUN.py`。系統會自動偵測並讀取此 JSON 檔，明日推理掛單將直接套用這組黃金風控。
 
-### 🔹 情境二：我想採用實驗優化出的最優因子 (MA, RSI 週期等)
+```powershell
+# 將模式 B 的黃金風控複製為系統正式設定
+copy best_trading_params_mode_b.json best_trading_params.json
+# 下午收盤後照常執行，系統自動套用新風控
+python Auto_RUN.py
+```
+
+### 🔹 情境二：採用實驗優化出的最優因子 (MA, RSI 週期等)
 如果您重新執行了因子最佳化（即沒有使用 `--skip_factor_opt`），且發現新因子的 RankIC 顯著高於舊因子：
-1. 因子參數已經在實驗中被寫入 `best_factors.json`（已在實驗結束時被還原）。您可以在對比報告中查看參數，或將實驗過程產生的備份因子套用。
-2. 讓系統正式使用新因子，您必須手動執行特徵工程與模型重新訓練，以將新因子嵌入模型中：
-   ```powershell
-   # 1. 根據新因子重新計算特徵
-   python auto_pipeline.py -s f
-   # 2. 重新訓練模型
-   python auto_pipeline.py -s t
-   ```
+
+```powershell
+# 1. 將實驗產生的模式 A 最佳因子複製為系統正式設定
+copy best_factors_mode_a.json best_factors.json
+# 2. 根據新因子重新計算特徵
+python auto_pipeline.py -s f
+# 3. 重新訓練模型（讓模型學習新因子的特徵空間）
+python auto_pipeline.py -s t
+```
+
+### 🔹 情境三：OOS 績效不佳，只重跑風控調參
+
+```powershell
+# 刪除風控 checkpoint，保留耗時的因子 checkpoint
+del best_trading_params_mode_a.json
+del best_trading_params_mode_b.json
+python run_workflow_experiment.py --skip_factor_opt
+```
+
+---
+
+## 📊 6. 如何判讀實驗報告
+
+實驗結束後，先閱讀 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，再對照以下標準評估策略健康度。
+
+### 6.1 訊號診斷指標（`reports/mode_a_regime_stability_report.txt`）
+
+| 指標 | 健康範圍 | 警示值 | 建議行動 |
+| :--- | :--- | :--- | :--- |
+| **IS All RankIC** | > 0.03 | < 0.01 | 因子對歷史數據幾乎無預測力，考慮重新調參 |
+| **OOS All RankIC** | > 0.02 | < 0.00 | 模型無法泛化到新市場，可能過擬合 |
+| **OOS Bull RankIC** | > 0.03 | < 0.01 | 模型在牛市選股失效，特徵漂移嚴重 |
+| **OOS Top 1% Alpha** | > +1.5%/日 | < +0.5%/日 | 模型無法識別真正的強勢股 |
+| **PSI 嚴重漂移特徵數** | 0~2 個 | > 5 個 | 需重新評估特徵工程或加入新特徵 |
+
+### 6.2 OOS 回測績效判讀（模式 A，OOS 期間為超級牛市）
+
+| 指標 | 強勁 | 可接受 | 需調整 |
+| :--- | :--- | :--- | :--- |
+| **累計報酬率** | > +30% | +10% ~ +30% | < +10% 或負報酬 |
+| **最大回撤 MDD** | < -15% | -15% ~ -25% | > -30% |
+| **Calmar 比率（報酬 / MDD）** | > 2.0 | 1.0 ~ 2.0 | < 1.0 |
+
+> [!NOTE]
+> 模式 A 的 OOS 區間（2025-08-02 ~ 2026-06-05）是台股史上最強的半年牛市，大盤從 22,000 漲至 45,000。若模式 A 在此期間仍能正報酬，代表策略具備極強的市場適應力。如果報酬落後大盤，通常是避險機制在正常回檔時頻繁觸發所致，而非選股方向錯誤——此時應採用模式 B 的風控參數上線。
+
+### 6.3 模式 A vs 模式 B 風控參數對比解讀
+
+下表說明在正常情況下，模式 B 的參數應比模式 A 更寬鬆：
+
+| 參數 | 模式 A 典型值（含熊市調參） | 模式 B 典型值（含牛市調參） | 意義 |
+| :--- | :--- | :--- | :--- |
+| `buy_threshold` | 15~20% | 8~12% | 牛市訊號多，B 更積極進場 |
+| `stop_loss` | -6% ~ -8% | -10% ~ -15% | 牛市波動大，B 給更多容錯空間 |
+| `panic_ma5` | -0.010 ~ -0.015 | -0.025 ~ -0.045 | B 不因短暫回檔觸發避險 |
+| `panic_breadth` | 0.20 ~ 0.30 | 0.10 ~ 0.17 | B 允許更大面積個股下跌才避險 |
+
+若模式 A 的避險門檻比模式 B **嚴格許多**，且 OOS 報酬明顯落後 → 策略在牛市被頻繁洗出場，**直接採用模式 B 參數上線**即可解決。
+
+---
+
+## 🔧 7. OOS 績效不佳的診斷與調整流程
+
+### 7.1 先診斷「為什麼差」
+
+開啟 `reports/backtest_equity_2025-08-02_2026-06-05.csv` 或對應的交易明細，觀察以下現象：
+
+| 觀察到的現象 | 根本原因 | 對應調整 |
+| :--- | :--- | :--- |
+| 進場次數極少，資金長期閒置 | `buy_threshold` 太高，訊號難觸發 | 降低 `BUY_THRESHOLD` |
+| 頻繁停損出場，每次損失 -7% 左右 | `stop_loss` 太緊，正常回檔被強制賣出 | 放寬 `STOP_LOSS_PCT` |
+| 大盤小幅回檔後全部持股被平倉 | `panic_ma5` / `panic_breadth` 太靈敏 | 放寬避險門檻 |
+| 持股方向正確，但移動止盈太早賣出 | `ts_activation` 太低 / `ts_pullback` 太緊 | 調高啟動門檻或放寬回撤容忍 |
+| 買進的股票本身就持續下跌 | 模型選股能力不足（OOS RankIC < 0）| 重新調整因子（`--fresh` 重跑）|
+
+### 7.2 各風控旋鈕的調整方向
+
+以下參數均定義於 [config.py](config.py)，也可透過 [scripts/optimize_trading_params.py](scripts/optimize_trading_params.py) 的搜尋邊界自動調整：
+
+| 參數名稱 | 保守（熊市）| 均衡 | 積極（牛市）| 當前牛市建議方向 |
+| :--- | :---: | :---: | :---: | :--- |
+| `BUY_THRESHOLD` | 20%+ | 12~15% | 8~10% | ↓ 降低，更積極進場 |
+| `STOP_LOSS_PCT` | -5% ~ -7% | -8% ~ -10% | -12% ~ -15% | ↓ 更大容忍空間 |
+| `MKT_PANIC_MA5` | -0.010 | -0.020 | -0.035 ~ -0.050 | ↓ 更不易觸發避險 |
+| `MKT_PANIC_BREADTH` | 0.30 | 0.20 | 0.12 ~ 0.15 | ↓ 更低閾值才避險 |
+| `TS_ACTIVATION_PCT` | 10% | 15% | 20 ~ 25% | ↑ 更高漲幅才啟動移動止盈 |
+| `TS_PULLBACK_PCT` | -5% | -8% | -12 ~ -15% | ↓ 允許更大回撤才止盈出場 |
+
+### 7.3 分層調整策略（由快到慢）
+
+**第一層（最快，今天就能測試）**：直接採用模式 B 已調好的牛市風控
+
+```powershell
+copy best_trading_params_mode_b.json best_trading_params.json
+python auto_pipeline.py -s i
+```
+
+**第二層（數小時）**：只重跑風控調參，讓 Optuna 在包含更多牛市的區間重新搜尋
+
+```powershell
+# 刪除模式 A 風控 checkpoint（同時修改 run_workflow_experiment.py 第 496 行
+# 將 -s 2021-01-02 改為 -s 2023-01-01，讓調參區間涵蓋更多牛市數據）
+del best_trading_params_mode_a.json
+python run_workflow_experiment.py --skip_factor_opt
+```
+
+**第三層（過夜）**：全流程重跑，重新搜尋最佳因子與風控組合
+
+```powershell
+python run_workflow_experiment.py --fresh
+```
+
+---
+
+## 🔁 8. 中斷後的 Checkpoint 續傳機制
+
+實驗支援自動續傳，**中途崩潰或手動 Ctrl+C 後，重新執行同一指令即可從斷點繼續**，無需重跑耗時的 Optuna 調參步驟。
+
+### Checkpoint 檔案對照表
+
+| Checkpoint 檔案 | 命中時跳過的步驟 | 估計節省時間 |
+| :--- | :--- | :--- |
+| `best_factors_mode_a.json` | 模式 A 因子調參（Optuna）| 1 ~ 3 小時 |
+| `reports/mode_a_regime_stability_report.txt`（含 All 行）| 模式 A 特徵重建 + 模型訓練 + 訊號診斷 | 20 ~ 40 分鐘 |
+| `best_trading_params_mode_a.json` | 模式 A 風控調參（Optuna）| 2 ~ 4 小時 |
+| `workflow_experiment_results.json` 中 `oos_return`/`oos_mdd` 不為零 | 模式 A OOS 模擬交易 | 5 ~ 10 分鐘 |
+| `best_trading_params_mode_b.json` | 模式 B 特徵重建 + 模型重訓 + 風控調參 | 3 ~ 6 小時 |
+| `workflow_experiment_results.json` 中 `full_return`/`full_mdd` 不為零 | 模式 B 全週期模擬交易 | 5 ~ 10 分鐘 |
+
+> [!WARNING]
+> 若 `best_trading_params_mode_b.json` Checkpoint 命中，系統將同時跳過模式 B 的特徵重建與模型重訓。此時 `models/lgbm_model_*.txt` 應為上次執行留下的模式 B 模型。若您曾在實驗期間手動修改模型，請加上 `--fresh` 強制全部重跑。
+
+### 強制全部重跑（忽略所有 Checkpoint）
+
+```powershell
+python run_workflow_experiment.py --fresh
+```
+
+---
+
+## 🗓️ 9. 何時應重新執行整個實驗
+
+| 觸發條件 | 建議動作 |
+| :--- | :--- |
+| **每季定期維護**（每 3 個月）| `python run_workflow_experiment.py --skip_factor_opt`（只更新風控）|
+| **市場結構重大轉變**（如牛市轉熊市、重大政策事件）| `python run_workflow_experiment.py --fresh`（全部重跑）|
+| **新增或移除 `TRAIN_INDUSTRIES` 產業** | `python run_workflow_experiment.py --fresh` |
+| **OOS 實盤績效連續 2 個月明顯下滑** | 先依第 7 節診斷，再選擇對應調整層級 |
+| **`feature_engineering.py` 新增重要特徵** | `python run_workflow_experiment.py --fresh` |
+| **`Stocks.txt` 自選股大幅調整** | `python run_workflow_experiment.py --skip_factor_opt` |
