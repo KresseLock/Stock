@@ -54,8 +54,8 @@ flowchart TD
 
     RunExp -->|設定 BACKTEST_DATE=20250801| ModeA
     RunExp -->|設定 BACKTEST_DATE=None| ModeB
-    ModeA -->|寫入與備份| TA_Param["best_trading_params_mode_a.json"]
-    ModeB -->|寫入與備份| TB_Param["best_trading_params_mode_b.json"]
+    ModeA -->|寫入與備份| TA_Param["configs/best_trading_params_mode_a.json"]
+    ModeB -->|寫入與備份| TB_Param["configs/best_trading_params_mode_b.json"]
 ```
 
 ---
@@ -71,7 +71,7 @@ flowchart TD
 | `-t` | `--trading_trials` | `int` | `400` | 模式 A / 模式 B 中 `optimize_trading_params.py` 的最大搜尋輪數。 |
 | `-te`| `--trading_early_stopping`| `str`| `"150"` | 風控搜尋無進展多少輪後自動終止 (`None` 代表不啟用)。 |
 | `-c` | `--capital` | `int` | `2000000`| 模擬交易與風控調參時的初始資金量。 |
-| ❌ | `--skip_factor_opt` | `bool`| `False` | 模式 A 中是否跳過因子調參，直接沿用現有的 `best_factors.json`。 |
+| ❌ | `--skip_factor_opt` | `bool`| `False` | 模式 A 中是否跳過因子調參，直接沿用現有的 `configs/best_factors.json`。 |
 | ❌ | `--fresh` | `bool`| `False` | 強制重新執行所有步驟，忽略現有的 Checkpoint 與中間 JSON 檔。 |
 
 > [!TIP]
@@ -82,8 +82,8 @@ flowchart TD
 ## 🔍 4. 詳細執行步驟、參數與載入數據
 
 ### 📂 步驟 1：安全備份與初始化
-*   **載入數據與狀態**：檢測根目錄是否存在 `config.py`、`best_factors.json` 和 `best_trading_params.json`。
-*   **執行動作**：將上述三檔複製並備份為 `.workflow.bak` 檔。如果原本沒有 `best_factors.json` 或 `best_trading_params.json`，則記錄其 nonexistent 狀態。
+*   **載入數據與狀態**：檢測 `configs/` 目錄下是否存在 `config.py`、`best_factors.json` 和 `best_trading_params.json`。
+*   **執行動作**：將上述三檔複製並備份為 `.workflow.bak` 檔。如果原本沒有 `configs/best_factors.json` 或 `configs/best_trading_params.json`，則記錄其 nonexistent 狀態。
 *   **目的**：確保在實驗過程中，不論發生程式崩潰、斷電或手動終止，都能在退出時 100% 還原主系統的狀態。
 
 ---
@@ -97,12 +97,12 @@ flowchart TD
     *   將 `RUN_OPTIMIZATION` 設為 `True`，將 `OPTIMIZATION_TRIALS` 設為 `-f` 參數值，將 `EARLY_STOPPING_ROUNDS` 設為 `-fe` 參數值。
 *   **載入數據**：加載 `data/raw_price/` 的每日收盤行情與 `config.py` 中的 `TRAIN_INDUSTRIES` 對應股票。
 *   **執行內容**：Optuna 在 2025-08-01 之前的訓練集上尋找最佳技術指標參數（MA、RSI、MACD 等均線窗口），以最大化分類勝率。
-*   **輸出產出**：寫入最佳因子到 `best_factors.json`。
+*   **輸出產出**：寫入最佳因子到 `configs/best_factors.json`。
 
 #### 2.2 重建特徵與訓練模型 A
 *   **調用指令**：`python auto_pipeline.py -s f` 與 `python auto_pipeline.py -s t`
 *   **載入數據**：
-    *   讀取剛生成的 `best_factors.json`。
+    *   讀取剛生成的 `configs/best_factors.json`。
     *   讀取 `data/` 目錄下三大法人籌碼、融資融券、大戶持股與基本面季報。
 *   **執行內容**：以最佳因子重新計算所有股票的技術指標與總體/板塊特徵，並只採用 `2025-08-01` 之前的數據訓練 LightGBM 分類模型。
 *   **輸出產出**：儲存模型至 `models/lgbm_model_1.txt`，特徵欄位順序存至 `models/feature_cols.json`。
@@ -118,11 +118,11 @@ flowchart TD
 *   **寫入配置**：將 `config.py` 中的 `EARLY_STOPPING_ROUNDS` 設為 `-te` 參數值。
 *   **載入數據**：加載 `features_combined.parquet`、`models/lgbm_model_1.txt` 與歷史大盤指數。
 *   **執行內容**：限制在 2025-08-01 以前的多空市況中（**絕對不讓 Optuna 看到未來牛市**），尋找最優風控配置（如停損線、避險紅燈）。
-*   **輸出產出**：最佳參數寫入 `best_trading_params.json`，實驗腳本將其備份為 `best_trading_params_mode_a.json`。
+*   **輸出產出**：最佳參數寫入 `configs/best_trading_params.json`，實驗腳本將其備份為 `configs/best_trading_params_mode_a.json`。
 
 #### 2.5 樣本外模擬交易 (時光機回測)
 *   **調用指令**：`python trading_sim.py -s 2025-08-02 -e 2026-06-05 -c <capital>`
-*   **載入數據**：加載 Model A 模型、`best_trading_params.json`（模式 A 風控）、`Stocks.txt` 自選股與 OOS 期間的股價及大盤數據。
+*   **載入數據**：加載 Model A 模型、`configs/best_trading_params.json`（模式 A 風控）、`Stocks.txt` 自選股與 OOS 期間的股價及大盤數據。
 *   **執行內容**：在 `2025-08-02 ~ 2026-06-05` 超級牛市中模擬實盤交易，模擬台股 T+2 交割機制，計入手續費與稅金。
 *   **輸出產出**：解析回測 terminal 輸出的「區間報酬」與「最大回撤」，寫入實驗日誌。
 
@@ -134,7 +134,7 @@ flowchart TD
 *   **調用指令**：`python auto_pipeline.py -s f`
 *   **寫入配置**：
     *   將 `config.py` 中的 `BACKTEST_DATE` 設為 `None`。
-    *   將 `RUN_OPTIMIZATION` 設為 `False`（沿用模式 A 優化出的 `best_factors.json`，以節省時間）。
+    *   將 `RUN_OPTIMIZATION` 設為 `False`（沿用模式 A 優化出的 `configs/best_factors.json`，以節省時間）。
 *   **執行內容**：將最完整的歷史數據（截至今日）合併重建。由於 `BACKTEST_DATE = None`，流水線會自動將特徵分界點設置在「一年前的最近交易日」，實現動態滾動。
 
 #### 3.2 重訓模型 B (包含牛市)
@@ -146,7 +146,7 @@ flowchart TD
 *   **調用指令**：`python scripts/optimize_trading_params.py -t <trials> -s 2023-01-01 -e 2026-06-01 -c <capital>`
 *   **寫入配置**：將 `config.py` 中的 `EARLY_STOPPING_ROUNDS` 設為 `-te` 參數值。
 *   **執行內容**：在涵蓋這段超級牛市的完整週期上進行風控優化。Optuna 此時能夠親眼見識到牛市的劇烈個股波動和大盤的極端強勢，藉以放寬避險紅燈與停損範圍，以免在牛市中被過早震盪洗出場。
-*   **輸出產出**：最佳參數寫入 `best_trading_params.json`，實驗腳本將其備份為 `best_trading_params_mode_b.json`。
+*   **輸出產出**：最佳參數寫入 `configs/best_trading_params.json`，實驗腳本將其備份為 `configs/best_trading_params_mode_b.json`。
 
 #### 3.4 全週期模擬交易回測
 *   **調用指令**：`python trading_sim.py -s 2023-01-01 -e 2026-06-05 -c <capital>`
@@ -162,7 +162,7 @@ flowchart TD
 *   **執行內容**：
     1.  讀取模式 A 訊號診斷報告中的相關 RankIC 指標。
     2.  將模式 A 與模式 B 的參數、報酬與 MDD 以表格對比格式寫入 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)。
-    3.  從備份檔 `.workflow.bak` 中，完美還原 `config.py`、`best_factors.json` 和 `best_trading_params.json` 到最原始狀態，確保實盤無任何副作用。
+    3.  從備份檔 `.workflow.bak` 中，完美還原 `config.py`、`configs/best_factors.json` 和 `configs/best_trading_params.json` 到最原始狀態，確保實盤無任何副作用。
 
 ---
 
@@ -170,12 +170,19 @@ flowchart TD
 
 當您執行完實驗並仔細評估了 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md) 後，如何將新參數上線？
 
+### 💡 核心機制：config.py 自動載入與動態覆寫
+本系統設計了**零人工代碼干預的動態參數覆寫機制**。當任何系統腳本（包括 `inference.py`、`trading_sim.py`、`auto_pipeline.py` 等）載入 [config.py](config.py) 時，[config.py](config.py) 的初始化邏輯會**自動偵測**專案 `configs/` 目錄下是否存在 `best_trading_params.json`：
+- **如果存在**：系統會直接讀取 JSON 中的最佳風控參數（如 `buy_threshold`, `stop_loss`, `panic_ma5`, `panic_breadth`, `ts_activation`, `ts_pullback` 等），並**在記憶體中自動覆寫** [config.py](config.py) 的預設變數。
+- **如果不存在**：系統則降級使用 [config.py](config.py) 檔案中硬編碼的靜態常數值。
+
+因此，您**完全不需要手動修改 config.py 中的參數代碼**。只需透過檔案複製切換 JSON 設定，全系統的所有模組（回測、模擬、推理）將立即自動套用最新最優風控值。
+
 ### 🔹 情境一：採用模式 B 優化出的黃金風控配置（推薦）
 這通常是最佳選擇，因為模式 B 經歷了最新大牛市的洗禮，其風控配置最適應當前市場：
 
 ```powershell
 # 將模式 B 的黃金風控複製為系統正式設定
-copy best_trading_params_mode_b.json best_trading_params.json
+copy configs\best_trading_params_mode_b.json configs\best_trading_params.json
 # 下午收盤後照常執行，系統自動套用新風控
 python Auto_RUN.py
 ```
@@ -185,7 +192,7 @@ python Auto_RUN.py
 
 ```powershell
 # 1. 將實驗產生的模式 A 最佳因子複製為系統正式設定
-copy best_factors_mode_a.json best_factors.json
+copy configs\best_factors_mode_a.json configs\best_factors.json
 # 2. 根據新因子重新計算特徵
 python auto_pipeline.py -s f
 # 3. 重新訓練模型（讓模型學習新因子的特徵空間）
@@ -196,8 +203,8 @@ python auto_pipeline.py -s t
 
 ```powershell
 # 刪除風控 checkpoint，保留耗時的因子 checkpoint
-del best_trading_params_mode_a.json
-del best_trading_params_mode_b.json
+del configs\best_trading_params_mode_a.json
+del configs\best_trading_params_mode_b.json
 python run_workflow_experiment.py --skip_factor_opt
 ```
 
@@ -275,7 +282,7 @@ python run_workflow_experiment.py --skip_factor_opt
 **第一層（最快，今天就能測試）**：直接採用模式 B 已調好的牛市風控
 
 ```powershell
-copy best_trading_params_mode_b.json best_trading_params.json
+copy configs\best_trading_params_mode_b.json configs\best_trading_params.json
 python auto_pipeline.py -s i
 ```
 
@@ -284,7 +291,7 @@ python auto_pipeline.py -s i
 ```powershell
 # 刪除模式 A 風控 checkpoint（同時修改 run_workflow_experiment.py 第 496 行
 # 將 -s 2021-01-02 改為 -s 2023-01-01，讓調參區間涵蓋更多牛市數據）
-del best_trading_params_mode_a.json
+del configs\best_trading_params_mode_a.json
 python run_workflow_experiment.py --skip_factor_opt
 ```
 
@@ -304,15 +311,15 @@ python run_workflow_experiment.py --fresh
 
 | Checkpoint 檔案 | 命中時跳過的步驟 | 估計節省時間 |
 | :--- | :--- | :--- |
-| `best_factors_mode_a.json` | 模式 A 因子調參（Optuna）| 1 ~ 3 小時 |
+| `configs/best_factors_mode_a.json` | 模式 A 因子調參（Optuna）| 1 ~ 3 小時 |
 | `reports/mode_a_regime_stability_report.txt`（含 All 行）| 模式 A 特徵重建 + 模型訓練 + 訊號診斷 | 20 ~ 40 分鐘 |
-| `best_trading_params_mode_a.json` | 模式 A 風控調參（Optuna）| 2 ~ 4 小時 |
+| `configs/best_trading_params_mode_a.json` | 模式 A 風控調參（Optuna）| 2 ~ 4 小時 |
 | `workflow_experiment_results.json` 中 `oos_return`/`oos_mdd` 不為零 | 模式 A OOS 模擬交易 | 5 ~ 10 分鐘 |
-| `best_trading_params_mode_b.json` | 模式 B 特徵重建 + 模型重訓 + 風控調參 | 3 ~ 6 小時 |
+| `configs/best_trading_params_mode_b.json` | 模式 B 特徵重建 + 模型重訓 + 風控調參 | 3 ~ 6 小時 |
 | `workflow_experiment_results.json` 中 `full_return`/`full_mdd` 不為零 | 模式 B 全週期模擬交易 | 5 ~ 10 分鐘 |
 
 > [!WARNING]
-> 若 `best_trading_params_mode_b.json` Checkpoint 命中，系統將同時跳過模式 B 的特徵重建與模型重訓。此時 `models/lgbm_model_*.txt` 應為上次執行留下的模式 B 模型。若您曾在實驗期間手動修改模型，請加上 `--fresh` 強制全部重跑。
+> 若 `configs/best_trading_params_mode_b.json` Checkpoint 命中，系統將同時跳過模式 B 的特徵重建與模型重訓。此時 `models/lgbm_model_*.txt` 應為上次執行留下的模式 B 模型。若您曾在實驗期間手動修改模型，請加上 `--fresh` 強制全部重跑。
 
 ### 強制全部重跑（忽略所有 Checkpoint）
 

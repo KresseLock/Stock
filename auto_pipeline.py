@@ -56,7 +56,7 @@ except ImportError:
     TRAIN_INDUSTRIES      = {}
 
 END_DATE = datetime.date.today()
-BEST_FACTORS_PATH = os.path.join(BASE_DIR, "best_factors.json")
+BEST_FACTORS_PATH = os.path.join(BASE_DIR, "configs", "best_factors.json")
 
 # 引入位於 scripts/ 的新模組
 import scripts.feature_engineering as fe_module

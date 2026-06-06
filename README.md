@@ -41,7 +41,7 @@
 ```mermaid
 flowchart LR
     A["🕷️ 數據爬蟲\nscraper.py"] --> B["⚙️ 貝葉斯因子調參\noptimize_factors.py"]
-    B -->|best_factors.json| C["🔬 特徵工程重建\nfeature_engineering.py"]
+    B -->|configs/best_factors.json| C["🔬 特徵工程重建\nfeature_engineering.py"]
     C -->|.parquet| D["🤖 模型訓練\ntrain.py"]
     D --> E["📡 推理預測\ninference.py"]
     E -->|多空分數| F["📊 交易模擬回測\ntrading_sim.py"]
@@ -80,7 +80,7 @@ flowchart LR
 - 使用 Optuna TPE 框架自動搜尋技術指標最佳參數組合。
 - 嚴格日期分界防止前視偏差（Lookahead Bias）。
 - 支援 Early Stopping（連續 N 輪無進展自動終止）。
-- 結果存至 `best_factors.json`，供後續流水線復用。
+- 結果存至 `configs/best_factors.json`，供後續流水線復用。
 
 </details>
 
@@ -104,6 +104,40 @@ flowchart LR
 - **動態參數覆蓋**：支援透過 CLI 參數覆蓋大盤避險紅燈與停損門檻，以便於回測探索。
 - **真實 T+2 交割機制模擬**：細分「購買力（可用資金）」與「銀行實質餘額（T+2 扣/入款）」，賣出股票當天資金可立即滾動買入，但實質款項於兩日後才完成交割。
 - 支援零股交易精算，回測結束輸出多分頁 Excel 報表。
+
+</details>
+
+<details>
+<summary><b>🤖 LightGBM 多天期分類模型訓練器 (scripts/train.py)</b></summary>
+
+- 訓練三個獨立的 LightGBM 分類模型，分別預測未來 1、2、3 天的強勢/弱勢/中性標籤。
+- **樣本大跌懲罰機制 (Loss Weighting)**：自動計算未來 3 天內最低收益率。若低於跌幅門檻 [SAMPLE_WEIGHT_DROP_THRESHOLD](config.py) (預設 -5%)，將該樣本權重乘以 [SAMPLE_WEIGHT_PENALTY](config.py) (預設 2.0)。這能強制模型在學習過程中優先避開具有大跌風險的個股，從而在選股層面有效抑制模擬交易與實盤中的最大回撤 (MDD)。
+- 採用嚴格的時間序列資料劃分 (70% 訓練, 10% 驗證, 20% 測試) 防止過擬合與數據洩漏。
+
+</details>
+
+<details>
+<summary><b>🩺 訊號與市況穩定性診斷分析器 (scripts/analyze_regime_stability.py)</b></summary>
+
+- 計算樣本內 (IS) 與樣本外 (OOS) 的選股相關指標，包括 RankIC、選股單調性 (Monotonicity) 以及首名組別的超額 Alpha 收益。
+- **特徵漂移監控**：計算特徵的 Population Stability Index (PSI)，評估特徵分佈隨市場暴漲或狀態改變的漂移程度 (若 PSI >= 0.25 且 RankIC 顯著衰退，代表因子已失效)。
+- 按市況分層輸出 (Bear / Bull / All) 指標，作為是否需要回到模式 A 重新篩選或設計因子的依據。
+
+</details>
+
+<details>
+<summary><b>🎛️ 交易策略與避險參數自動調參器 (scripts/optimize_trading_params.py)</b></summary>
+
+- 使用 Optuna 調校模擬交易風控參數 (`buy_threshold`, `stop_loss`, `panic_ma5`, `panic_breadth`, `ts_activation`, `ts_pullback`)。
+- **多市況魯棒性交叉驗證 (Regime-Robust CV)**：將訓練區間依時間順序切分為 3 個子區間（如：2021多頭、2022空頭、2023-2025多空震盪），若所有區間回報皆為正，採用調和平均值（Harmonic Mean）打分以懲罰單一表現差勁的區間；若有任何區間回報為負，則採用最小值（Minimin）強行避開在空頭市場崩盤或震盪市中爆倉的配置。
+
+</details>
+
+<details>
+<summary><b>📅 時光機樣本外單日回測器 (scripts/backtest.py)</b></summary>
+
+- 針對單一基準日期 (D) 的走步驗證 (Walk-forward Validation) 工具。它會將時間軸限制在日期 D 之前，自動訓練 Day 1 ~ Day 3 的 LightGBM 模型，並在 D 之後的 3 個交易日上執行預測，輸出真實命中率。
+- 自動加載 [Stocks.txt](Stocks.txt) 自選股進行對比，印出其多空分數、預測漲跌與實際漲跌。
 
 </details>
 
@@ -151,12 +185,16 @@ Stock/
 ├── Auto_RUN.py                 # 一鍵順序執行全流程主控腳本
 ├── auto_pipeline.py            # 一鍵式自動化流水線入口
 ├── config.py                   # 系統中央控制面板
+├── 📂 configs/                  # 最佳化參數設定資料夾
+│   ├── best_factors.json       # 最佳化技術指標參數存檔
+│   ├── best_trading_params.json # 最佳化交易與風控策略參數存檔
+│   ├── best_factors_mode_a.json # 實驗模式 A 因子參數
+│   ├── best_trading_params_mode_a.json # 實驗模式 A 風控參數
+│   └── best_trading_params_mode_b.json # 實驗模式 B 風控參數
 ├── run_workflow_experiment.py  # 一鍵全自動雙階段實驗主控腳本
 ├── run_workflow_experiment_guide.md # 實驗主控台使用說明與架構指南
 ├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
 ├── Stocks.txt                  # 自選股 / 實質持倉清單
-├── best_factors.json           # 最佳化技術指標參數存檔
-├── best_trading_params.json     # 最佳化交易與風控策略參數存檔
 ├── FINMIND_TOKEN.txt           # FinMind API 金鑰存放檔 (可選)
 └── requirements.txt            # Python 依賴套件清單
 ```
@@ -317,7 +355,7 @@ python scripts/backtest.py 2025-08-01
 
 ##### 3. 輸出結果與自動套用
 
-搜尋完成後，最佳參數與回測指標會自動輸出並覆蓋存檔於 `best_trading_params.json`。該檔案除了包含最佳的參數配置外，還會記錄**全區間整體績效**與**三個子區間個別的報酬率、最大回撤與得分**，供後續分析。
+搜尋完成後，最佳參數與回測指標會自動輸出並覆蓋存檔於 `configs/best_trading_params.json`。該檔案除了包含最佳的參數配置外，還會記錄**全區間整體績效**與**三個子區間個別的報酬率、最大回撤與得分**，供後續分析。
 
 `config.py` 在被任何模組（回測、模擬、推理）載入時，會自動偵測並讀取此 JSON 檔，動態覆寫內部的風控參數，使新參數立刻全系統生效。
 
@@ -336,13 +374,13 @@ python scripts/backtest.py 2025-08-01
 1. **第一階段：技術指標與因子最佳化 (Optimize Factors)**
    - **目的**：搜尋最適合目前選定板塊與自選股的技術指標週期參數（如均線長短、RSI/KD天數等），使機器學習模型預測最準確。
    - **執行指令**：`python auto_pipeline.py -s o`
-   - **產出**：儲存最佳技術指標參數至 `best_factors.json`。
+   - **產出**：儲存最佳技術指標參數至 `configs/best_factors.json`。
    - **後續步驟**：執行特徵重建 `python auto_pipeline.py -s f` 與模型重新訓練 `python auto_pipeline.py -s t`，以將新因子應用到特徵數據與模型中。
 
 2. **第二階段：交易策略與避險風控最佳化 (Optimize Trading Params)**
    - **目的**：在模型預測力固定下，搜尋最佳的實戰交易風控參數（如個股停損線、大盤避險紅燈、移動止盈啟動線），以最大化獲利率並抑制最大回撤 (MDD)。
    - **執行指令**：`python scripts/optimize_trading_params.py`
-   - **產出**：儲存最佳風控與策略參數至 `best_trading_params.json`。
+   - **產出**：儲存最佳風控與策略參數至 `configs/best_trading_params.json`。
    - **後續步驟**：此結果會由 `config.py` 在初始化時自動動態加載並覆寫預設常數，**全系統（回測、模擬、推理）將立即自動套用新風控值**，無須任何手動操作。
 
 ### Step 6 — 量化研發與實盤生產工作流 (模式 A 與 模式 B)
@@ -384,7 +422,7 @@ python scripts/backtest.py 2025-08-01
         ```powershell
         python auto_pipeline.py -s o
         ```
-        *   *為什麼*：使用 Optuna 尋找最適合指定產業的技術指標參數（如均線窗口、KD週期），產生 `best_factors.json`。
+        *   *為什麼*：使用 Optuna 尋找最適合指定產業的技術指標參數（如均線窗口、KD週期），產生 `configs/best_factors.json`。
     3.  **重建特徵工程與訓練模型**：
         ```powershell
         python auto_pipeline.py -s f
@@ -405,7 +443,7 @@ python scripts/backtest.py 2025-08-01
         ```powershell
         python trading_sim.py --start 2025-08-02 --end 2026-06-05 -c 2000000
         ```
-        *   *為什麼*：使用步驟 5 優化出的 `best_trading_params.json`，在完全沒看過的 OOS 超級牛市區間執行模擬交易。如果此時的 Return 與 MDD（Return - 2.0*MDD）依然非常優異，代表整個量化系統的泛化能力極強，即可準備進入實盤。
+        *   *為什麼*：使用步驟 5 優化出的 `configs/best_trading_params.json`，在完全沒看過的 OOS 超級牛市區間執行模擬交易。如果此時的 Return 與 MDD（Return - 2.0*MDD）依然非常優異，代表整個量化系統的泛化能力極強，即可準備進入實盤。
 
 ---
 
@@ -439,7 +477,7 @@ python scripts/backtest.py 2025-08-01
 
 ##### ① 執行方式與參數
 ```powershell
-# 1. 預設執行 (因子調參跑 30 輪，風控調參跑 100 輪，初始資金 200 萬，重新執行因子尋優)
+# 1. 預設執行（因子調參跑 400 輪，風控調參跑 400 輪，初始資金 200 萬，適合過夜計算）
 python run_workflow_experiment.py
 
 # 2. 自訂調參輪數與資金 (模式 A 因子調參 50 輪，風控調參 150 輪，初始資金 300 萬)
@@ -447,16 +485,43 @@ python run_workflow_experiment.py -f 50 -t 150 -c 3000000
 
 # 3. 沿用現有 best_factors.json (跳過因子優化，僅重新訓練模型與優化交易風控，速度最快)
 python run_workflow_experiment.py --skip_factor_opt
+
+# 4. 忽略所有斷點續傳，強制全部重跑
+python run_workflow_experiment.py --fresh
 ```
 
-##### ② 實驗產出報告與備份存檔
+##### ② 命令列參數清單
+
+| 短參數 | 長參數 | 類型 | 預設値 | 說明 |
+| :--- | :--- | :--- | :--- | :--- |
+| `-f` | `--factor_trials` | `int` | `400` | 模式 A 因子調參最大搜尋輪數 |
+| `-fe` | `--factor_early_stopping` | `str` | `"150"` | 因子調參早停輪數（`None` 代表不啟用）|
+| `-t` | `--trading_trials` | `int` | `400` | 風控調參最大搜尋輪數 |
+| `-te` | `--trading_early_stopping` | `str` | `"150"` | 風控調參早停輪數 |
+| `-c` | `--capital` | `int` | `2000000` | 回測與優化的初始資金 |
+| ✕ | `--skip_factor_opt` | flag | `False` | 跳過模式 A 因子調參，沿用現有 `best_factors.json` |
+| ✕ | `--fresh` | flag | `False` | 忽略所有 Checkpoint，強制全部重跑 |
+
+##### ③ 實驗產出報告與備份存檔
 執行完畢後，系統會自動在 `reports/` 目錄生成一份詳細的 Markdown 對比報告 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，其中包含：
 *   **關鍵績效指標對比**：模式 A（樣本外超級牛市）與模式 B（全週期含牛市）的區間報酬、最大回撤 (MDD) 與 Calmar 比率對比。
 *   **最佳化風控參數對比**：展示 Optuna 在兩模式下搜尋出的黃金參數差異（如大盤避險紅燈、個股停損線的漂移）。
 *   **獨立存檔參數與診斷**：
     *   模式 A 訊號診斷報告存檔於 [reports/mode_a_regime_stability_report.txt](reports/mode_a_regime_stability_report.txt)。
-    *   模式 A 風控參數存檔於 `best_trading_params_mode_a.json`。
-    *   模式 B 風控參數存檔於 `best_trading_params_mode_b.json`。
+    *   模式 A 風控參數存檔於 `configs/best_trading_params_mode_a.json`。
+    *   模式 B 風控參數存檔於 `configs/best_trading_params_mode_b.json`。
+##### ④ Checkpoint 斷點續傳機制
+
+實驗支援自動續傳，**中途崩潰或手動 Ctrl+C 後，重新執行同一指令即可從斷點續跑**。主要 Checkpoint 檔案如下：
+
+| Checkpoint 檔案 | 命中時跳過的歕時步驟 | 估計節省 |
+| :--- | :--- | :--- |
+| `configs/best_factors_mode_a.json` | 模式 A 因子調參（Optuna 400 輪）| 1~3 小時 |
+| `reports/mode_a_regime_stability_report.txt` | 模式 A 特徵重建 + 模型訓練 + 訊號診斷 | 20~40 分鐘 |
+| `configs/best_trading_params_mode_a.json` | 模式 A 風控調參（Optuna 400 輪）| 2~4 小時 |
+| `configs/best_trading_params_mode_b.json` | 模式 B 全部步驟（特徵重建 + 模型重訓 + 風控調參）| 3~6 小時 |
+
+報告判讀詳解請參閱 [run_workflow_experiment_guide.md](run_workflow_experiment_guide.md)。
 
 ---
 
@@ -472,17 +537,47 @@ python tests/test_pipeline.py
 
 ## ⚙️ 核心策略參數
 
+### 1. 交易執行與基本風控參數
 | 參數 | 預設值 | 說明 |
 |------|--------|------|
 | `BUY_THRESHOLD` | `10.0%` | Day1 多空淨分數達此值才觸發買進 |
 | `SELL_THRESHOLD` | `0.0%` | Day3 多空淨分數低於此值觸發賣出 |
 | `STOP_LOSS_PCT` | `-8.0%` | 相對買進成本的個股固定停損線 |
-| `MKT_PANIC_MA5` | `-1.0%` | 大盤 5 日滾動平均報酬率避險紅燈門檻 |
-| `MKT_PANIC_BREADTH` | `30.0%` | 全市場上漲家數比例避險紅燈門檻 |
 | `MAX_POSITIONS` | `5 檔` | 最大同時持股數 |
 | `FEE_RATE` | `0.1425%` | 單邊券商手續費 |
 | `TAX_RATE` | `0.3%` | 賣出證交稅（非當沖） |
 | **總交易摩擦成本** | **≈ 0.585%** | 模型選股獲利需超越此值才有淨利 |
+
+### 2. 系統性大盤避險與移動追蹤止盈參數
+| 參數 | 預設值 | 說明 |
+|------|--------|------|
+| `MKT_PANIC_MA5` | `-1.0%` | 大盤 5 日滾動平均報酬率避險紅燈門檻 |
+| `MKT_PANIC_BREADTH` | `30.0%` | 全市場上漲家數比例避險紅燈門檻 |
+| `TS_ACTIVATION_PCT` | `10.0%` | 個股浮動盈利達到此百分比時，開啟移動追蹤止盈 |
+| `TS_PULLBACK_PCT` | `-6.0%` | 啟動移動止盈後，自最高收盤價回撤此百分比執行停利出場 |
+
+### 3. 機器學習樣本大跌懲罰 (MDD 避險機制) 參數
+| 參數 | 預設值 | 說明 |
+|------|--------|------|
+| `SAMPLE_WEIGHT_DROP_THRESHOLD` | `-5.0%` | 大跌門檻。若未來 3 天內有任一天大跌超過此值，該樣本將會被懲罰 |
+| `SAMPLE_WEIGHT_PENALTY` | `2.0` 倍 | 樣本懲罰權重倍數。強制模型在學習過程中避開具有大跌風險的個股 |
+
+### 4. 絕對與相對混合標籤 (方案 C) 設計參數
+| 參數 | 預設值 | 說明 |
+|------|--------|------|
+| `LABEL_STRONG_QUANTILE` | `0.80` (前 20%) | 強勢股橫截面相對排名分位數門檻 |
+| `LABEL_WEAK_QUANTILE` | `0.20` (後 20%) | 弱勢股橫截面相對排名分位數門檻 |
+| `LABEL_STRONG_MIN_RET` | `0.0%` (0.00) | 強勢股 (Class 2) 絕對報酬率必須大於此值，否則歸為中性 (大崩盤防線) |
+| `LABEL_WEAK_MAX_RET` | `-2.0%` (-0.02) | 跌幅大於此值強制歸類為弱勢股 (Class 0) |
+
+### 5. 智慧限價掛單 (限價搓合機制) 參數
+| 參數 | 預設值 | 說明 |
+|------|--------|------|
+| `ORDER_MARKUP_HIGH_SCORE` | `30.0` | D1 多空預測信心分數達此值，使用高溢價幅度 |
+| `ORDER_MARKUP_MID_SCORE` | `20.0` | D1 多空預測信心分數達此值，使用中溢價幅度 |
+| `ORDER_MARKUP_HIGH_PCT` | `+2.5%` | 高溢價幅度比例，用於開盤搶進強勢股 |
+| `ORDER_MARKUP_MID_PCT` | `+2.0%` | 中溢價幅度比例 |
+| `ORDER_MARKUP_LOW_PCT` | `+1.5%` | 標準買入加價限價幅度比例 |
 
 ---
 
@@ -507,7 +602,7 @@ flowchart LR
 - **中央設定檔**：所有常數與 ML 配置均在 [config.py](config.py) 修改，禁止在模組腳本中硬編碼。
 - **新增特徵**：修改 `feature_engineering.py` 後，必須執行 `auto_pipeline.py -s f` 重建 parquet 並重新訓練。
 - **編輯自選股**：直接修改 `Stocks.txt`，可用 `python scripts/tools/clean_stocks.py` 自動清理重複代碼。
-- **提交前**：務必執行 `python tests/test_pipeline.py` 確認全數通過。
+- **提交前**：涉及核心程式碼修改時，務必執行 `python tests/test_pipeline.py` 確認全數通過；若僅修改說明文件（如 `README.md`、`AGENTS.md`）或非代碼配置（如 `.gitignore`、`.agyignore`），則無須執行測試。
 
 ---
 

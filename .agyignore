@@ -10,8 +10,11 @@ data/
 *.json
 
 # 允許 AI 讀取重要的設定與快取 JSON 檔
-!best_factors.json
-!best_trading_params.json
+!configs/best_factors.json
+!configs/best_trading_params.json
+!configs/best_factors_mode_a.json
+!configs/best_trading_params_mode_a.json
+!configs/best_trading_params_mode_b.json
 !scripts/stock_categories.json
 !models/feature_cols.json
 !data/failed_dates.json
@@ -46,7 +49,10 @@ temp/
 .DS_Store
 Thumbs.db
 FINMIND_TOKEN.txt
-reports/
+reports/*
+!reports/workflow_experiment_report.md
+!reports/workflow_experiment_results.json
+!reports/mode_a_regime_stability_report.txt
 predictions/
 
 # rclone 雲端密鑰與設定檔 (防外洩)

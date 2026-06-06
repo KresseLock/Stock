@@ -56,8 +56,8 @@ CAPITAL        = 2000000          # 回測與優化的初始資金 (200 萬)
 # 路徑定義
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.py")
-BEST_FACTORS_PATH = os.path.join(BASE_DIR, "best_factors.json")
-BEST_TRADING_PARAMS_PATH = os.path.join(BASE_DIR, "best_trading_params.json")
+BEST_FACTORS_PATH = os.path.join(BASE_DIR, "configs", "best_factors.json")
+BEST_TRADING_PARAMS_PATH = os.path.join(BASE_DIR, "configs", "best_trading_params.json")
 STABILITY_REPORT_PATH = os.path.join(BASE_DIR, "reports", "regime_stability_report.txt")
 
 # 備份路徑
@@ -410,7 +410,7 @@ def main():
         update_config_var("EARLY_STOPPING_ROUNDS", fact_es_str)
         
         # Checkpoint: 檢查是否已有備份的最佳因子
-        factor_mode_a_saved = os.path.join(BASE_DIR, "best_factors_mode_a.json")
+        factor_mode_a_saved = os.path.join(BASE_DIR, "configs", "best_factors_mode_a.json")
         has_checkpoint_factor = os.path.exists(factor_mode_a_saved) and not args.fresh
         
         if has_checkpoint_factor:
@@ -472,7 +472,7 @@ def main():
         save_progress(results)
         
         # A8. 執行風控參數最佳化
-        trading_mode_a_saved = os.path.join(BASE_DIR, "best_trading_params_mode_a.json")
+        trading_mode_a_saved = os.path.join(BASE_DIR, "configs", "best_trading_params_mode_a.json")
         has_checkpoint_trading_a = os.path.exists(trading_mode_a_saved) and not args.fresh
         
         mode_a_params = {}
@@ -539,7 +539,7 @@ def main():
         print("=" * 80)
         
         # B6. 執行全週期風控參數優化
-        trading_mode_b_saved = os.path.join(BASE_DIR, "best_trading_params_mode_b.json")
+        trading_mode_b_saved = os.path.join(BASE_DIR, "configs", "best_trading_params_mode_b.json")
         has_checkpoint_trading_b = os.path.exists(trading_mode_b_saved) and not args.fresh
         
         mode_b_params = {}

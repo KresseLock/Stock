@@ -1,0 +1,71 @@
+{
+  "optimized_at": "2026-06-06 03:23:05",
+  "algorithm": "Optuna TPE (Bayesian)",
+  "iterations": 400,
+  "best_score_avg": 27.147595356550582,
+  "backtest_date": "20250801",
+  "best_params_for_run_feature_engineering": {
+    "MA_WINDOWS": [
+      4,
+      12,
+      35,
+      84
+    ],
+    "RSI_PERIOD": 20,
+    "ATR_PERIOD": 28,
+    "KD_PERIOD": 17,
+    "MACD_FAST": 18,
+    "MACD_SLOW": 44,
+    "MACD_SIGNAL": 13,
+    "BOLL_WINDOW": 12,
+    "BOLL_STD_MULT": 2.73,
+    "VOL_MA_WINDOW": 3,
+    "CHIPS_SUM_WINDOWS": [
+      7,
+      9,
+      25
+    ]
+  },
+  "top10_trials": [
+    {
+      "trial": 360,
+      "score": 27.147595356550582
+    },
+    {
+      "trial": 260,
+      "score": 27.097844112769483
+    },
+    {
+      "trial": 378,
+      "score": 27.089552238805968
+    },
+    {
+      "trial": 376,
+      "score": 27.08126036484245
+    },
+    {
+      "trial": 278,
+      "score": 27.07296849087894
+    },
+    {
+      "trial": 394,
+      "score": 27.056384742951906
+    },
+    {
+      "trial": 372,
+      "score": 27.04809286898839
+    },
+    {
+      "trial": 302,
+      "score": 27.03150912106136
+    },
+    {
+      "trial": 344,
+      "score": 27.03150912106136
+    },
+    {
+      "trial": 249,
+      "score": 27.01492537313433
+    }
+  ]
+}

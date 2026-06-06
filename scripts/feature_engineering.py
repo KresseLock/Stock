@@ -724,7 +724,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # 載入最佳參數 best_factors.json (若存在)
-    best_factors_path = os.path.join(PARENT_DIR, "best_factors.json")
+    best_factors_path = os.path.join(PARENT_DIR, "configs", "best_factors.json")
     if os.path.exists(best_factors_path):
         try:
             with open(best_factors_path, "r", encoding="utf-8") as f:

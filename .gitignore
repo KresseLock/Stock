@@ -12,8 +12,11 @@ data/features/
 *.json
 
 # 允許追蹤重要的設定與快取 JSON 檔
-!best_factors.json
-!best_trading_params.json
+!configs/best_factors.json
+!configs/best_trading_params.json
+!configs/best_factors_mode_a.json
+!configs/best_trading_params_mode_a.json
+!configs/best_trading_params_mode_b.json
 !scripts/stock_categories.json
 !models/feature_cols.json
 !data/failed_dates.json

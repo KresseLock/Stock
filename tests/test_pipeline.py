@@ -148,7 +148,7 @@ check("_STABLE_NON_TA_COLS 無 mkt_inst_net", test_stable_cols_no_mkt_inst_net)
 
 def test_best_factors_json():
     import json
-    path = os.path.join(ROOT_DIR, "best_factors.json")
+    path = os.path.join(ROOT_DIR, "configs", "best_factors.json")
     assert os.path.exists(path), "best_factors.json 不存在"
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -171,7 +171,7 @@ def test_apply_best_params():
     import json
     import auto_pipeline
     import scripts.feature_engineering as rfe_module
-    path = os.path.join(ROOT_DIR, "best_factors.json")
+    path = os.path.join(ROOT_DIR, "configs", "best_factors.json")
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     params = data["best_params_for_run_feature_engineering"]

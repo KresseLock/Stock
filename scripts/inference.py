@@ -202,7 +202,7 @@ def main(target_date_str=None):
     results_top5    = results_market.sort_values("Day1_net", ascending=False).head(5).reset_index(drop=True)
     results_bottom5 = results_market.sort_values("Day1_net", ascending=True ).head(5).reset_index(drop=True)
 
-    factors_file = os.path.join(BASE_DIR, "best_factors.json")
+    factors_file = os.path.join(BASE_DIR, "configs", "best_factors.json")
     factors_info = "  [因子參數] 未找到最佳化參數，使用系統預設值"
     if os.path.exists(factors_file):
         try:

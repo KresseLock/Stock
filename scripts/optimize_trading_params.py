@@ -72,7 +72,7 @@ default_end_date = dt_end.strftime("%Y-%m-%d")
 default_start_date = (dt_end - datetime.timedelta(days=365 * 2.5)).strftime("%Y-%m-%d")
 
 # 最佳化結果存檔路徑
-RESULT_PATH = os.path.join(BASE_DIR, "best_trading_params.json")
+RESULT_PATH = os.path.join(BASE_DIR, "configs", "best_trading_params.json")
 
 
 def main():

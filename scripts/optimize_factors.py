@@ -72,7 +72,7 @@ except ImportError:
 FORECAST_DAYS  = [1, 2, 3]
 
 # 最佳化結果儲存路徑 (保存在根目錄)
-RESULT_PATH    = os.path.join(BASE_DIR, "best_factors.json")
+RESULT_PATH    = os.path.join(BASE_DIR, "configs", "best_factors.json")
 
 
 
