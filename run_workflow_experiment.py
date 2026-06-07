@@ -487,7 +487,7 @@ def main():
                 run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], f"訓練 LightGBM 模型 (Lambda={l_val})")
                 
                 # 診斷 OOS 訊號
-                stdout_diag, _ = run_cmd([sys.executable, "scripts/analyze_regime_stability.py"], f"診斷 OOS 訊號 (Lambda={l_val})")
+                stdout_diag, _ = run_cmd([sys.executable, "scripts/analyze_regime_stability.py", "--silent"], f"診斷 OOS 訊號 (Lambda={l_val})")
                 
                 # 從 stdout 中解析 RankIC
                 ic_match = re.search(r"OOS\s*\|\s*All\s*\|\s*\d+\s*\|\s*([+-]?\d+\.?\d*)", stdout_diag)
@@ -521,15 +521,13 @@ def main():
             # 以最佳 Lambda 重新訓練最終模型 A
             run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], f"以最佳 Lambda={best_lambda} 重新訓練最終模型 A")
             
-            # 跑最終的診斷報告
-            run_cmd([sys.executable, "scripts/analyze_regime_stability.py"], "生成最終模式 A 診斷報告")
+            # 跑最終的診斷報告 (直接輸出到 mode_a_regime_stability_report.txt)
+            run_cmd([sys.executable, "scripts/analyze_regime_stability.py", "--output", stability_summary_path], "生成最終模式 A 診斷報告")
             
             stability_summary = "找不到報告"
-            if os.path.exists(STABILITY_REPORT_PATH):
-                with open(STABILITY_REPORT_PATH, "r", encoding="utf-8") as rf:
+            if os.path.exists(stability_summary_path):
+                with open(stability_summary_path, "r", encoding="utf-8") as rf:
                     stability_summary = rf.read()
-                shutil.copy2(STABILITY_REPORT_PATH, stability_summary_path)
-                print(f"  已將模式 A 診斷報告另存至 reports/mode_a_regime_stability_report.txt")
         
         # 解析關鍵 RankIC 指標與 SHAP 表
         ic_is_all = re.search(r"IS\s*\|\s*All\s*\|\s*\d+\s*\|\s*([+-]?\d+\.?\d*)", stability_summary)
@@ -725,6 +723,15 @@ def main():
     finally:
         # ── 5. 還原環境設定 (確保不論成敗都還原設定檔) ──────────────────────
         print("\n[步驟 4/4] 正在還原原始設定檔與備份...")
+        
+        # 清理臨時的診斷報告，只保留 mode_a_regime_stability_report.txt 精裝版
+        if os.path.exists(STABILITY_REPORT_PATH):
+            try:
+                os.remove(STABILITY_REPORT_PATH)
+                print("  已清理臨時的 regime_stability_report.txt 診斷報告")
+            except Exception:
+                pass
+
         if os.path.exists(CONFIG_BAK):
             shutil.copy2(CONFIG_BAK, CONFIG_PATH)
             os.remove(CONFIG_BAK)

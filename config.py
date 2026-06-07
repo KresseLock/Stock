@@ -59,7 +59,7 @@ FINMIND_CACHE_DAYS = 15                 # FinMind 基本面資料快取更新間
 
 # ── 4. 機器學習與平行資源設定 ─────────────────────────────────
 RUN_OPTIMIZATION      = True# 是否在流水線執行時重新啟動 Optuna 調參
-OPTIMIZATION_TRIALS   = 5# Optuna 最佳化最大輪數
+OPTIMIZATION_TRIALS   = 400# Optuna 最佳化最大輪數
 EARLY_STOPPING_ROUNDS = 150# Optuna Early Stopping 輪數 (None 代表不提早結束)
 BACKTEST_DATE         = "20250801"# 訓練與測試的切分分界點 (樣本外評估起點)
 
@@ -94,7 +94,7 @@ PORTFOLIO_SPREAD_WEIGHT = 0.2         # 組合 Spread 權重 (輔助)
 CALMAR_SCORE_WEIGHT     = 0.2         # Calmar 比率權重
 
 DECAY_LAMBDA_GRID    = [0.0, 0.001, 0.002, 0.003, 0.005]
-DEFAULT_DECAY_LAMBDA = 0.002# 預設半衰期約一年的衰減係數
+DEFAULT_DECAY_LAMBDA = 0.0# 預設半衰期約一年的衰減係數
 
 # ── 8. 標籤設計參數 (feature_engineering.py) ─────────────────
 # 方案 C：絕對與相對混合標籤設計

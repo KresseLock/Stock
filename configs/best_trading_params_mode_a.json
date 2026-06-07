@@ -1,0 +1,91 @@
+{
+    "best_score": 0.0,
+    "optimized_at": "2026-06-07 16:10:49",
+    "date_range": "2021-01-02 to 2025-08-01",
+    "best_params": {
+        "buy_threshold": 10.5,
+        "stop_loss": -6.75,
+        "panic_ma5": -0.0155,
+        "panic_breadth": 0.375,
+        "ts_activation": 15.0,
+        "ts_pullback": -4.75
+    },
+    "overall_metrics": {
+        "return_pct": 0.0,
+        "mdd_pct": 0.0
+    },
+    "walk_forward_metrics": {
+        "buy_threshold": {
+            "values": [
+                9.0,
+                10.0,
+                11.0,
+                12.5
+            ],
+            "median": 10.5,
+            "iqr": 1.625,
+            "cv": 0.12169506391516001,
+            "stability": "穩定"
+        },
+        "stop_loss": {
+            "values": [
+                -5.5,
+                -6.5,
+                -12.0,
+                -7.0
+            ],
+            "median": -6.75,
+            "iqr": 2.0,
+            "cv": 0.32418953616519,
+            "stability": "不穩定"
+        },
+        "panic_ma5": {
+            "values": [
+                -0.015000000000000001,
+                -0.016,
+                -0.018000000000000002,
+                -0.005000000000000001
+            ],
+            "median": -0.0155,
+            "iqr": 0.004,
+            "cv": 0.37221761559707,
+            "stability": "不穩定"
+        },
+        "panic_breadth": {
+            "values": [
+                0.39,
+                0.37,
+                0.21,
+                0.38
+            ],
+            "median": 0.375,
+            "iqr": 0.05249999999999999,
+            "cv": 0.2191140660407265,
+            "stability": "需注意"
+        },
+        "ts_activation": {
+            "values": [
+                23.0,
+                14.0,
+                16.0,
+                5.0
+            ],
+            "median": 15.0,
+            "iqr": 6.0,
+            "cv": 0.4429390544367286,
+            "stability": "不穩定"
+        },
+        "ts_pullback": {
+            "values": [
+                -5.5,
+                -4.0,
+                -4.0,
+                -10.0
+            ],
+            "median": -4.75,
+            "iqr": 2.625,
+            "cv": 0.41855990580651065,
+            "stability": "不穩定"
+        }
+    }
+}

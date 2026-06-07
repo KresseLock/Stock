@@ -19,6 +19,12 @@ if BASE_DIR not in sys.path:
 DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 REPORT_PATH = os.path.join(BASE_DIR, "reports", "regime_stability_report.txt")
+if "--output" in sys.argv:
+    try:
+        idx = sys.argv.index("--output")
+        REPORT_PATH = sys.argv[idx + 1]
+    except Exception:
+        pass
 
 def calculate_psi(expected, actual, num_bins=10):
     """計算 Population Stability Index (PSI)"""
@@ -405,7 +411,8 @@ def main():
     with open(REPORT_PATH, "r", encoding="utf-8") as f_in:
         print(f_in.read())
         
-    print(f"\n[成功] 診斷分析完成，完整報告已存檔至: {REPORT_PATH}\n")
+    if "--silent" not in sys.argv:
+        print(f"\n[成功] 診斷分析完成，完整報告已存檔至: {REPORT_PATH}\n")
 
 if __name__ == "__main__":
     main()
