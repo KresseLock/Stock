@@ -51,11 +51,28 @@ TRADING_EARLY_STOPPING = 150       # 風控最佳化早停輪數 (無進步達�
 
 # 💰 模擬交易基本設定
 CAPITAL        = 2000000          # 回測與優化的初始資金 (200 萬)
-# 注意：是否跳過模式 A 因子調參，請使用 CLI 參數 --skip_factor_opt，而非在此修改
 
 # 路徑定義
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.py")
+
+def get_config_backtest_date():
+    """自中央控制面板 config.py 讀取 BACKTEST_DATE 設定，若為 None 或格式不符則使用預設值 20250801"""
+    if not os.path.exists(CONFIG_PATH):
+        return "20250801"
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            content = f.read()
+        m = re.search(r'BACKTEST_DATE\s*=\s*["\'](\d{8})["\']', content)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return "20250801"
+
+# 🗓️ 模式 A 研究截斷日期 (YYYYMMDD)；OOS 起始日 = 截斷日 +1；所有回測結束日 = 最新資料日 (自動偵測)
+MODE_A_CUTOFF_DATE = get_config_backtest_date()   # ← 自動從 config.py 讀取，若 config.py 為 None 則預設為 "20250801"
+# 注意：是否跳過模式 A 因子調參，請使用 CLI 參數 --skip_factor_opt，而非在此修改
 BEST_FACTORS_PATH = os.path.join(BASE_DIR, "configs", "best_factors.json")
 BEST_TRADING_PARAMS_PATH = os.path.join(BASE_DIR, "configs", "best_trading_params.json")
 STABILITY_REPORT_PATH = os.path.join(BASE_DIR, "reports", "regime_stability_report.txt")
@@ -71,6 +88,29 @@ def format_val_for_config(val):
     if val is None or str(val).strip().lower() == "none":
         return "None"
     return str(val).strip()
+
+
+def get_latest_data_date():
+    """掃描 data/raw_price/ 目錄，自動偵測最新已下載的資料日期，回傳 YYYY-MM-DD 字串。"""
+    import glob as _glob
+    price_dir = os.path.join(BASE_DIR, "data", "raw_price")
+    if not os.path.isdir(price_dir):
+        fallback = time.strftime("%Y-%m-%d")
+        print(f"  [警告] 找不到 data/raw_price/，以今日 {fallback} 作為回測結束日")
+        return fallback
+    files = _glob.glob(os.path.join(price_dir, "*_price.csv"))
+    dates = [
+        m.group(1)
+        for f in files
+        for m in [re.match(r"(\d{8})_price\.csv", os.path.basename(f))]
+        if m
+    ]
+    if not dates:
+        fallback = time.strftime("%Y-%m-%d")
+        print(f"  [警告] data/raw_price/ 無有效資料，以今日 {fallback} 作為回測結束日")
+        return fallback
+    latest = max(dates)
+    return f"{latest[:4]}-{latest[4:6]}-{latest[6:]}"
 
 
 def update_config_var(var_name, new_val_str):
@@ -226,7 +266,11 @@ def write_experiment_report(res):
     mode_a_p = res["mode_a"].get("params", {})
     mode_b_p = res["mode_b"].get("params", {})
     args_info = res["args"]
-    
+    date_info = res.get("date_info", {})
+    _cutoff      = date_info.get("mode_a_cutoff",   "2025-08-01")
+    _oos_start   = date_info.get("mode_a_oos_start", "2025-08-02")
+    _latest      = date_info.get("latest_date",      "N/A")
+
     shap_table = res["mode_a"].get("shap_drift_table", "")
     shap_section_md = ""
     if shap_table:
@@ -261,13 +305,13 @@ def write_experiment_report(res):
 
 | 指標 / 模式 | 🟢 模式 A (研究模式 - 乾淨樣本外) | 🔵 模式 B (實盤模式 - 全數據包含牛市) |
 | :--- | :--- | :--- |
-| **訓練與測試分界** | 截斷於 2025-08-01 (樣本外測試) | `None` (每日滾動重訓至最新) |
+| **訓練與測試分界** | 截斷於 {_cutoff} (樣本外測試) | `None` (每日滾動重訓至最新) |
 | **最優時間衰減 (Lambda)** | `{res.get("best_lambda", "未完成")}` | 沿用模式 A 最優值 |
 | **樣本內 (IS) 因子 RankIC** | `{res["mode_a"].get("is_rankic", "未完成")}` | 沿用模式 A 因子 |
 | **樣本外 (OOS) 牛市 RankIC**| `{res["mode_a"].get("oos_bull_rankic", "未完成")}` | N/A (模型已納入牛市訓練) |
 | **OOS 弱動能組 (ret1 <= 2%) RankIC**| `{res["mode_a"].get("weak_mom_ic", "未完成")}` | N/A |
 | **OOS 強動能組 (ret1 > 2%) RankIC**| `{res["mode_a"].get("strong_mom_ic", "未完成")}` | N/A |
-| **回測測試區間** | 2025-08-02 ~ 2026-06-05 (樣本外) | 2023-01-01 ~ 2026-06-05 (全週期) |
+| **回測測試區間** | {_oos_start} ~ {_latest} (樣本外) | 2023-01-01 ~ {_latest} (全週期) |
 | **回測累計報酬率 (%)** | `{fmt_pct(res["mode_a"].get("oos_return"))}` | `{fmt_pct(res["mode_b"].get("full_return"))}` |
 | **回測最大回撤 MDD (%)** | `{fmt_mdd(res["mode_a"].get("oos_mdd"))}` | `{fmt_mdd(res["mode_b"].get("full_mdd"))}` |
 | **Calmar 比率 (報酬/MDD)** | `{fmt_calmar(res["mode_a"].get("oos_return"), res["mode_a"].get("oos_mdd"))}` | `{fmt_calmar(res["mode_b"].get("full_return"), res["mode_b"].get("full_mdd"))}` |
@@ -336,15 +380,24 @@ def main():
     # 參數標準化 (處理 'None')
     fact_es_str = format_val_for_config(args.factor_early_stopping)
     trad_es_str = format_val_for_config(args.trading_early_stopping)
-    
+
+    # ── 0. 動態推算所有回測日期 ─────────────────────────────────────────────
+    from datetime import datetime as _dt, timedelta as _td
+    latest_date      = get_latest_data_date()                              # 最新資料日 (自動偵測)
+    cutoff_dt        = _dt.strptime(MODE_A_CUTOFF_DATE, "%Y%m%d")
+    mode_a_cutoff_str = cutoff_dt.strftime("%Y-%m-%d")                    # 例：2025-08-01
+    mode_a_oos_start  = (cutoff_dt + _td(days=1)).strftime("%Y-%m-%d")   # 例：2025-08-02
+
     print("=" * 80)
     print("   🚀 台灣股市量化交易系統 ─ 模式 A 與 模式 B 雙階段自動化實驗控制台 🚀")
     print("=" * 80)
     print(f"  * 因子調參 (Factor) : 最大 {args.factor_trials} 輪 | 早停門檻: {fact_es_str} 輪")
     print(f"  * 風控調參 (Trading): 最大 {args.trading_trials} 輪 | 早停門檻: {trad_es_str} 輪")
-    print(f"  * 初始模擬資金 (Capital)       : {args.capital:,} 元")
+    print(f"  * 初始模擬資金 (Capital)         : {args.capital:,} 元")
+    print(f"  * 模式 A 截斷日期 (BACKTEST_DATE): {mode_a_cutoff_str}")
+    print(f"  * 最新資料日期 (自動偵測)        : {latest_date}")
     print(f"  * 模式 A 執行因子最佳化          : {'否 (沿用現有)' if args.skip_factor_opt else '是'}")
-    print(f"  * 續傳 / 復原機制啟動          : {'否 (強制重新執行)' if args.fresh else '是 (優先讀取 Checkpoints)'}")
+    print(f"  * 續傳 / 復原機制啟動           : {'否 (強制重新執行)' if args.fresh else '是 (優先讀取 Checkpoints)'}")
     print("=" * 80)
     
     # ── 1. 安全備份 ────────────────────────────────────────────────────────
@@ -393,6 +446,11 @@ def main():
             "capital": args.capital,
             "skip_factor_opt": args.skip_factor_opt
         },
+        "date_info": {
+            "mode_a_cutoff": mode_a_cutoff_str,
+            "mode_a_oos_start": mode_a_oos_start,
+            "latest_date": latest_date
+        },
         "mode_a": {},
         "mode_b": {}
     }
@@ -426,7 +484,7 @@ def main():
         print("=" * 80)
         
         # A1. 更新 config 變數以符合因子優化配置
-        update_config_var("BACKTEST_DATE", '"20250801"')
+        update_config_var("BACKTEST_DATE", f'"{MODE_A_CUTOFF_DATE}"')
         update_config_var("RUN_OPTIMIZATION", "True" if not args.skip_factor_opt else "False")
         update_config_var("OPTIMIZATION_TRIALS", str(args.factor_trials))
         update_config_var("EARLY_STOPPING_ROUNDS", fact_es_str)
@@ -576,10 +634,10 @@ def main():
                 sys.executable, "scripts/optimize_trading_params.py",
                 "-t", str(args.trading_trials),
                 "-s", "2021-01-02",
-                "-e", "2025-08-01",
+                "-e", mode_a_cutoff_str,
                 "-c", str(args.capital),
                 "-wf"
-            ], "模式 A：交易與風控參數最佳化 (Walk-Forward)")
+            ], f"模式 A：交易與風控參數最佳化 (Walk-Forward, 2021-01-02 ~ {mode_a_cutoff_str})")
             
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
                 with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:
@@ -601,15 +659,15 @@ def main():
         if has_checkpoint_sim_a:
             print(f"\n[續傳/復原] 偵測到已存在的模式 A 模擬交易結果，跳過模擬交易回測...")
         else:
-            # 確保 BACKTEST_DATE 設為 "20250801" 以加載模型 A
-            update_config_var("BACKTEST_DATE", '"20250801"')
-            
+            # 確保 BACKTEST_DATE 設為模式 A 截斷日，以加載模型 A
+            update_config_var("BACKTEST_DATE", f'"{MODE_A_CUTOFF_DATE}"')
+
             sim_stdout, _ = run_cmd([
                 sys.executable, "trading_sim.py",
-                "-s", "2025-08-02",
-                "-e", "2026-06-05",
+                "-s", mode_a_oos_start,
+                "-e", latest_date,
                 "-c", str(args.capital)
-            ], "模式 A：樣本外 (OOS) 超級牛市模擬交易回測 (Model A)")
+            ], f"模式 A：樣本外 (OOS) 超級牛市模擬交易回測 (Model A, {mode_a_oos_start} ~ {latest_date})")
             
             ret_a, mdd_a = parse_sim_output(sim_stdout)
             results["mode_a"]["oos_return"] = ret_a
@@ -628,7 +686,7 @@ def main():
         mode_b_params = {}
         if has_checkpoint_trading_b:
             print(f"\n[續傳/復原] 偵測到已存在的模式 B 風控參數 {trading_mode_b_saved}，直接載入並跳過優化與模型重訓...")
-            print(f"  [警告] 此時 models/lgbm_model_*.txt 應為上次執行將留下的模式 B 模型，如果您變更過模型請使用 --fresh 強制重跟。")
+            print(f"  [警告] 此時 models/lgbm_model_*.txt 應為上次執行將留下的模式 B 模型，如果您變更過模型請使用 --fresh 強制重跑。")
             shutil.copy2(trading_mode_b_saved, BEST_TRADING_PARAMS_PATH)
             with open(trading_mode_b_saved, "r", encoding="utf-8") as f:
                 mode_b_data = json.load(f)
@@ -656,10 +714,10 @@ def main():
                 sys.executable, "scripts/optimize_trading_params.py",
                 "-t", str(args.trading_trials),
                 "-s", "2023-01-01",
-                "-e", "2026-06-01",
+                "-e", latest_date,
                 "-c", str(args.capital),
                 "-wf"
-            ], "模式 B：交易與風控參數全週期最佳化 (Walk-Forward)")
+            ], f"模式 B：交易與風控參數全週期最佳化 (Walk-Forward, 2023-01-01 ~ {latest_date})")
             
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
                 with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:
@@ -683,13 +741,13 @@ def main():
         else:
             # 確保 config 變數為 Mode B
             update_config_var("BACKTEST_DATE", "None")
-            
+
             sim_stdout_b, _ = run_cmd([
                 sys.executable, "trading_sim.py",
                 "-s", "2023-01-01",
-                "-e", "2026-06-05",
+                "-e", latest_date,
                 "-c", str(args.capital)
-            ], "模式 B：全週期 (含大牛市) 模擬交易回測 (Model B)")
+            ], f"模式 B：全週期 (含大牛市) 模擬交易回測 (Model B, 2023-01-01 ~ {latest_date})")
             
             ret_b, mdd_b = parse_sim_output(sim_stdout_b)
             results["mode_b"]["full_return"] = ret_b

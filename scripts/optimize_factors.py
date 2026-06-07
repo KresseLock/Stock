@@ -395,6 +395,13 @@ def main():
     
     df_base["date"] = pd.to_datetime(df_base["date"])
 
+    # ── 偵測是否啟用歷史樣本外 (OOS) 防洩漏保護 ─────────────────
+    try:
+        import config as _cfg
+        cfg_backtest_date = _cfg.BACKTEST_DATE
+    except Exception:
+        cfg_backtest_date = None
+
     bt_date = pd.to_datetime(BACKTEST_DATE, format="%Y%m%d")
     avail   = sorted(df_base["date"].unique())
     close   = [d for d in avail if d <= bt_date]
@@ -402,10 +409,24 @@ def main():
         print(f"[錯誤] 回測日期 {BACKTEST_DATE} 之前沒有資料。")
         return
     bt_date = close[-1]
+
+    max_data_date = df_base["date"].max()
+    # 只有在 config.py 中明確指定了歷史截止日（非 None），且資料庫有更晚的資料時，才進行截斷保護
+    if cfg_backtest_date is not None and max_data_date > bt_date:
+        print(f"\n  ⚠️  [防洩漏保護] 偵測到歷史截斷模式 (config.BACKTEST_DATE={cfg_backtest_date})，且資料庫有 OOS 區間數據 ({bt_date.date()} ~ {max_data_date.date()})")
+        print(f"      正在啟用數據截斷保護：將因子最佳化限制在 {bt_date.date()} 以前的歷史數據。")
+        df_base = df_base[df_base["date"] <= bt_date].copy()
+        
+        # 訓練/驗證分割點往前移 1.5 年，為 Optuna 評估提供足夠的樣本長度
+        optuna_split_date = bt_date - pd.Timedelta(days=365 * 1.5)
+        print(f"      Optuna 訓練與評估分割點調整為: {optuna_split_date.date()}")
+    else:
+        optuna_split_date = bt_date
+
     print(f"   資料筆數   : {len(df_base)}")
     print(f"   回測切割日 : {bt_date.date()}")
-    print(f"   訓練樣本   : {len(df_base[df_base['date'] < bt_date])}")
-    print(f"   評估樣本   : {len(df_base[df_base['date'] >= bt_date])}")
+    print(f"   訓練樣本   : {len(df_base[df_base['date'] < optuna_split_date])}")
+    print(f"   評估樣本   : {len(df_base[df_base['date'] >= optuna_split_date])}")
     print()
 
     # ── 步驟 2: 建立 study 並執行最佳化 ──────────
@@ -414,7 +435,7 @@ def main():
     print("-" * 65)
 
     best_holder = {"score": -1.0, "params": {}}
-    objective   = make_objective(df_base, bt_date, best_holder)
+    objective   = make_objective(df_base, optuna_split_date, best_holder)
 
     study = optuna.create_study(
         direction="maximize",

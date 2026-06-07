@@ -33,6 +33,7 @@ try:
         LGBM_SUBSAMPLE, LGBM_COLSAMPLE, LGBM_EARLY_STOPPING,
         SAMPLE_WEIGHT_DROP_THRESHOLD, SAMPLE_WEIGHT_PENALTY,
         DEFAULT_DECAY_LAMBDA,
+        BACKTEST_DATE,
     )
     N_JOBS = TRAIN_N_JOBS
 except ImportError:
@@ -43,6 +44,7 @@ except ImportError:
     LGBM_EARLY_STOPPING = 30
     SAMPLE_WEIGHT_DROP_THRESHOLD = -0.05; SAMPLE_WEIGHT_PENALTY = 2.0
     DEFAULT_DECAY_LAMBDA = 0.002
+    BACKTEST_DATE = None
 
 # 共用過濾工具
 try:
@@ -154,7 +156,17 @@ def main():
         
     df = pd.read_parquet(DATA_PATH)
     
-    # ── 使用統一過濾器 filter_stocks_by_train_industries 筛選訓練集股票 ──────
+    # ── 若為模式 A 歷史截斷模式，限制訓練與驗證資料在 BACKTEST_DATE 以前 ──
+    if BACKTEST_DATE is not None:
+        cutoff_ts = pd.to_datetime(BACKTEST_DATE)
+        before_len = len(df)
+        df["date_temp"] = pd.to_datetime(df["date"])
+        df = df[df["date_temp"] <= cutoff_ts].copy()
+        df.drop(columns=["date_temp"], inplace=True)
+        print(f"  [防洩漏保護] 偵測到歷史截斷模式 (config.BACKTEST_DATE={BACKTEST_DATE})：")
+        print(f"      訓練與驗證資料限制在 {cutoff_ts.date()} 以前（樣本數：{before_len} -> {len(df)}）。")
+
+    # ── 使用統一過濾器 filter_stocks_by_train_industries 篩選訓練集股票 ──────
     # 注意: 此函式已處理 Stocks.txt 自選股強制保留 與 stock_id 類型對齊
     before_count = df["stock_id"].nunique()
     df = filter_stocks_by_train_industries(df)
