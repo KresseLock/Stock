@@ -32,6 +32,7 @@ try:
         LGBM_N_ESTIMATORS, LGBM_LEARNING_RATE, LGBM_MAX_DEPTH, LGBM_NUM_LEAVES,
         LGBM_SUBSAMPLE, LGBM_COLSAMPLE, LGBM_EARLY_STOPPING,
         SAMPLE_WEIGHT_DROP_THRESHOLD, SAMPLE_WEIGHT_PENALTY,
+        DEFAULT_DECAY_LAMBDA,
     )
     N_JOBS = TRAIN_N_JOBS
 except ImportError:
@@ -41,6 +42,7 @@ except ImportError:
     LGBM_NUM_LEAVES = 15;   LGBM_SUBSAMPLE = 0.8;      LGBM_COLSAMPLE = 0.8
     LGBM_EARLY_STOPPING = 30
     SAMPLE_WEIGHT_DROP_THRESHOLD = -0.05; SAMPLE_WEIGHT_PENALTY = 2.0
+    DEFAULT_DECAY_LAMBDA = 0.002
 
 # 共用過濾工具
 try:
@@ -78,7 +80,13 @@ def train_model(df, feature_cols, target_col, days_ahead):
     X_valid, y_valid = valid_df[feature_cols], valid_df[target_col].astype(int)
     X_test, y_test   = test_df[feature_cols],  test_df[target_col].astype(int)
     
-    w_train = train_df["sample_weight"].values
+    # 計算時間衰減權重 (越近的資料，權重越高，防範機制不包含 regime_weight)
+    train_dates = pd.to_datetime(train_df["date"])
+    max_date = train_dates.max()
+    decay_days = (max_date - train_dates).dt.days
+    time_weight = np.exp(-DEFAULT_DECAY_LAMBDA * decay_days)
+    
+    w_train = train_df["sample_weight"].values * time_weight.values
     w_valid = valid_df["sample_weight"].values
     
     # 分類模型

@@ -58,10 +58,10 @@ START_DATE = datetime.date(2020, 1, 1)  # 數據回溯起點 (建議至少 5 年
 FINMIND_CACHE_DAYS = 15                 # FinMind 基本面資料快取更新間隔天數
 
 # ── 4. 機器學習與平行資源設定 ─────────────────────────────────
-RUN_OPTIMIZATION      = False   # 是否在流水線執行時重新啟動 Optuna 調參
-OPTIMIZATION_TRIALS   = 600     # Optuna 最佳化最大輪數
-EARLY_STOPPING_ROUNDS = 200     # Optuna Early Stopping 輪數 (None 代表不提早結束)
-BACKTEST_DATE         = "20250801" # 訓練與測試的切分分界點 (樣本外評估起點)
+RUN_OPTIMIZATION      = True# 是否在流水線執行時重新啟動 Optuna 調參
+OPTIMIZATION_TRIALS   = 5# Optuna 最佳化最大輪數
+EARLY_STOPPING_ROUNDS = 150# Optuna Early Stopping 輪數 (None 代表不提早結束)
+BACKTEST_DATE         = "20250801"# 訓練與測試的切分分界點 (樣本外評估起點)
 
 FEAT_N_JOBS           = -1      # 特徵工程平行核心數 (-1 為最大核心)
 TRAIN_N_JOBS          = -1      # LightGBM 訓練核心數
@@ -83,10 +83,18 @@ LGBM_COLSAMPLE           = 0.8    # 每棵樹的特徵採樣比例
 LGBM_EARLY_STOPPING      = 30     # LightGBM 訓練早停輪數 (用於 train.py / backtest.py)
 LGBM_BT_EARLY_STOPPING   = 20     # 時光機回測 (backtest.py) 早停輪數
 
-# ── 7. 樣本懲罰權重設定 (train.py / backtest.py / optimize_factors.py 共享) ──
+# ── 7. 樣本懲罰權重與時間衰減設定 (train.py / backtest.py / optimize_factors.py 共享) ──
 # 若未來 3 天內最低報酬率 <= 此閾值，賦予懲罰倍數以抑止最大回撤
 SAMPLE_WEIGHT_DROP_THRESHOLD = -0.05  # 跌幅門檻 (-5%)
 SAMPLE_WEIGHT_PENALTY        = 2.0    # 懲罰權重倍數
+
+# ── 新增：時間衰減與優化目標權重設定 ──
+PORTFOLIO_ALPHA_WEIGHT = 0.6          # 組合 Alpha 權重 (核心)
+PORTFOLIO_SPREAD_WEIGHT = 0.2         # 組合 Spread 權重 (輔助)
+CALMAR_SCORE_WEIGHT     = 0.2         # Calmar 比率權重
+
+DECAY_LAMBDA_GRID    = [0.0, 0.001, 0.002, 0.003, 0.005]
+DEFAULT_DECAY_LAMBDA = 0.002# 預設半衰期約一年的衰減係數
 
 # ── 8. 標籤設計參數 (feature_engineering.py) ─────────────────
 # 方案 C：絕對與相對混合標籤設計

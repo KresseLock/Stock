@@ -227,6 +227,21 @@ def write_experiment_report(res):
     mode_b_p = res["mode_b"].get("params", {})
     args_info = res["args"]
     
+    shap_table = res["mode_a"].get("shap_drift_table", "")
+    shap_section_md = ""
+    if shap_table:
+        shap_section_md = f"""
+---
+
+## 🔍 OOS 特徵 SHAP 漂移診斷 (Top 5 Features)
+
+| 特徵名稱 | Gain% | IS_SHAP_A | OOS_SHAP_A | OOS_SHAP_M | Drift(Mean) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+{shap_table}
+
+*註：當 Drift(Mean) 正負號發生反轉時，說明特徵作用方向改變（Regime Shift）。*
+"""
+
     report_content = f"""# 🇹🇼 台灣股市量化交易系統 ─ 模式 A 與 模式 B 雙階段自動化實驗報告
 
 本報告由自動化實驗腳本 `run_workflow_experiment.py` 於 {time.strftime('%Y-%m-%d %H:%M:%S')} 自動生成。本實驗旨在對比研發研究（模式 A）與實盤生產（模式 B）的表現，並提供風控參數對比。
@@ -247,20 +262,23 @@ def write_experiment_report(res):
 | 指標 / 模式 | 🟢 模式 A (研究模式 - 乾淨樣本外) | 🔵 模式 B (實盤模式 - 全數據包含牛市) |
 | :--- | :--- | :--- |
 | **訓練與測試分界** | 截斷於 2025-08-01 (樣本外測試) | `None` (每日滾動重訓至最新) |
+| **最優時間衰減 (Lambda)** | `{res.get("best_lambda", "未完成")}` | 沿用模式 A 最優值 |
 | **樣本內 (IS) 因子 RankIC** | `{res["mode_a"].get("is_rankic", "未完成")}` | 沿用模式 A 因子 |
 | **樣本外 (OOS) 牛市 RankIC**| `{res["mode_a"].get("oos_bull_rankic", "未完成")}` | N/A (模型已納入牛市訓練) |
+| **OOS 弱動能組 (ret1 <= 2%) RankIC**| `{res["mode_a"].get("weak_mom_ic", "未完成")}` | N/A |
+| **OOS 強動能組 (ret1 > 2%) RankIC**| `{res["mode_a"].get("strong_mom_ic", "未完成")}` | N/A |
 | **回測測試區間** | 2025-08-02 ~ 2026-06-05 (樣本外) | 2023-01-01 ~ 2026-06-05 (全週期) |
 | **回測累計報酬率 (%)** | `{fmt_pct(res["mode_a"].get("oos_return"))}` | `{fmt_pct(res["mode_b"].get("full_return"))}` |
 | **回測最大回撤 MDD (%)** | `{fmt_mdd(res["mode_a"].get("oos_mdd"))}` | `{fmt_mdd(res["mode_b"].get("full_mdd"))}` |
 | **Calmar 比率 (報酬/MDD)** | `{fmt_calmar(res["mode_a"].get("oos_return"), res["mode_a"].get("oos_mdd"))}` | `{fmt_calmar(res["mode_b"].get("full_return"), res["mode_b"].get("full_mdd"))}` |
 
 *註：模式 A 的回測區間屬於完全未見過的樣本外 (OOS) 測試集，代表策略在全新超級牛市下的防禦與獲利能力。模式 B 的回測區間為包含牛市與熊市的全週期回測，展現策略的長線穩健性。*
-
+{shap_section_md}
 ---
 
 ## ⚙️ 最佳化風控策略參數對比 (Optimized Trading Params)
 
-本部分對比 Optuna 在兩種模式下搜尋出的最佳交易參數。**這揭示了牛市與熊市/震盪市下，最優風控配置的結構性漂移：**
+本部分對比 Walk-Forward 在兩種模式下搜尋出的最佳交易參數中位數（Median）。**這揭示了牛市與熊市/阻礙市下，最優風控配置的結構性漂移：**
 
 | 風控參數 | 🟢 模式 A (未見過牛市的最佳化) | 🔵 模式 B (包含牛市的最佳化) | 參數說明 |
 | :--- | :--- | :--- | :--- |
@@ -273,8 +291,8 @@ def write_experiment_report(res):
 
 ### 💡 研究員核心分析與結論：
 1. **為什麼模式 A 與模式 B 的最優風控參數存在差異？**
-   * 模式 A 優化時，Optuna 看不到 2025-08-01 之後的兩萬點到四萬點大牛市，因此其優化出的風控引數更加傾向於**「防守震盪與熊市」**。
-   * 模式 B 將 2025-08 ~ 2026-06 的超級牛市納入優化眼界。在強多頭市場中，大盤避險紅燈門檻（`panic_breadth` 和 `panic_ma5`）通常會被優化得更加寬容，個股停損（`stop_loss`）與移動止盈回撤（`ts_pullback`）也會更寬，以適應牛市個股的劇烈波動，防止被輕易洗出場，最大化捕捉趨勢利潤。
+   * 模式 A 優化時，Optuna 看不到 2025-08-01 之後的兩萬點到四萬點大牛市，因此其優化出的風控引數更加傾向於**「防守阻礙與熊市」**。
+   * 模式 B 將 2025-08 ~ 2026-06 的超級牛市納源優化眼界。在強多頭市場中，大盤避險紅燈門檻（`panic_breadth` 和 `panic_ma5`）通常會被優化得更加寬容，個股停損（`stop_loss`）與移動止盈回撤（`ts_pullback`）也會更寬，以適應牛市個股的劇烈波動，防止被輕易洗出場，最大化捕捉趨勢利潤。
 2. **策略健康度判斷：**
    * 若模式 A 在 OOS 區間的 `oos_return` 表現良好且 `oos_mdd` 受控，證明策略具備極強的**樣本外泛化能力**，非過擬合。
    * 正式實盤上線時，推薦**以模式 B 訓練出的最新模型**作為預測大腦（擁有最新特徵），並套用**模式 B 產出的 `best_trading_params_mode_b.json` 風控參數**進行每日交易，以在當下大牛市中獲得最契合市場波動的收益。
@@ -391,9 +409,13 @@ def main():
                     results["mode_a"] = loaded_results["mode_a"]
                 if "mode_b" in loaded_results:
                     results["mode_b"] = loaded_results["mode_b"]
+                if "best_lambda" in loaded_results:
+                    results["best_lambda"] = loaded_results["best_lambda"]
                 print("  已載入的進度數據:")
                 print(f"    模式 A 已完成: {list(results['mode_a'].keys())}")
                 print(f"    模式 B 已完成: {list(results['mode_b'].keys())}")
+                if "best_lambda" in results:
+                    print(f"    最優時間衰減 Lambda: {results['best_lambda']}")
         except Exception as e:
             print(f"  [警告] 讀取進度檔失敗: {e}，將從頭開始執行。")
 
@@ -440,8 +462,8 @@ def main():
         if has_checkpoint_stability:
             with open(stability_summary_path, "r", encoding="utf-8") as rf:
                 stability_summary = rf.read()
-            if "All" not in stability_summary:
-                print("  [提示] 偵測到舊版診斷報告（缺少 'All' 行），將重新執行模型 A 訓練與診斷...")
+            if "All" not in stability_summary or "7. SHAP" not in stability_summary:
+                print("  [提示] 偵測到舊版診斷報告（缺少 'All' 或 '7. SHAP' 行），將重新執行模型 A 訓練與診斷...")
                 has_checkpoint_stability = False
                 
         if has_checkpoint_stability:
@@ -450,11 +472,57 @@ def main():
             # A3.2. 重建特徵矩陣
             run_cmd([sys.executable, "auto_pipeline.py", "-s", "f"], "模式 A：重建特徵矩陣 (截斷 2025-08-01)")
             
-            # A4. 訓練模型 A
-            run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], "模式 A：訓練 LightGBM 模型 (僅限樣本內)")
+            # Phase 1 Step 2: Time Decay Grid Search
+            print("\n>>> 正在進行 Time Decay 網格搜尋實驗 (Step 2)...")
+            lambdas = [0.0, 0.001, 0.002, 0.003, 0.005]
+            best_lambda = 0.002
+            best_ic = -999.0
+            grid_results = {}
             
-            # A5. 執行 OOS 訊號診斷
-            run_cmd([sys.executable, "scripts/analyze_regime_stability.py"], "模式 A：樣本外 (OOS) 訊號健康與特徵漂移診斷")
+            for l_val in lambdas:
+                print(f"\n[衰減網格測試] 正在測試 Lambda = {l_val}...")
+                update_config_var("DEFAULT_DECAY_LAMBDA", str(l_val))
+                
+                # 訓練模型
+                run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], f"訓練 LightGBM 模型 (Lambda={l_val})")
+                
+                # 診斷 OOS 訊號
+                stdout_diag, _ = run_cmd([sys.executable, "scripts/analyze_regime_stability.py"], f"診斷 OOS 訊號 (Lambda={l_val})")
+                
+                # 從 stdout 中解析 RankIC
+                ic_match = re.search(r"OOS\s*\|\s*All\s*\|\s*\d+\s*\|\s*([+-]?\d+\.?\d*)", stdout_diag)
+                ic_val = float(ic_match.group(1)) if ic_match else -999.0
+                
+                # 解析 Top 1% Alpha
+                alpha_match = re.search(r"Top 1%  平均報酬: [+-]?\d+\.?\d*% \| 超額 Alpha:\s*([+-]?\d+\.?\d*)", stdout_diag)
+                alpha_val = float(alpha_match.group(1)) if alpha_match else 0.0
+                
+                # 解析 LS Spread
+                spread_match = re.search(r"OOS\s*\|\s*All\s*\|\s*\d+\s*\|\s*[+-]?\d+\.?\d*\s*\|\s*([+-]?\d+\.?\d*)%", stdout_diag)
+                spread_val = float(spread_match.group(1)) if spread_match else 0.0
+                
+                print(f"  -> 結果: OOS RankIC = {ic_val:+.4f} | Top1 Alpha = {alpha_val:+.3f}% | LS Spread = {spread_val:+.3f}%")
+                grid_results[l_val] = (ic_val, alpha_val, spread_val)
+                
+                if ic_val > best_ic:
+                    best_ic = ic_val
+                    best_lambda = l_val
+            
+            print(f"\n[網格搜尋完成] 最佳時間衰減係數: Lambda = {best_lambda} (OOS RankIC = {best_ic:+.4f})")
+            print("各參數對比:")
+            for lv, (ic, al, sp) in grid_results.items():
+                print(f"  Lambda = {lv:<5} | RankIC = {ic:+.4f} | Alpha = {al:+.3f}% | Spread = {sp:+.3f}%")
+                
+            results["best_lambda"] = best_lambda
+            
+            # 將最優 Lambda 寫入 config.py
+            update_config_var("DEFAULT_DECAY_LAMBDA", str(best_lambda))
+            
+            # 以最佳 Lambda 重新訓練最終模型 A
+            run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], f"以最佳 Lambda={best_lambda} 重新訓練最終模型 A")
+            
+            # 跑最終的診斷報告
+            run_cmd([sys.executable, "scripts/analyze_regime_stability.py"], "生成最終模式 A 診斷報告")
             
             stability_summary = "找不到報告"
             if os.path.exists(STABILITY_REPORT_PATH):
@@ -463,12 +531,28 @@ def main():
                 shutil.copy2(STABILITY_REPORT_PATH, stability_summary_path)
                 print(f"  已將模式 A 診斷報告另存至 reports/mode_a_regime_stability_report.txt")
         
-        # 解析關鍵 RankIC 指標
+        # 解析關鍵 RankIC 指標與 SHAP 表
         ic_is_all = re.search(r"IS\s*\|\s*All\s*\|\s*\d+\s*\|\s*([+-]?\d+\.?\d*)", stability_summary)
         ic_oos_bull = re.search(r"OOS\s*\|\s*Bull\s*\|\s*\d+\s*\|\s*([+-]?\d+\.?\d*)", stability_summary)
+        ic_weak_mom = re.search(r"弱動能組.*平均 RankIC:\s*([+-]?\d+\.?\d*)", stability_summary)
+        ic_strong_mom = re.search(r"強動能組.*平均 RankIC:\s*([+-]?\d+\.?\d*)", stability_summary)
         
         results["mode_a"]["is_rankic"] = ic_is_all.group(1) if ic_is_all else "N/A"
         results["mode_a"]["oos_bull_rankic"] = ic_oos_bull.group(1) if ic_oos_bull else "N/A"
+        results["mode_a"]["weak_mom_ic"] = ic_weak_mom.group(1) if ic_weak_mom else "N/A"
+        results["mode_a"]["strong_mom_ic"] = ic_strong_mom.group(1) if ic_strong_mom else "N/A"
+        
+        # 解析 Section 7 SHAP Drift table
+        shap_drift_section = re.search(r"7\. SHAP 與特徵重要性漂移.*?\n-+\n(.*?)\n-+\n診斷指引", stability_summary, re.DOTALL)
+        shap_drift_lines = []
+        if shap_drift_section:
+            lines = shap_drift_section.group(1).strip().split('\n')
+            for l in lines[2:7]: # Top 5 features
+                parts = [p.strip() for p in l.split('|')]
+                if len(parts) >= 8:
+                    shap_drift_lines.append(f"| {parts[0]} | {parts[1]} | {parts[3]} | {parts[4]} | {parts[6]} | {parts[7]} |")
+        
+        results["mode_a"]["shap_drift_table"] = "\n".join(shap_drift_lines) if shap_drift_lines else ""
         save_progress(results)
         
         # A8. 執行風控參數最佳化
@@ -495,8 +579,9 @@ def main():
                 "-t", str(args.trading_trials),
                 "-s", "2021-01-02",
                 "-e", "2025-08-01",
-                "-c", str(args.capital)
-            ], "模式 A：交易與風控參數最佳化 (Optuna)")
+                "-c", str(args.capital),
+                "-wf"
+            ], "模式 A：交易與風控參數最佳化 (Walk-Forward)")
             
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
                 with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:
@@ -574,8 +659,9 @@ def main():
                 "-t", str(args.trading_trials),
                 "-s", "2023-01-01",
                 "-e", "2026-06-01",
-                "-c", str(args.capital)
-            ], "模式 B：交易與風控參數全週期最佳化 (Optuna)")
+                "-c", str(args.capital),
+                "-wf"
+            ], "模式 B：交易與風控參數全週期最佳化 (Walk-Forward)")
             
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
                 with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:

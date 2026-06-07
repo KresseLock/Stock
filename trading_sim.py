@@ -78,6 +78,21 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     # 1. 載入資料並過濾日期
     df = pd.read_parquet(DATA_PATH)
     
+    # 計算每日大盤特徵與 20 日滾動均值，用以劃分 Regime
+    df_daily_mkt = df.groupby("date")[["market_mean_pct", "market_breadth_pct"]].first().reset_index()
+    df_daily_mkt["market_trend_20d"] = df_daily_mkt["market_mean_pct"].rolling(window=20, min_periods=5).mean()
+    df_daily_mkt["market_breadth_20d"] = df_daily_mkt["market_breadth_pct"].rolling(window=20, min_periods=5).mean()
+    
+    # 用 np.select 劃分 Bull, Bear, Sideways
+    conditions = [
+        (df_daily_mkt["market_trend_20d"] > 0) & (df_daily_mkt["market_breadth_20d"] > 0.50),
+        (df_daily_mkt["market_trend_20d"] < 0) & (df_daily_mkt["market_breadth_20d"] < 0.50)
+    ]
+    df_daily_mkt["regime"] = np.select(conditions, ["Bull", "Bear"], default="Sideways")
+    
+    # 把 regime 合併回 df
+    df = df.merge(df_daily_mkt[["date", "market_trend_20d", "market_breadth_20d", "regime"]], on="date", how="left")
+    
     # ── 根據 train.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
     try:
         from scripts.utils import filter_stocks_by_train_industries
@@ -237,6 +252,11 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         
         today_data = df_sim[df_sim['date'] == today].set_index('stock_id')
         prev_data = df_sim[df_sim['date'] == prev_day].set_index('stock_id')
+        
+        # 獲取今日市況
+        regime = "Sideways"
+        if not today_data.empty and 'regime' in today_data.columns:
+            regime = today_data['regime'].iloc[0]
         
         # --- A. 更新今日持倉價格與歷史最高收盤價 ---
         for sid, pos in positions.items():
@@ -469,13 +489,38 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         pending_cash = sum(pending_settlements.values())
         current_equity = bank_cash + pending_cash + final_stock_value
         
+        # 計算今日組合回報與 Alpha/Spread
+        if idx_today == 0:
+            prev_equity = initial_capital
+        else:
+            prev_equity = history[-1]['equity']
+            
+        portfolio_return = (current_equity / prev_equity - 1.0)
+        
+        mkt_ret = today_data['market_mean_pct'].iloc[0] if not today_data.empty and 'market_mean_pct' in today_data.columns else 0.0
+        portfolio_alpha = portfolio_return - mkt_ret
+        
+        # 尋找昨日預測最低的 5% 股票，計算其今日的實際均報作為對照 (Short leg)
+        if not prev_data.empty:
+            bot_k_size = max(1, int(len(prev_data) * 0.05))
+            bottom_stocks = prev_data.sort_values('Day1_net', ascending=True).head(bot_k_size)
+            bottom_mean_ret = bottom_stocks['next_ret_1'].mean() if not bottom_stocks.empty else 0.0
+        else:
+            bottom_mean_ret = 0.0
+            
+        portfolio_spread = portfolio_return - bottom_mean_ret
+        
         history.append({
             'date': today.date(),
             'equity': current_equity,
             'cash': available_cash,
             'bank_cash': bank_cash,
             'pending_cash': pending_cash,
-            'invested': final_stock_value
+            'invested': final_stock_value,
+            'regime': regime,
+            'portfolio_return': portfolio_return,
+            'portfolio_alpha': portfolio_alpha,
+            'portfolio_spread': portfolio_spread
         })
 
         # 統一將今日產生的明細欄位更新為日終淨值

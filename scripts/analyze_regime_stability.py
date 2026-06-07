@@ -249,7 +249,76 @@ def main():
             })
     df_feat_drift = pd.DataFrame(feat_rank_ics).sort_values("Abs_IC_Drift", ascending=False).reset_index(drop=True)
     
-    # ── 8. 生成診斷文字報告 ──
+    # ── 7. 動能疊加測試 (Momentum Overlay Test) ──
+    # 目的：驗證模型在昨日大漲股票（強動能 > 2%）與一般股票（弱動能 <= 2%）的選股預測力 (RankIC) 是否有結構性差異
+    momentum_stats = []
+    
+    for date, g in df_oos.groupby("date"):
+        if len(g) < 10 or "ret1" not in g.columns:
+            continue
+            
+        g_strong = g[g["ret1"] > 0.02]
+        g_weak = g[g["ret1"] <= 0.02]
+        
+        strong_ic = np.nan
+        weak_ic = np.nan
+        
+        # 計算強動能組 RankIC
+        if len(g_strong) >= 5 and g_strong["net_score"].std() > 0 and g_strong["next_ret_1"].std() > 0:
+            strong_ic, _ = spearmanr(g_strong["net_score"], g_strong["next_ret_1"])
+            
+        # 計算弱動能組 RankIC
+        if len(g_weak) >= 5 and g_weak["net_score"].std() > 0 and g_weak["next_ret_1"].std() > 0:
+            weak_ic, _ = spearmanr(g_weak["net_score"], g_weak["next_ret_1"])
+        strong_spread = np.nan
+        if len(g_strong) >= 5:
+            g_strong_sorted = g_strong.sort_values("net_score", ascending=False)
+            k_s = max(1, int(len(g_strong) * 0.20))
+            strong_spread = g_strong_sorted.head(k_s)["next_ret_1"].mean() - g_strong_sorted.tail(k_s)["next_ret_1"].mean()
+        weak_spread = np.nan
+        if len(g_weak) >= 5:
+            g_weak_sorted = g_weak.sort_values("net_score", ascending=False)
+            k_w = max(1, int(len(g_weak) * 0.20))
+            weak_spread = g_weak_sorted.head(k_w)["next_ret_1"].mean() - g_weak_sorted.tail(k_w)["next_ret_1"].mean()
+        momentum_stats.append({
+            "date": date, "strong_ic": strong_ic, "weak_ic": weak_ic,
+            "strong_spread": strong_spread, "weak_spread": weak_spread,
+            "strong_count": len(g_strong), "weak_count": len(g_weak)
+        })
+    df_mom = pd.DataFrame(momentum_stats)
+    
+    # ── 8. SHAP & 特徵重要性漂移分析 (SHAP & Importance Drift) ──
+    print("計算特徵重要性與 SHAP 漂移 (Step 4 & 4.5)...")
+    X_is = df_is.reindex(columns=feature_cols).astype(np.float32)
+    X_oos = df_oos.reindex(columns=feature_cols).astype(np.float32)
+    num_features = len(feature_cols)
+    contribs_is = model.predict(X_is, pred_contrib=True)
+    contribs_oos = model.predict(X_oos, pred_contrib=True)
+    class2_start = 2 * (num_features + 1)
+    shap_is = contribs_is[:, class2_start : class2_start + num_features]
+    shap_oos = contribs_oos[:, class2_start : class2_start + num_features]
+    shap_abs_is = np.mean(np.abs(shap_is), axis=0)
+    shap_abs_oos = np.mean(np.abs(shap_oos), axis=0)
+    shap_mean_is = np.mean(shap_is, axis=0)
+    shap_mean_oos = np.mean(shap_oos, axis=0)
+    gain_imp = model.feature_importance(importance_type="gain")
+    split_imp = model.feature_importance(importance_type="split")
+    sum_gain = sum(gain_imp) if sum(gain_imp) > 0 else 1.0
+    sum_split = sum(split_imp) if sum(split_imp) > 0 else 1.0
+    sum_shap_is = sum(shap_abs_is) if sum(shap_abs_is) > 0 else 1.0
+    gain_imp_pct = (gain_imp / sum_gain) * 100
+    split_imp_pct = (split_imp / sum_split) * 100
+    shap_imp_pct = (shap_abs_is / sum_shap_is) * 100
+    shap_drift_list = []
+    for j, feat in enumerate(feature_cols):
+        shap_drift_list.append({
+            "feature": feat, "gain_pct": gain_imp_pct[j], "split_pct": split_imp_pct[j],
+            "shap_is_pct": shap_imp_pct[j], "shap_is_abs": shap_abs_is[j], "shap_oos_abs": shap_abs_oos[j],
+            "shap_is_mean": shap_mean_is[j], "shap_oos_mean": shap_mean_oos[j], "shap_mean_drift": shap_mean_oos[j] - shap_mean_is[j]
+        })
+    df_shap_drift = pd.DataFrame(shap_drift_list).sort_values("shap_oos_abs", ascending=False).reset_index(drop=True)
+    
+    # ── 9. 生成診斷文字報告 ──
     os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
     with open(REPORT_PATH, "w", encoding="utf-8") as f_out:
         f_out.write("======================================================================\n")
@@ -299,6 +368,38 @@ def main():
         f_out.write("-" * 70 + "\n")
         for idx, row in df_feat_drift.head(10).iterrows():
             f_out.write(f"[{idx+1:>2}] 特徵: {row['feature']:<30} | IS RankIC: {row['IS_RankIC']:+.4f} | OOS RankIC: {row['OOS_RankIC']:+.4f} | Drift: {row['IC_Drift']:+.4f}\n")
+        f_out.write("\n")
+        
+        f_out.write("6. 動能疊加測試 (Momentum Overlay Test)\n")
+        f_out.write("-" * 70 + "\n")
+        f_out.write("目的: 驗證昨日大漲股票(強動能 > 2%)與一般股票(弱動能 <= 2%)在樣本外的預測力差異\n")
+        f_out.write("-" * 70 + "\n")
+        
+        mean_weak_ic = df_mom["weak_ic"].mean() if not df_mom.empty else np.nan
+        mean_strong_ic = df_mom["strong_ic"].mean() if not df_mom.empty else np.nan
+        mean_weak_spread = df_mom["weak_spread"].mean() if not df_mom.empty else np.nan
+        mean_strong_spread = df_mom["strong_spread"].mean() if not df_mom.empty else np.nan
+        mean_weak_count = df_mom["weak_count"].mean() if not df_mom.empty else 0
+        mean_strong_count = df_mom["strong_count"].mean() if not df_mom.empty else 0
+        
+        f_out.write(f"弱動能組 (Yesterday Ret <= 2%) 平均 RankIC: {mean_weak_ic:+.4f} | 平均多空價差: {mean_weak_spread*100:+.3f}% (日均個股數: {mean_weak_count:.1f})\n")
+        f_out.write(f"強動能組 (Yesterday Ret > 2%)  平均 RankIC: {mean_strong_ic:+.4f} | 平均多空價差: {mean_strong_spread*100:+.3f}% (日均個股數: {mean_strong_count:.1f})\n")
+        f_out.write("-" * 70 + "\n")
+        f_out.write("診斷指引:\n")
+        f_out.write("- 若 [弱動能組 IC] 顯著高於 [強動能組 IC] (例如 0.04 vs -0.01)，代表模型在強趨勢股上失效(Mean Reversion與動能相衝)\n")
+        f_out.write("- 若兩組 IC 接近，代表 Alpha 衰退並非由 Momentum 風格切換單一因子所主導\n\n")
+        
+        # 新增第 7 部分：SHAP 與特徵重要性漂移對比
+        f_out.write("7. SHAP 與特徵重要性漂移 (SHAP & Importance Drift Top 15)\n")
+        f_out.write("-" * 80 + "\n")
+        f_out.write(f"{'特徵名稱':<28} | {'Gain%':<6} | {'Split%':<6} | {'IS_SHAP_A':<9} | {'OOS_SHAP_A':<10} | {'IS_SHAP_M':<9} | {'OOS_SHAP_M':<10} | {'Drift(Mean)':<11}\n")
+        f_out.write("-" * 80 + "\n")
+        for idx, row in df_shap_drift.head(15).iterrows():
+            f_out.write(f"{row['feature']:<28} | {row['gain_pct']:5.1f}% | {row['split_pct']:5.1f}% | {row['shap_is_abs']:9.4f} | {row['shap_oos_abs']:10.4f} | {row['shap_is_mean']:+9.4f} | {row['shap_oos_mean']:+10.4f} | {row['shap_mean_drift']:+11.4f}\n")
+        f_out.write("-" * 80 + "\n")
+        f_out.write("診斷指引:\n")
+        f_out.write("- 比較 IS_SHAP_M 與 OOS_SHAP_M (SHAP Direction)，若正負號反轉，即為市場機制反轉之鐵證\n")
+        f_out.write("- 比較 Gain% (擬合) 與 OOS_SHAP_A (實質)，若 Gain% 高但 OOS SHAP 極低，說明特徵過度擬合且失效\n")
             
     # 同步印出報告至控制台
     with open(REPORT_PATH, "r", encoding="utf-8") as f_in:
