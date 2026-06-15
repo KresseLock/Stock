@@ -24,6 +24,7 @@
 | **第一層** 宏觀感知 | 辨識市場多空環境 | 注入全市場日報酬均值、市場寬度（上漲比例）與板塊趨勢強度 |
 | **第二層** 混合型標籤 | 強勢股雙重門檻 | 強勢股需同時滿足：相對排名前 20% **且** 絕對報酬率 > 0%，崩盤日不產生買入標籤 |
 | **第三層** 智慧空倉 | 全面信號惡化自動避險 | Day1 分數全面下滑時，系統自動判定無股可買，100% 空倉持現金 |
+| **第四層** 市況過濾器 | 趨勢市進攻、震盪市防守 | 依昨日大盤趨勢 (20日均報酬) 動態切換買入門檻：多頭低門檻積極進場、震盪盤整高門檻防守、空頭實質空倉。解決靜態門檻「多頭少賺、震盪爆倉」的兩難 |
 
 ### 多源數據融合
 
@@ -134,6 +135,18 @@ flowchart LR
 </details>
 
 <details>
+<summary><b>🔬 參數敏感度自動診斷器 (scripts/param_sensitivity.py)</b></summary>
+
+- 與 `optimize_trading_params.py` **互補**：優化器負責「**找**」最佳參數（Optuna 黑箱），本工具負責「**解釋**」參數——透明呈現每個風控參數如何牽動報酬／回撤／資金曝險／對大盤的超額擷取，讓你看著數據手動決策，而非盲信優化器的單一結果。
+- **單因子掃描 (OFAT)**：以 `configs/best_trading_params.json` 為基準，每次只掃描一個參數（其餘固定），跨「震盪市 / 大多頭」兩段相反市況回測。
+- **三大歸因指標**（從回測 history 反推）：大盤 Benchmark(beta)、平均曝險率（量化資金利用率）、Capture（策略報酬 / 大盤報酬，>1 表勝過 beta 有 alpha）；另附 **OptScore = Return − 2×MDD**，直接重現優化器評分邏輯，一眼看穿「為何優化器選了不交易」。
+- **執行摘要 (Executive Summary)**：報告開頭自動彙整成可直接照做的決策清單——✅ 跨市況穩健可直接改、⚠ 跨市況不穩定勿設靜態值、⊘ 現行基準下惰性建議值不可信、🎚️ 曝險旋鈕、🔴 資金利用率警示。
+- **數據存檔與秒級重生**：原始數據另存 `reports/param_sensitivity_report_data.json`，可用 `--from-json` 不重跑回測、秒級重新產生報告。
+- 輸出 `reports/param_sensitivity_report.md`。執行：`python scripts/param_sensitivity.py`（3 個高影響參數）、`--full`（全部 6 個）、`-p A,B`（指定參數，逗號多選）、`--from-json`（秒級重生）、`--base buy_threshold=5`（覆寫基準重測惰性參數）。
+
+</details>
+
+<details>
 <summary><b>📅 時光機樣本外單日回測器 (scripts/backtest.py)</b></summary>
 
 - 針對單一基準日期 (D) 的走步驗證 (Walk-forward Validation) 工具。它會將時間軸限制在日期 D 之前，自動訓練 Day 1 ~ Day 3 的 LightGBM 模型，並在 D 之後的 3 個交易日上執行預測，輸出真實命中率。
@@ -174,6 +187,7 @@ Stock/
 │   ├── inference.py            # 多空分數預測排行榜 + 智慧限價掛單指引
 │   ├── optimize_factors.py     # Optuna 貝葉斯超參數最佳化器
 │   ├── optimize_trading_params.py # 交易策略與避險參數最佳化器 (Optuna TPE)
+│   ├── param_sensitivity.py    # 參數敏感度自動診斷器 (OFAT 掃描，解釋優化器選值)
 │   ├── backtest.py             # 時光機單日回測器 (樣本外評估)
 │   ├── utils.py                # 全系統共享股票解析與過濾工具
 │   ├── stock_categories.json   # 產業分類與 ETF 全系統共享對照表
@@ -358,6 +372,43 @@ python scripts/backtest.py 2025-08-01
 搜尋完成後，最佳參數與回測指標會自動輸出並覆蓋存檔於 `configs/best_trading_params.json`。該檔案除了包含最佳的參數配置外，還會記錄**全區間整體績效**與**三個子區間個別的報酬率、最大回撤與得分**，供後續分析。
 
 `config.py` 在被任何模組（回測、模擬、推理）載入時，會自動偵測並讀取此 JSON 檔，動態覆寫內部的風控參數，使新參數立刻全系統生效。
+
+---
+
+#### 方案庚：參數敏感度自動診斷器 (scripts/param_sensitivity.py)
+
+`optimize_trading_params.py` 只會吐出「最佳參數」這個黑箱結果，卻不告訴你**為什麼**、**調動它會怎樣**、**哪個參數才是瓶頸**。本工具用**單因子掃描 (OFAT)** 補上這塊：以 `configs/best_trading_params.json` 為基準，每次只動一個風控參數，跨「震盪市 / 大多頭」兩段相反市況回測，產出一份可逐欄判讀的敏感度報告，讓你看著數據手動修參數。
+
+```powershell
+# 1. 預設掃描 3 個高影響參數 (buy_threshold / panic_breadth / stop_loss)
+python scripts/param_sensitivity.py
+
+# 2. 掃描全部 6 個參數 (較久，含 ts_activation / ts_pullback / sell_threshold)
+python scripts/param_sensitivity.py --full
+
+# 3. 只掃描單一或多個指定參數 (逗號分隔，最快)
+python scripts/param_sensitivity.py -p buy_threshold
+python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold
+
+# 4. 指定回測初始資金與最大持股數
+python scripts/param_sensitivity.py -c 2000000 -m 5
+
+# 5. 用上次的 JSON 數據「秒級重生報告」(不重跑回測，改判讀邏輯後重出報告用)
+python scripts/param_sensitivity.py --from-json
+
+# 6. 覆寫 OFAT 固定基準：在「滿倉狀態」重測出場類惰性參數 (見下方 NOTE)
+#    輸出至獨立檔 reports/param_sensitivity_report_rescan.md，不覆寫主報告
+python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold --base buy_threshold=5
+```
+
+**報告欄位與判讀（輸出至 `reports/param_sensitivity_report.md`）：**
+- `策略報酬 / 大盤beta / Capture`：Capture = 策略報酬 ÷ 大盤報酬，**> 1 表勝過大盤（有 alpha）**，< 1 表只是在賭 beta 甚至跑輸。
+- `平均曝險 / 空倉%`：量化資金利用率。**平均曝險 < 30% 代表資金常年空手**，該參數把你鎖在現金。
+- `OptScore = Return − 2×MDD`：直接重現 `optimize_trading_params.py` 的評分邏輯，一眼看穿「為何優化器選了不交易」。
+- 自動標籤：**「曝險旋鈕」**（一動就大幅改變市場參與度）、**「⚠ 跨市況不穩定」**（各區間最佳值不一致＝過擬合風險，靜態單一值無法通吃）。
+
+> [!NOTE]
+> OFAT 一次只動一個參數，**不會捕捉參數間的交互作用**（例如 `panic_breadth` 在「低門檻滿倉」情境下的效果）。若需檢視交互作用，須改用小型網格掃描。
 
 ---
 
@@ -556,6 +607,16 @@ python tests/test_pipeline.py
 | `TS_ACTIVATION_PCT` | `10.0%` | 個股浮動盈利達到此百分比時，開啟移動追蹤止盈 |
 | `TS_PULLBACK_PCT` | `-6.0%` | 啟動移動止盈後，自最高收盤價回撤此百分比執行停利出場 |
 
+### 2.1 市況過濾器（趨勢市進攻、震盪市防守）
+> 依昨日大盤趨勢動態切換買入門檻，解決靜態 `BUY_THRESHOLD`「多頭少賺、震盪爆倉」的兩難（回測：2026 牛市 −1.79%→+42.5%、2025 震盪 +0.95%→+12.7%，兩者皆勝過大盤 beta）。`trading_sim.py` 與 `inference.py` 共用同一邏輯。**僅在未顯式指定 `buy_threshold` 時生效**（CLI 覆寫與 `param_sensitivity.py` 靜態掃描不受影響）。
+
+| 參數 | 預設值 | 說明 |
+|------|--------|------|
+| `REGIME_ADAPTIVE_ENABLED` | `True` | 市況過濾器總開關 |
+| `REGIME_BUY_THRESHOLD` | `{Bull:5.0, Sideways:21.5, Bear:99.0}` | 各市況對應的 Day1 買入門檻（Bull 低門檻進攻／Bear 實質空倉）|
+| `REGIME_BULL_TREND` | `0.002` | 大盤 20 日均日報酬 > 此值判為 Bull（趨勢導向，不用 breadth 以涵蓋權值股窄牛市）|
+| `REGIME_BEAR_TREND` | `-0.002` | 大盤 20 日均日報酬 < 此值判為 Bear，其餘為 Sideways |
+
 ### 3. 機器學習樣本大跌懲罰 (MDD 避險機制) 參數
 | 參數 | 預設值 | 說明 |
 |------|--------|------|
@@ -609,3 +670,72 @@ flowchart LR
 ## 📄 免責聲明
 
 本系統所有預測結果與回測報告僅供量化研究參考，**不構成任何實際投資建議**。投資涉及風險，請自行審慎評估。
+
+---
+
+<!-- =====================================================================================
+  ⚠️ 已知結構性問題備忘錄 (2026-06-15 診斷)
+  本節記錄目前系統的已知架構缺陷與待修正項目，供後續開發與調參時參照。
+  當問題修復後，請將對應條目標記為 ✅ 並註明修復日期。
+======================================================================================== -->
+
+## ⚠️ 已知結構性問題與待修正項目 (2026-06-15 診斷)
+
+> [!WARNING]
+> 以下問題已通過回測數據與敏感度分析確認，是系統績效落後大盤的主要根因。
+> 詳細診斷數據參見 `reports/bottleneck_attribution.txt` 與 `reports/param_sensitivity_report.md`。
+
+### 問題 1：Optuna 目標函數存在「空倉偏誤」— 🔴 最高優先
+
+<!-- TODO: 修正 optimize_trading_params.py 的 run_simulation_scoring，加入曝險懲罰項 -->
+
+- **現象**：WFO 調參持續收斂到 `buy_threshold=21.5`，導致系統 **80%+ 交易日完全空倉**，平均曝險僅 3-7%。
+- **根因**：`run_simulation_scoring()` 的評分公式中，空倉策略得分 = 0，而微虧策略得分 < 0。Optuna 發現「不交易」就是分數最穩定的解，等同在優化「怎麼不虧錢」而非「怎麼賺錢」。
+- **實測數據**：
+  | 區間 | buy_thr=21.5 曝險 | buy_thr=0 曝險 | 報酬差距 |
+  |------|-------------------|---------------|---------|
+  | 2025 震盪市 | 6.8% (空倉 79%) | 93.5% | +11.82% |
+  | 2026 大多頭 | 3.1% (空倉 87%) | 95.9% | **+84.72%** |
+- **修正方向**：在 `combined_score` 計算後加入曝險懲罰項，曝險低於 30% 時線性扣分，防止 Optuna 收斂到「不交易」的局部最優。
+- **涉及檔案**：`scripts/optimize_trading_params.py` 第 140-188 行
+
+### 問題 2：Regime 分類器滯後嚴重（20 日均線延遲）— 🟡 高優先
+
+<!-- TODO: 考慮將 REGIME_TREND_WINDOW 從 20 縮短至 10，或將 SMA 改為 EMA -->
+
+- **現象**：OOS 207 天中僅 27 天（13%）被判定為 Bull，149 天（72%）被判為 Sideways，導致多數牛市日子使用防守門檻 21.5%（≈不買）。
+- **根因**：`REGIME_TREND_WINDOW = 20` 的 SMA 是強滯後指標，牛市起漲時前 20 天均線仍在 0 附近，系統誤判為 Sideways。
+- **修正方向**：
+  - 方案 A（最小改動）：`REGIME_TREND_WINDOW` 從 20 縮至 10，`REGIME_BULL_TREND` 從 0.002 降至 0.0015
+  - 方案 B（進階）：將 `.rolling().mean()` 改為 `.ewm().mean()`，加速對趨勢的反應
+- **涉及檔案**：`config.py` 第 62-64 行、`trading_sim.py` 第 86-100 行
+
+### 問題 3：Panic Breadth 門檻在窄牛市過度敏感 — 🟡 高優先
+
+<!-- TODO: 評估是否在 Bull regime 下放寬或停用 panic_breadth 紅燈 -->
+
+- **現象**：2026 年權值股帶動的窄牛市中（大盤漲但多數個股跌），`MKT_PANIC_BREADTH = 0.33` 頻繁觸發紅燈（兩段回測共 37 天），每次紅燈 = 當天完全禁止買進。
+- **根因**：`config.py` 第 60 行自己的註解已寫：「2026 為權值股帶動的窄牛市 (breadth 低但趨勢強)，用 breadth 會嚴重低估多頭」，但 `panic_breadth` 仍設 0.33，認知未落實到參數。
+- **修正方向**：考慮在 Bull regime 下放寬（或停用）breadth 紅燈，僅在 Sideways/Bear 時啟用。
+- **涉及檔案**：`trading_sim.py` 第 311-318 行、`config.py` 第 45 行
+
+### 問題 4：WFO 出場參數在「空倉假象」下校準，無實質意義 — 🟠 中優先
+
+<!-- TODO: 修正問題 1 後，重跑 WFO 讓出場參數在滿倉狀態下被校準 -->
+
+- **現象**：`sell_threshold`、`ts_activation`、`ts_pullback` 在敏感度掃描中幾乎無作用（跨市況報酬擺幅 0-2.3%）。
+- **根因**：這些出場參數掃描時的基準 `buy_threshold=21.5`，系統幾乎不持股，出場邏輯無部位可作用。
+- **修正方向**：先修正問題 1（加入曝險懲罰），讓 WFO 在合理曝險下重新校準出場參數。在低 `buy_threshold`（滿倉）狀態下重掃 `param_sensitivity.py --base buy_threshold=5` 才能得到有意義的出場參數建議。
+- **實測對比**（rescan 報告 `buy_threshold=5` 基準）：
+  | 參數 | buy_thr=21.5 基準報酬擺幅 | buy_thr=5 基準報酬擺幅 |
+  |------|--------------------------|----------------------|
+  | `ts_activation` | 0.0% (完全惰性) | 10.2% (有效) |
+  | `sell_threshold` | 2.2% (微弱) | 25.3% (強影響) |
+
+### 問題 5：模型預測相對排名，但決策框架用絕對門檻做二元閘門 — 🔵 架構層
+
+<!-- NOTE: 長期架構改善方向，非短期修正項 -->
+
+- **現象**：LightGBM 標籤為橫截面相對排名（top 20% = class 2），`D1_net = (P(strong) - P(weak)) × 100` 的分布不因市場環境改善而提升，買入門檻 21.5% 是固定的「硬牆」。
+- **根因**：模型設計適合「永遠有持股，選誰比較好」（排序型），但決策框架是「分數夠高才買」（閾值型），兩者不匹配。
+- **長期方向**：考慮將系統改為「永遠持有 N 檔，用模型排序後買排名最高的 N 檔，出現更好候選時換股輪動」的持續滿倉架構，讓 alpha 完全來自選股排序能力。

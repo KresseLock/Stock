@@ -28,6 +28,8 @@ try:
         BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS, FEE_RATE, TAX_RATE,
         ORDER_MARKUP_HIGH_SCORE, ORDER_MARKUP_MID_SCORE,
         ORDER_MARKUP_HIGH_PCT, ORDER_MARKUP_MID_PCT, ORDER_MARKUP_LOW_PCT,
+        REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD, REGIME_BULL_TREND, REGIME_BEAR_TREND,
+        REGIME_TREND_WINDOW, REGIME_TREND_MIN_PERIODS,
     )
 except ImportError:
     BUY_THRESHOLD   = 10.0
@@ -38,6 +40,9 @@ except ImportError:
     MAX_POSITIONS   = 5
     ORDER_MARKUP_HIGH_SCORE = 30.0; ORDER_MARKUP_MID_SCORE  = 20.0
     ORDER_MARKUP_HIGH_PCT   = 2.5;  ORDER_MARKUP_MID_PCT    = 2.0; ORDER_MARKUP_LOW_PCT = 1.5
+    REGIME_ADAPTIVE_ENABLED = False; REGIME_BUY_THRESHOLD = {}
+    REGIME_BULL_TREND = 0.002; REGIME_BEAR_TREND = -0.002
+    REGIME_TREND_WINDOW = 20; REGIME_TREND_MIN_PERIODS = 5
 
 
 def load_watchlist_detailed() -> dict:
@@ -143,6 +148,21 @@ def main(target_date_str=None):
     if df_latest_market.empty:
         print("[錯誤] 最新日期無任何股票資料。")
         return
+
+    # ── 市況過濾器：依最新日(D) regime 動態決定隔日買入門檻 (與 trading_sim 同邏輯、無前視) ──
+    eff_buy_threshold = BUY_THRESHOLD
+    current_regime = "靜態"
+    if REGIME_ADAPTIVE_ENABLED and "market_mean_pct" in df.columns:
+        _trend = df.groupby("date")["market_mean_pct"].first().sort_index().rolling(window=REGIME_TREND_WINDOW, min_periods=REGIME_TREND_MIN_PERIODS).mean()
+        t20 = _trend.get(latest_date, _trend.iloc[-1] if len(_trend) else 0.0)
+        if t20 > REGIME_BULL_TREND:
+            current_regime = "Bull"
+        elif t20 < REGIME_BEAR_TREND:
+            current_regime = "Bear"
+        else:
+            current_regime = "Sideways"
+        eff_buy_threshold = REGIME_BUY_THRESHOLD.get(current_regime, BUY_THRESHOLD)
+        print(f"  [市況過濾器] 最新日 regime = {current_regime} (趨勢t20={t20:+.4f}) → 買入門檻動態調整為 {eff_buy_threshold:.1f}%")
 
     target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     ignore_cols = ["stock_id", "date"] + target_cols
@@ -329,7 +349,7 @@ def main(target_date_str=None):
 
     output_lines.append("")
     output_lines.append("=" * 90)
-    output_lines.append(f"   [實戰下單指令] 買進D1 >= {BUY_THRESHOLD:.0f}% | 賣出D3 < {SELL_THRESHOLD:.0f}% | 停損 {STOP_LOSS_PCT:.0f}%")
+    output_lines.append(f"   [實戰下單指令] 買進D1 >= {eff_buy_threshold:.0f}% (市況:{current_regime}) | 賣出D3 < {SELL_THRESHOLD:.0f}% | 停損 {STOP_LOSS_PCT:.0f}%")
     output_lines.append("=" * 90)
 
     output_lines.append("   明日建議賣出掛單 (開盤賣出釋出倉位):")
@@ -343,7 +363,7 @@ def main(target_date_str=None):
     output_lines.append(f"   明日建議買進掛單 (持倉:{current_hold_count} -> 開盤剩餘:{remaining_hold_count} | 需填補空位:{available_slots} 檔):")
     
     buy_cond = (
-        (results_market["Day1_net"] >= BUY_THRESHOLD) &
+        (results_market["Day1_net"] >= eff_buy_threshold) &
         (~results_market["stock_id"].isin(remaining_holdings)) &
         (~results_market["stock_id"].isin(sells_sids)) &
         (~results_market["stock_id"].astype(str).isin(etf_set))
@@ -382,10 +402,10 @@ def main(target_date_str=None):
     if has_real_watchlist and len(track_only) > 0:
         track_buys_df = results_watchlist[
             (results_watchlist["stock_id"].isin(track_only.keys())) &
-            (results_watchlist["Day1_net"] >= BUY_THRESHOLD)
+            (results_watchlist["Day1_net"] >= eff_buy_threshold)
         ]
         if not track_buys_df.empty:
-            output_lines.append("   自選追蹤強勢股已達買進門檻 (D1 >= +10.0%):")
+            output_lines.append(f"   自選追蹤強勢股已達買進門檻 (D1 >= {eff_buy_threshold:+.1f}%):")
             for row in track_buys_df.itertuples():
                 sid   = str(row.stock_id)
                 cname = stock_names.get(sid, "")

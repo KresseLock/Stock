@@ -75,27 +75,65 @@ default_start_date = (dt_end - datetime.timedelta(days=365 * 2.5)).strftime("%Y-
 RESULT_PATH = os.path.join(BASE_DIR, "configs", "best_trading_params.json")
 
 
+def suggest_trial_params(trial, regime_mode):
+    """集中定義 Optuna 搜尋空間。regime_mode 時搜尋 REGIME_* 動態門檻，否則搜尋靜態 buy_threshold。"""
+    p = {
+        "sell_threshold": trial.suggest_float("sell_threshold", -20.0, 5.0, step=0.5),
+        "stop_loss": trial.suggest_float("stop_loss", -15.0, -3.0, step=0.5),
+        "panic_ma5": trial.suggest_float("panic_ma5", -0.025, 0.00, step=0.001),
+        "panic_breadth": trial.suggest_float("panic_breadth", 0.15, 0.45, step=0.01),
+        "ts_activation": trial.suggest_float("ts_activation", 5.0, 25.0, step=0.5),
+        "ts_pullback": trial.suggest_float("ts_pullback", -12.0, -1.0, step=0.5),
+        "min_hold_days": trial.suggest_int("min_hold_days", 1, 25),
+        "markup_pct": trial.suggest_float("markup_pct", -3.0, 2.0, step=0.5),
+    }
+    if regime_mode:
+        # 市況過濾器：趨勢市低門檻進攻、震盪市高門檻防守、空頭固定空倉(99)
+        p["regime_bull_buy"] = trial.suggest_float("regime_bull_buy", 0.0, 15.0, step=0.5)
+        p["regime_sideways_buy"] = trial.suggest_float("regime_sideways_buy", 8.0, 25.0, step=0.5)
+        p["regime_bull_trend"] = trial.suggest_float("regime_bull_trend", 0.0005, 0.004, step=0.0005)
+        p["regime_bear_trend"] = trial.suggest_float("regime_bear_trend", -0.004, -0.0005, step=0.0005)
+    else:
+        p["buy_threshold"] = trial.suggest_float("buy_threshold", 5.0, 25.0, step=0.5)
+    return p
+
+
 def run_simulation_scoring(start_date, end_date, trial_params, capital, max_pos):
     import io
     import contextlib
     from trading_sim import run_simulation
     import numpy as np
     
+    sim_kwargs = dict(
+        start_date=start_date,
+        end_date=end_date,
+        initial_capital=capital,
+        max_positions=max_pos,
+        mkt_panic_ma5=trial_params["panic_ma5"],
+        mkt_panic_breadth=trial_params["panic_breadth"],
+        sell_threshold=trial_params["sell_threshold"],
+        stop_loss_pct=trial_params["stop_loss"],
+        ts_activation_pct=trial_params["ts_activation"],
+        ts_pullback_pct=trial_params["ts_pullback"],
+        min_hold_days=trial_params["min_hold_days"],
+        markup_pct=trial_params["markup_pct"],
+    )
+    if "regime_bull_buy" in trial_params:
+        # 市況過濾器模式：搜尋 regime 動態門檻，buy_threshold 留空 (None) 以啟用過濾器
+        sim_kwargs["regime_buy_threshold"] = {
+            "Bull":     trial_params["regime_bull_buy"],
+            "Sideways": trial_params["regime_sideways_buy"],
+            "Bear":     99.0,
+        }
+        sim_kwargs["regime_bull_trend"] = trial_params["regime_bull_trend"]
+        sim_kwargs["regime_bear_trend"] = trial_params["regime_bear_trend"]
+    else:
+        sim_kwargs["buy_threshold"] = trial_params["buy_threshold"]
+
     f = io.StringIO()
     with contextlib.redirect_stdout(f):
         try:
-            total_return, max_dd, history = run_simulation(
-                start_date=start_date,
-                end_date=end_date,
-                initial_capital=capital,
-                max_positions=max_pos,
-                mkt_panic_ma5=trial_params["panic_ma5"],
-                mkt_panic_breadth=trial_params["panic_breadth"],
-                buy_threshold=trial_params["buy_threshold"],
-                stop_loss_pct=trial_params["stop_loss"],
-                ts_activation_pct=trial_params["ts_activation"],
-                ts_pullback_pct=trial_params["ts_pullback"]
-            )
+            total_return, max_dd, history = run_simulation(**sim_kwargs)
         except Exception:
             return -999.0, {}, 0.0, 0.0
             
@@ -160,7 +198,9 @@ def main():
     parser.add_argument("-t", "--trials", type=int, default=OPTIMIZATION_TRIALS, help="最佳化搜尋輪數")
     parser.add_argument("-j", "--jobs", type=int, default=1, help="並行搜尋執行緒數")
     parser.add_argument("-wf", "--walk_forward", action="store_true", help="是否啟用 Walk-Forward 參數穩定性檢驗")
-    
+    parser.add_argument("--regime", action="store_true",
+                        help="市況過濾器模式：搜尋 REGIME_* 動態門檻 (Bull/Sideways 門檻與趨勢分界)，而非靜態 buy_threshold")
+
     args = parser.parse_args()
     
     import numpy as np
@@ -205,14 +245,7 @@ def main():
             print(f"\n[WF 窗口 {idx+1}/4] 優化區間: {ws} 至 {we} (搜尋 {wf_trials} 輪)...")
             
             def wf_objective(trial):
-                trial_params = {
-                    "buy_threshold": trial.suggest_float("buy_threshold", 5.0, 25.0, step=0.5),
-                    "stop_loss": trial.suggest_float("stop_loss", -15.0, -3.0, step=0.5),
-                    "panic_ma5": trial.suggest_float("panic_ma5", -0.025, 0.00, step=0.001),
-                    "panic_breadth": trial.suggest_float("panic_breadth", 0.15, 0.45, step=0.01),
-                    "ts_activation": trial.suggest_float("ts_activation", 5.0, 25.0, step=0.5),
-                    "ts_pullback": trial.suggest_float("ts_pullback", -12.0, -1.0, step=0.5)
-                }
+                trial_params = suggest_trial_params(trial, args.regime)
                 score, _, _, _ = run_simulation_scoring(ws, we, trial_params, args.capital, args.max_pos)
                 return score
                 
@@ -221,8 +254,8 @@ def main():
             print(f"  [窗口 {idx+1} 完成] 最佳得分: {study.best_value:.4f} | 參數: {study.best_params}")
             all_best_params.append(study.best_params)
             
-        # 統計與部署
-        param_names = ["buy_threshold", "stop_loss", "panic_ma5", "panic_breadth", "ts_activation", "ts_pullback"]
+        # 統計與部署 (參數名稱依模式動態取得)
+        param_names = list(all_best_params[0].keys()) if all_best_params else []
         wf_results = {}
         median_params = {}
         
@@ -273,15 +306,8 @@ def main():
     else:
         # ── 標準單區間優化模式 ──
         def objective(trial):
-            trial_params = {
-                "buy_threshold": trial.suggest_float("buy_threshold", 5.0, 25.0, step=0.5),
-                "stop_loss": trial.suggest_float("stop_loss", -15.0, -3.0, step=0.5),
-                "panic_ma5": trial.suggest_float("panic_ma5", -0.025, 0.00, step=0.001),
-                "panic_breadth": trial.suggest_float("panic_breadth", 0.15, 0.45, step=0.01),
-                "ts_activation": trial.suggest_float("ts_activation", 5.0, 25.0, step=0.5),
-                "ts_pullback": trial.suggest_float("ts_pullback", -12.0, -1.0, step=0.5)
-            }
-            
+            trial_params = suggest_trial_params(trial, args.regime)
+
             score, regime_details, total_ret, max_dd = run_simulation_scoring(
                 args.start, args.end, trial_params, args.capital, args.max_pos
             )
@@ -320,15 +346,23 @@ def main():
                         sub_info.append(f"{r}:{sub_score:.2f}")
                     sub_str = " | ".join(sub_info)
                     
+                    tp = trial.params
+                    if "regime_bull_buy" in tp:
+                        buy_str = (f"市況門檻[多:{tp['regime_bull_buy']}/盤:{tp['regime_sideways_buy']}]% "
+                                   f"趨勢界[多>{tp['regime_bull_trend']:.4f}/空<{tp['regime_bear_trend']:.4f}]")
+                    else:
+                        buy_str = f"Buy門檻: {tp['buy_threshold']}%"
                     with _print_lock:
                         print(
                             f"  [{n:>4}/{args.trials:>4}] "
                             f"綜合得分={val:.2f} ({sub_str})  最佳={best:.2f} | "
-                            f"Buy門檻: {trial.params['buy_threshold']}% | "
-                            f"停損: {trial.params['stop_loss']}% | "
-                            f"大盤MA5: {trial.params['panic_ma5']*100:.1f}% | "
-                            f"上漲比例: {trial.params['panic_breadth']*100:.0f}% | "
-                            f"移動止盈: 達 {trial.params['ts_activation']}% 回撤 {trial.params['ts_pullback']}%"
+                            f"{buy_str} | "
+                            f"Sell門檻: {tp['sell_threshold']}% | "
+                            f"停損: {tp['stop_loss']}% | "
+                            f"大盤MA5: {tp['panic_ma5']*100:.1f}% | "
+                            f"上漲比例: {tp['panic_breadth']*100:.0f}% | "
+                            f"移動止盈: 達 {tp['ts_activation']}% 回撤 {tp['ts_pullback']}% | "
+                            f"持股天數: {tp['min_hold_days']}天 | 折溢價: {tp['markup_pct']}%"
                             f"{tag}",
                             flush=True
                         )
@@ -365,12 +399,22 @@ def main():
             print(f"    - {r:<8} 市況績效 ({r_days:>3}天): 報酬率 {r_ret:+.2f}% | 最大回撤 {r_mdd:+.2f}% | 分數 {r_score:.2f}")
         print(f"    - 全區間整體績效: 報酬率 {best_trial.user_attrs.get('overall_return', 0.0):+.2f}% | 最大回撤 {best_trial.user_attrs.get('overall_mdd', 0.0):+.2f}%")
         print("-" * 70)
-        print(f"  1. 買進分數門檻 (buy_threshold)  : {best_params['buy_threshold']:.1f}%")
+        if "regime_bull_buy" in best_params:
+            print(f"  1. 市況動態買入門檻 (regime):")
+            print(f"       - Bull 多頭進攻門檻 : {best_params['regime_bull_buy']:.1f}%")
+            print(f"       - Sideways 防守門檻 : {best_params['regime_sideways_buy']:.1f}%")
+            print(f"       - Bear 空頭         : 99.0% (實質空倉)")
+            print(f"       - 趨勢分界 (t20)    : Bull > {best_params['regime_bull_trend']:.4f} | Bear < {best_params['regime_bear_trend']:.4f}")
+        else:
+            print(f"  1. 買進分數門檻 (buy_threshold)  : {best_params['buy_threshold']:.1f}%")
+        print(f"  1.5 賣出分數門檻 (sell_threshold): {best_params['sell_threshold']:.1f}%")
         print(f"  2. 個股固定停損 (stop_loss)      : {best_params['stop_loss']:.1f}%")
         print(f"  3. 大盤5日報酬門檻 (panic_ma5)   : {best_params['panic_ma5']*100:.2f}% (實數: {best_params['panic_ma5']:.4f})")
         print(f"  4. 全市場上漲比例 (panic_breadth): {best_params['panic_breadth']*100:.1f}% (實數: {best_params['panic_breadth']:.2f})")
         print(f"  5. 移動止盈啟動線 (ts_activation): {best_params['ts_activation']:.1f}%")
         print(f"  6. 移動止盈回撤線 (ts_pullback)  : {best_params['ts_pullback']:.1f}%")
+        print(f"  7. 最少持股天數 (min_hold_days)  : {best_params['min_hold_days']}天")
+        print(f"  8. 掛單溢價幅度 (markup_pct)     : {best_params['markup_pct']:.1f}%")
         print("=" * 70)
         
         output_data = {

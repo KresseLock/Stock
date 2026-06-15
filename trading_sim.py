@@ -19,13 +19,16 @@ try:
         ORDER_MARKUP_HIGH_SCORE, ORDER_MARKUP_MID_SCORE,
         ORDER_MARKUP_HIGH_PCT, ORDER_MARKUP_MID_PCT, ORDER_MARKUP_LOW_PCT,
         SIM_DEFAULT_START, SIM_DEFAULT_END, SIM_DEFAULT_CAPITAL,
-        MAX_POSITIONS,
+        MAX_POSITIONS, REGIME_BULL_TREND, REGIME_BEAR_TREND,
+        REGIME_TREND_WINDOW, REGIME_TREND_MIN_PERIODS,
     )
 except ImportError:
     ORDER_MARKUP_HIGH_SCORE = 30.0; ORDER_MARKUP_MID_SCORE = 20.0
     ORDER_MARKUP_HIGH_PCT   = 2.5;  ORDER_MARKUP_MID_PCT   = 2.0; ORDER_MARKUP_LOW_PCT = 1.5
     SIM_DEFAULT_START = "2026-01-01"; SIM_DEFAULT_END = "2026-06-30"; SIM_DEFAULT_CAPITAL = 1_000_000
     MAX_POSITIONS = 5
+    REGIME_BULL_TREND = 0.002; REGIME_BEAR_TREND = -0.002
+    REGIME_TREND_WINDOW = 20; REGIME_TREND_MIN_PERIODS = 5
 
 def get_tw_tick_size(price: float) -> float:
     if price < 10:
@@ -63,8 +66,10 @@ def load_models():
 
 def run_simulation(start_date, end_date, initial_capital, max_positions,
                    mkt_panic_ma5=None, mkt_panic_breadth=None,
-                   buy_threshold=None, stop_loss_pct=None,
-                   ts_activation_pct=None, ts_pullback_pct=None):
+                   buy_threshold=None, sell_threshold=None, stop_loss_pct=None,
+                   ts_activation_pct=None, ts_pullback_pct=None,
+                   min_hold_days=None, markup_pct=None,
+                   regime_buy_threshold=None, regime_bull_trend=None, regime_bear_trend=None):
     print("=" * 70)
     print(f"  啟動量化交易回測 (Out-of-Sample, T+1 限價搓合 + 雙風控防線版)")
     print(f"  期間: {start_date} 到 {end_date}")
@@ -80,13 +85,17 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     
     # 計算每日大盤特徵與 20 日滾動均值，用以劃分 Regime
     df_daily_mkt = df.groupby("date")[["market_mean_pct", "market_breadth_pct"]].first().reset_index()
-    df_daily_mkt["market_trend_20d"] = df_daily_mkt["market_mean_pct"].rolling(window=20, min_periods=5).mean()
-    df_daily_mkt["market_breadth_20d"] = df_daily_mkt["market_breadth_pct"].rolling(window=20, min_periods=5).mean()
+    df_daily_mkt["market_trend_20d"] = df_daily_mkt["market_mean_pct"].rolling(window=REGIME_TREND_WINDOW, min_periods=REGIME_TREND_MIN_PERIODS).mean()
+    df_daily_mkt["market_breadth_20d"] = df_daily_mkt["market_breadth_pct"].rolling(window=REGIME_TREND_WINDOW, min_periods=REGIME_TREND_MIN_PERIODS).mean()
     
-    # 用 np.select 劃分 Bull, Bear, Sideways
+    # 用 np.select 劃分 Bull, Bear, Sideways (趨勢導向：以 market_trend_20d 為主軸)。
+    # 不用 breadth 判 Bull，因 2026 為權值股窄牛市 (趨勢強但 breadth 低)，用 breadth 會漏判多頭。
+    # 趨勢門檻可由外部覆寫 (供 optimize_trading_params.py 校準)，否則用 config 預設。
+    _bull_trend = regime_bull_trend if regime_bull_trend is not None else REGIME_BULL_TREND
+    _bear_trend = regime_bear_trend if regime_bear_trend is not None else REGIME_BEAR_TREND
     conditions = [
-        (df_daily_mkt["market_trend_20d"] > 0) & (df_daily_mkt["market_breadth_20d"] > 0.50),
-        (df_daily_mkt["market_trend_20d"] < 0) & (df_daily_mkt["market_breadth_20d"] < 0.50)
+        df_daily_mkt["market_trend_20d"] > _bull_trend,
+        df_daily_mkt["market_trend_20d"] < _bear_trend
     ]
     df_daily_mkt["regime"] = np.select(conditions, ["Bull", "Bear"], default="Sideways")
     
@@ -191,9 +200,10 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     # ── 載入中央控制面板 config ──────────────────────────────────
     try:
         from config import (
-            BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS, 
-            FEE_RATE, TAX_RATE, MKT_PANIC_MA5, MKT_PANIC_BREADTH, 
-            TS_ACTIVATION_PCT, TS_PULLBACK_PCT
+            BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS,
+            FEE_RATE, TAX_RATE, MKT_PANIC_MA5, MKT_PANIC_BREADTH,
+            TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS, ORDER_MARKUP_PCT,
+            REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD
         )
     except ImportError:
         BUY_THRESHOLD     = 10.0
@@ -205,10 +215,24 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         MKT_PANIC_BREADTH = 0.30    # 與 config.py 黃金風控參數一致 (30%)
         TS_ACTIVATION_PCT = 10.0
         TS_PULLBACK_PCT   = -6.0
+        MIN_HOLD_DAYS     = 1
+        ORDER_MARKUP_PCT  = None
+        REGIME_ADAPTIVE_ENABLED = False
+        REGIME_BUY_THRESHOLD = {}
+
+    # 市況過濾器精度控管：僅在「未顯式指定 buy_threshold」時啟用動態門檻，
+    # 避免破壞 CLI 覆寫與 param_sensitivity.py 的靜態掃描。
+    # regime 買入門檻字典可由外部覆寫 (供 optimize_trading_params.py 校準)。
+    _regime_buy_thr = regime_buy_threshold if regime_buy_threshold is not None else REGIME_BUY_THRESHOLD
+    use_regime_filter = (buy_threshold is None) and REGIME_ADAPTIVE_ENABLED
+    if use_regime_filter:
+        print(f"  [市況過濾器] 已啟用動態買入門檻 (依昨日 regime)：{_regime_buy_thr}")
 
     # 外部參數覆蓋
     if buy_threshold is not None:
         BUY_THRESHOLD = buy_threshold
+    if sell_threshold is not None:
+        SELL_THRESHOLD = sell_threshold
     if stop_loss_pct is not None:
         STOP_LOSS_PCT = stop_loss_pct
     if mkt_panic_ma5 is not None:
@@ -219,6 +243,10 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         TS_ACTIVATION_PCT = ts_activation_pct
     if ts_pullback_pct is not None:
         TS_PULLBACK_PCT = ts_pullback_pct
+    if min_hold_days is not None:
+        MIN_HOLD_DAYS = min_hold_days
+    if markup_pct is not None:
+        ORDER_MARKUP_PCT = markup_pct
     
     # 建立股票名稱對照表
     stock_names = {}
@@ -289,7 +317,13 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             is_market_panic = True
             panic_reason = f"全市場上漲比例過低 ({mkt_breadth * 100:.1f}%)，低於風控門檻 {MKT_PANIC_BREADTH * 100:.1f}%"
 
-        current_buy_threshold = BUY_THRESHOLD
+        # 市況過濾器：依「昨日(訊號日)」的 regime 動態決定買入門檻 (趨勢市進攻、震盪/空頭防守)。
+        # 刻意讀 prev_data 而非 today_data，因 today 的 regime 含今日市場報酬，用於今日買進屬前視偏差。
+        if use_regime_filter and not prev_data.empty and 'regime' in prev_data.columns:
+            signal_regime = prev_data['regime'].iloc[0]
+            current_buy_threshold = _regime_buy_thr.get(signal_regime, BUY_THRESHOLD)
+        else:
+            current_buy_threshold = BUY_THRESHOLD
         if is_market_panic:
             current_buy_threshold = 99.0
             print(f"  [風控警示] {today.date()} 觸發大盤避險紅燈！原因: {panic_reason}。今日起暫停任何新股買進。")
@@ -326,15 +360,20 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                     if not pd.isna(prev_close) and prev_close > 0 and prev_close <= trailing_stop_price:
                         triggered_trailing_stop = True
                 
-                # 賣出判定優先級
-                if day3_score < SELL_THRESHOLD:
-                    sells_today.append((sid, open_T1, "Day3預測轉弱"))
-                elif open_T1 <= stop_loss_price:
-                    sells_today.append((sid, open_T1, "觸發-8%停損(開盤跳空)"))
+                # 計算持股天數 (如果沒有 buy_idx 則預設為 999 避免阻礙賣出)
+                buy_idx = pos.get('buy_idx', None)
+                held_trading_days = (idx_today - buy_idx) if buy_idx is not None else 999
+                
+                # 賣出判定優先級：停損不受最少持股天數限制，但 Day3 訊號轉弱與移動止盈必須符合 MIN_HOLD_DAYS 限制
+                if open_T1 <= stop_loss_price:
+                    sells_today.append((sid, open_T1, f"觸發停損(開盤跳空:{stop_loss_price:.2f})"))
                 elif low_T1 <= stop_loss_price:
-                    sells_today.append((sid, stop_loss_price, "觸發-8%停損(盤中)"))
-                elif triggered_trailing_stop:
-                    sells_today.append((sid, open_T1, f"觸發移動止盈(高點 {pos['max_close_price']:.2f} 回撤{abs(TS_PULLBACK_PCT)}%)"))
+                    sells_today.append((sid, stop_loss_price, f"觸發停損(盤中:{stop_loss_price:.2f})"))
+                elif held_trading_days >= MIN_HOLD_DAYS:
+                    if day3_score < SELL_THRESHOLD:
+                        sells_today.append((sid, open_T1, f"Day3預測轉弱 ({day3_score:.1f}% < {SELL_THRESHOLD}%)"))
+                    elif triggered_trailing_stop:
+                        sells_today.append((sid, open_T1, f"觸發移動止盈(高點 {pos['max_close_price']:.2f} 回撤{abs(TS_PULLBACK_PCT)}%)"))
 
         today_sells_amount = 0
         for sid, sell_price, reason in sells_today:
@@ -399,13 +438,16 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             if pd.isna(open_T1) or open_T1 <= 0 or pd.isna(low_T1) or low_T1 <= 0:
                 continue
                 
-            # 根據 D1 分數動態決定加價幅度 (與 scripts/inference.py 對齊，共用 config.py ORDER_MARKUP_* 常數)
-            if day1_score >= ORDER_MARKUP_HIGH_SCORE:
-                target_pct = ORDER_MARKUP_HIGH_PCT
-            elif day1_score >= ORDER_MARKUP_MID_SCORE:
-                target_pct = ORDER_MARKUP_MID_PCT
+            # 根據 D1 分數動態決定加價幅度，或是採用固定的 ORDER_MARKUP_PCT
+            if ORDER_MARKUP_PCT is not None:
+                target_pct = ORDER_MARKUP_PCT
             else:
-                target_pct = ORDER_MARKUP_LOW_PCT
+                if day1_score >= ORDER_MARKUP_HIGH_SCORE:
+                    target_pct = ORDER_MARKUP_HIGH_PCT
+                elif day1_score >= ORDER_MARKUP_MID_SCORE:
+                    target_pct = ORDER_MARKUP_MID_PCT
+                else:
+                    target_pct = ORDER_MARKUP_LOW_PCT
                 
             raw_target_price = close_prev * (1 + target_pct / 100.0)
             limit_price = round_to_tick(raw_target_price)
@@ -442,7 +484,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                     'buy_price': buy_price,
                     'current_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else buy_price,
                     'buy_date': today,
-                    'max_close_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else buy_price
+                    'max_close_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else buy_price,
+                    'buy_idx': idx_today
                 }
                 cname = stock_names.get(sid, "")
                 
@@ -653,9 +696,12 @@ if __name__ == "__main__":
     parser.add_argument("--panic_ma5", type=float, default=None, help="大盤 5 日滾動平均報酬率避險門檻 (例如 -0.005)")
     parser.add_argument("--panic_breadth", type=float, default=None, help="全市場上漲家數比例避險門檻 (例如 0.35)")
     parser.add_argument("--buy_threshold", type=float, default=None, help="買入多空淨分數門檻 (%)")
+    parser.add_argument("--sell_threshold", type=float, default=None, help="賣出多空淨分數門檻 (%)")
     parser.add_argument("--stop_loss", type=float, default=None, help="固定的個股停損趴數 (%)")
     parser.add_argument("--ts_activation", type=float, default=None, help="移動止盈啟動門檻 (%)")
     parser.add_argument("--ts_pullback", type=float, default=None, help="移動止盈回撤門檻 (%)")
+    parser.add_argument("--min_hold_days", type=int, default=None, help="最少持股天數 (防止頻繁交易)")
+    parser.add_argument("--markup_pct", type=float, default=None, help="掛單溢價幅度 (%)，負數為折價買進")
     
     args = parser.parse_args()
     run_simulation(
@@ -663,7 +709,10 @@ if __name__ == "__main__":
         mkt_panic_ma5=args.panic_ma5,
         mkt_panic_breadth=args.panic_breadth,
         buy_threshold=args.buy_threshold,
+        sell_threshold=args.sell_threshold,
         stop_loss_pct=args.stop_loss,
         ts_activation_pct=args.ts_activation,
-        ts_pullback_pct=args.ts_pullback
+        ts_pullback_pct=args.ts_pullback,
+        min_hold_days=args.min_hold_days,
+        markup_pct=args.markup_pct
     )

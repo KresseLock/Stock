@@ -122,16 +122,11 @@ def update_config_var(var_name, new_val_str):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         content = f.read()
     
-    # 匹配 var_name = value 格式，忽略註解，支援字串、數字、布林值與 None
-    pattern = rf'^({var_name}\s*=\s*)([^\n#]+)'
+    # 匹配 var_name = value 格式，忽略註解，支援字串、數字、布林值與 None，且允許縮排但排除已被註解之行
+    pattern = rf'^(\s*{var_name}\s*=\s*)([^\n#]+)'
     replacement = rf'\g<1>{new_val_str}'
     
     new_content, count = re.subn(pattern, replacement, content, flags=re.MULTILINE)
-    if count == 0:
-        # 嘗試無首行錨定的匹配
-        pattern_fallback = rf'({var_name}\s*=\s*)([^\n#]+)'
-        new_content, count = re.subn(pattern_fallback, replacement, content)
-        
     if count == 0:
         print(f"[警告] 無法更新 config.py 中的 {var_name}")
         return False
@@ -185,6 +180,19 @@ def run_cmd(cmd_list, description=""):
         # 主線程以 time.sleep 進行非阻塞式循環等待，以確保 Ctrl+C (KeyboardInterrupt) 可以在 Windows 上被即時捕獲
         while t.is_alive() or process.poll() is None:
             time.sleep(0.1)
+            if not t.is_alive() and process.poll() is None:
+                # 讀取線程已結束但進程尚未結束，可能已到達 EOF，給予短暫緩衝後檢查
+                try:
+                    process.wait(timeout=2.0)
+                except subprocess.TimeoutExpired:
+                    # 超時說明讀取線程異常崩潰，而進程仍在運行且可能因 pipe 滿而堵塞
+                    print("⚠️ [警告] 輸出讀取線程已提前終止，但子進程仍在運行。可能發生管道阻塞，正在終止子進程...")
+                    process.terminate()
+                    try:
+                        process.wait(timeout=3.0)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                    break
                 
         rc = process.wait()
         elapsed = time.time() - start_time
@@ -215,9 +223,51 @@ def parse_sim_output(stdout_str):
     ret_match = re.search(r"區間報酬:\s*([+-]?\d+\.?\d*)%", stdout_str)
     mdd_match = re.search(r"最大回撤:\s*-?(\d+\.?\d*)%", stdout_str)
     
-    ret_val = float(ret_match.group(1)) if ret_match else 0.0
-    mdd_val = float(mdd_match.group(1)) if mdd_match else 0.0
+    ret_val = float(ret_match.group(1)) if ret_match else None
+    mdd_val = float(mdd_match.group(1)) if mdd_match else None
     return ret_val, mdd_val
+
+
+def load_trading_params(filepath):
+    """載入風控參數 JSON，並確保包含 'best_params' 鍵值且非空"""
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"找不到風控參數檔案: {filepath}")
+    with open(filepath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    if "best_params" not in data:
+        raise KeyError(f"在 {os.path.basename(filepath)} 中找不到 'best_params' 鍵值，請檢查優化/調參程式輸出結構是否變動！")
+    params = data.get("best_params", {})
+    if not params:
+        raise ValueError(f"在 {os.path.basename(filepath)} 中的 'best_params' 為空，請檢查優化/調參是否成功運行！")
+    return params
+
+
+def backup_models(suffix):
+    """將 models/ 目錄下的所有模型備份，加上指定的 suffix (例如 .mode_a)"""
+    model_dir = os.path.join(BASE_DIR, "models")
+    if not os.path.exists(model_dir):
+        return
+    for name in ["lgbm_model_1.txt", "lgbm_model_2.txt", "lgbm_model_3.txt", "feature_cols.json"]:
+        src = os.path.join(model_dir, name)
+        if os.path.exists(src):
+            shutil.copy2(src, src + suffix)
+            print(f"  [模型備份] 備份 {name} -> {name}{suffix}")
+
+
+def restore_models(suffix):
+    """還原指定 suffix 的模型到 models/ 目錄下"""
+    model_dir = os.path.join(BASE_DIR, "models")
+    if not os.path.exists(model_dir):
+        return False
+    restored_any = False
+    for name in ["lgbm_model_1.txt", "lgbm_model_2.txt", "lgbm_model_3.txt", "feature_cols.json"]:
+        src = os.path.join(model_dir, name + suffix)
+        dst = os.path.join(model_dir, name)
+        if os.path.exists(src):
+            shutil.copy2(src, dst)
+            restored_any = True
+            print(f"  [模型還原] 還原 {name}{suffix} -> {name}")
+    return restored_any
 
 
 def fmt_pct(val):
@@ -327,11 +377,14 @@ def write_experiment_report(res):
 | 風控參數 | 🟢 模式 A (未見過牛市的最佳化) | 🔵 模式 B (包含牛市的最佳化) | 參數說明 |
 | :--- | :--- | :--- | :--- |
 | **買入門檻 (`buy_threshold`)** | `{fmt_param_val(mode_a_p.get("buy_threshold"), "%")}` | `{fmt_param_val(mode_b_p.get("buy_threshold"), "%")}` | D1 多空預測分數觸發買進的百分比。 |
+| **賣出門檻 (`sell_threshold`)** | `{fmt_param_val(mode_a_p.get("sell_threshold"), "%")}` | `{fmt_param_val(mode_b_p.get("sell_threshold"), "%")}` | Day 3 多空預測分數低於此值觸發賣出的百分比。 |
 | **個股停損 (`stop_loss`)** | `{fmt_param_val(mode_a_p.get("stop_loss"), "%")}` | `{fmt_param_val(mode_b_p.get("stop_loss"), "%")}` | 買入後的個股固定停損線。 |
 | **避險門檻 (`panic_ma5`)** | `{fmt_param_val(mode_a_p.get("panic_ma5"))}` | `{fmt_param_val(mode_b_p.get("panic_ma5"))}` | 大盤 5 日平均回報低於此值觸發避險紅燈。 |
 | **避險門檻 (`panic_breadth`)**| `{fmt_param_val(mode_a_p.get("panic_breadth"))}` | `{fmt_param_val(mode_b_p.get("panic_breadth"))}` | 全市場上漲比例低於此值觸發避險紅燈。 |
 | **移動止盈啟動 (`ts_activation`)**| `{fmt_param_val(mode_a_p.get("ts_activation"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_activation"), "%")}` | 個股利潤達到此值開啟移動追蹤止盈。 |
 | **移動止盈回撤 (`ts_pullback`)** | `{fmt_param_val(mode_a_p.get("ts_pullback"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_pullback"), "%")}` | 移動止盈開啟後自高點拉回多少執行停利。 |
+| **最少持股天數 (`min_hold_days`)** | `{fmt_param_val(mode_a_p.get("min_hold_days"), " 天")}` | `{fmt_param_val(mode_b_p.get("min_hold_days"), " 天")}` | 防止頻繁交易所限制的最短持倉天數。 |
+| **掛單折溢價幅 (`markup_pct`)**  | `{fmt_param_val(mode_a_p.get("markup_pct"), "%")}` | `{fmt_param_val(mode_b_p.get("markup_pct"), "%")}` | 掛單折溢價比例，負數代表折價拉回買進。 |
 
 ### 💡 研究員核心分析與結論：
 1. **為什麼模式 A 與模式 B 的最優風控參數存在差異？**
@@ -380,6 +433,17 @@ def main():
     # 參數標準化 (處理 'None')
     fact_es_str = format_val_for_config(args.factor_early_stopping)
     trad_es_str = format_val_for_config(args.trading_early_stopping)
+
+    optuna_jobs = 1
+    try:
+        if os.path.exists(CONFIG_PATH):
+            with open(CONFIG_PATH, "r", encoding="utf-8") as _f:
+                _content = _f.read()
+            _m = re.search(r'OPTUNA_N_JOBS\s*=\s*(-?\d+)', _content)
+            if _m:
+                optuna_jobs = int(_m.group(1))
+    except Exception:
+        pass
 
     # ── 0. 動態推算所有回測日期 ─────────────────────────────────────────────
     from datetime import datetime as _dt, timedelta as _td
@@ -526,6 +590,7 @@ def main():
                 
         if has_checkpoint_stability:
             print(f"\n[續傳/復原] 偵測到已存在的模式 A 診斷報告，將直接讀取並跳過模型 A 訓練與診斷...")
+            restore_models(".mode_a")
         else:
             # A3.2. 重建特徵矩陣
             run_cmd([sys.executable, "auto_pipeline.py", "-s", "f"], "模式 A：重建特徵矩陣 (截斷 2025-08-01)")
@@ -533,8 +598,8 @@ def main():
             # Phase 1 Step 2: Time Decay Grid Search
             print("\n>>> 正在進行 Time Decay 網格搜尋實驗 (Step 2)...")
             lambdas = [0.0, 0.001, 0.002, 0.003, 0.005]
-            best_lambda = 0.002
-            best_ic = -999.0
+            best_lambda = None
+            best_ic = None
             grid_results = {}
             
             for l_val in lambdas:
@@ -549,7 +614,7 @@ def main():
                 
                 # 從 stdout 中解析 RankIC
                 ic_match = re.search(r"OOS\s*\|\s*All\s*\|\s*\d+\s*\|\s*([+-]?\d+\.?\d*)", stdout_diag)
-                ic_val = float(ic_match.group(1)) if ic_match else -999.0
+                ic_val = float(ic_match.group(1)) if ic_match else None
                 
                 # 解析 Top 1% Alpha
                 alpha_match = re.search(r"Top 1%  平均報酬: [+-]?\d+\.?\d*% \| 超額 Alpha:\s*([+-]?\d+\.?\d*)", stdout_diag)
@@ -559,17 +624,28 @@ def main():
                 spread_match = re.search(r"OOS\s*\|\s*All\s*\|\s*\d+\s*\|\s*[+-]?\d+\.?\d*\s*\|\s*([+-]?\d+\.?\d*)%", stdout_diag)
                 spread_val = float(spread_match.group(1)) if spread_match else 0.0
                 
-                print(f"  -> 結果: OOS RankIC = {ic_val:+.4f} | Top1 Alpha = {alpha_val:+.3f}% | LS Spread = {spread_val:+.3f}%")
-                grid_results[l_val] = (ic_val, alpha_val, spread_val)
-                
-                if ic_val > best_ic:
-                    best_ic = ic_val
-                    best_lambda = l_val
+                if ic_val is not None:
+                    print(f"  -> 結果: OOS RankIC = {ic_val:+.4f} | Top1 Alpha = {alpha_val:+.3f}% | LS Spread = {spread_val:+.3f}%")
+                    grid_results[l_val] = (ic_val, alpha_val, spread_val)
+                    if best_ic is None or ic_val > best_ic:
+                        best_ic = ic_val
+                        best_lambda = l_val
+                else:
+                    print(f"  -> [警告] 無法解析 Lambda = {l_val} 的 OOS RankIC")
+                    grid_results[l_val] = ("解析失敗", alpha_val, spread_val)
+            
+            if best_lambda is None:
+                raise RuntimeError("Time Decay 網格搜尋中所有 Lambda 的 OOS RankIC 解析均失敗，無法決定最佳 Lambda！請檢查 scripts/analyze_regime_stability.py 的輸出格式是否變動。")
             
             print(f"\n[網格搜尋完成] 最佳時間衰減係數: Lambda = {best_lambda} (OOS RankIC = {best_ic:+.4f})")
             print("各參數對比:")
-            for lv, (ic, al, sp) in grid_results.items():
-                print(f"  Lambda = {lv:<5} | RankIC = {ic:+.4f} | Alpha = {al:+.3f}% | Spread = {sp:+.3f}%")
+            for lv, res_tuple in grid_results.items():
+                if len(res_tuple) == 3:
+                    ic, al, sp = res_tuple
+                    if isinstance(ic, float):
+                        print(f"  Lambda = {lv:<5} | RankIC = {ic:+.4f} | Alpha = {al:+.3f}% | Spread = {sp:+.3f}%")
+                    else:
+                        print(f"  Lambda = {lv:<5} | RankIC = {ic} | Alpha = {al:+.3f}% | Spread = {sp:+.3f}%")
                 
             results["best_lambda"] = best_lambda
             
@@ -581,6 +657,8 @@ def main():
             
             # 跑最終的診斷報告 (直接輸出到 mode_a_regime_stability_report.txt)
             run_cmd([sys.executable, "scripts/analyze_regime_stability.py", "--output", stability_summary_path], "生成最終模式 A 診斷報告")
+            
+            backup_models(".mode_a")
             
             stability_summary = "找不到報告"
             if os.path.exists(stability_summary_path):
@@ -603,10 +681,15 @@ def main():
         shap_drift_lines = []
         if shap_drift_section:
             lines = shap_drift_section.group(1).strip().split('\n')
-            for l in lines[2:7]: # Top 5 features
+            for l in lines:
+                if '|' not in l:
+                    continue
                 parts = [p.strip() for p in l.split('|')]
-                if len(parts) >= 8:
+                # 排除標題行與分界線
+                if len(parts) >= 8 and "特徵名稱" not in parts[0] and "feature" not in parts[0].lower():
                     shap_drift_lines.append(f"| {parts[0]} | {parts[1]} | {parts[3]} | {parts[4]} | {parts[6]} | {parts[7]} |")
+                    if len(shap_drift_lines) >= 5:
+                        break
         
         results["mode_a"]["shap_drift_table"] = "\n".join(shap_drift_lines) if shap_drift_lines else ""
         save_progress(results)
@@ -619,9 +702,7 @@ def main():
         if has_checkpoint_trading_a:
             print(f"\n[續傳/復原] 偵測到已存在的模式 A 風控參數 {trading_mode_a_saved}，直接載入並跳過優化...")
             shutil.copy2(trading_mode_a_saved, BEST_TRADING_PARAMS_PATH)
-            with open(trading_mode_a_saved, "r", encoding="utf-8") as f:
-                mode_a_data = json.load(f)
-                mode_a_params = mode_a_data.get("best_params", {})
+            mode_a_params = load_trading_params(trading_mode_a_saved)
         else:
             # 移除舊的交易參數以防干擾風控優化
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
@@ -636,13 +717,12 @@ def main():
                 "-s", "2021-01-02",
                 "-e", mode_a_cutoff_str,
                 "-c", str(args.capital),
+                "-j", str(optuna_jobs),
                 "-wf"
             ], f"模式 A：交易與風控參數最佳化 (Walk-Forward, 2021-01-02 ~ {mode_a_cutoff_str})")
             
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
-                with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:
-                    mode_a_data = json.load(f)
-                    mode_a_params = mode_a_data.get("best_params", {})
+                mode_a_params = load_trading_params(BEST_TRADING_PARAMS_PATH)
                 shutil.copy2(BEST_TRADING_PARAMS_PATH, trading_mode_a_saved)
                 print(f"  已將模式 A 風控參數另存至 best_trading_params_mode_a.json")
                 
@@ -651,9 +731,9 @@ def main():
         
         # A9. 在樣本外超級牛市進行模擬交易 (2025-08-02 ~ 2026-06-05)
         has_checkpoint_sim_a = ("oos_return" in results["mode_a"]) and ("oos_mdd" in results["mode_a"]) and not args.fresh
-        # 修正：若模擬結果為 0.0 (先前編碼解析錯誤導致)，則強制重新執行以獲取正確數據
-        if has_checkpoint_sim_a and results["mode_a"].get("oos_return") == 0.0 and results["mode_a"].get("oos_mdd") == 0.0:
-            print("  [提示] 偵測到模擬交易結果為 0.0% (可能為先前編碼解析錯誤的無效數據)，將重新執行模擬...")
+        # 修正：若模擬結果為 None (先前解析錯誤導致)，則強制重新執行以獲取正確數據
+        if has_checkpoint_sim_a and (results["mode_a"].get("oos_return") is None or results["mode_a"].get("oos_mdd") is None):
+            print("  [提示] 偵測到模擬交易結果為 None (可能為先前解析錯誤的無效數據)，將重新執行模擬...")
             has_checkpoint_sim_a = False
             
         if has_checkpoint_sim_a:
@@ -670,38 +750,42 @@ def main():
             ], f"模式 A：樣本外 (OOS) 超級牛市模擬交易回測 (Model A, {mode_a_oos_start} ~ {latest_date})")
             
             ret_a, mdd_a = parse_sim_output(sim_stdout)
+            if ret_a is None or mdd_a is None:
+                print("⚠️ [警告] 無法解析模式 A 模擬交易結果！請檢查 trading_sim.py 輸出是否正常。")
             results["mode_a"]["oos_return"] = ret_a
             results["mode_a"]["oos_mdd"] = mdd_a
             save_progress(results)
             
-        # ── 3. 模式 B 流程 (實盤生產推理期) ──────────────────────────────────
-        print("\n" + "=" * 80)
-        print("   🔵 進入 [模式 B]：實盤生產推理期 (動態滾動重訓)")
-        print("=" * 80)
+        # B1. 更新 config 變數
+        update_config_var("BACKTEST_DATE", "None")
+        update_config_var("RUN_OPTIMIZATION", "False") # 沿用模式 A 的最佳因子
         
         # B6. 執行全週期風控參數優化
         trading_mode_b_saved = os.path.join(BASE_DIR, "configs", "best_trading_params_mode_b.json")
         has_checkpoint_trading_b = os.path.exists(trading_mode_b_saved) and not args.fresh
         
-        mode_b_params = {}
+        # Checkpoint: 檢查是否能復原 Mode B 的模型以節省時間
+        has_mode_b_model = False
         if has_checkpoint_trading_b:
-            print(f"\n[續傳/復原] 偵測到已存在的模式 B 風控參數 {trading_mode_b_saved}，直接載入並跳過優化與模型重訓...")
-            print(f"  [警告] 此時 models/lgbm_model_*.txt 應為上次執行將留下的模式 B 模型，如果您變更過模型請使用 --fresh 強制重跑。")
-            shutil.copy2(trading_mode_b_saved, BEST_TRADING_PARAMS_PATH)
-            with open(trading_mode_b_saved, "r", encoding="utf-8") as f:
-                mode_b_data = json.load(f)
-                mode_b_params = mode_b_data.get("best_params", {})
-        else:
-            # B1. 更新 config 變數
-            update_config_var("BACKTEST_DATE", "None")
-            update_config_var("RUN_OPTIMIZATION", "False") # 沿用模式 A 的最佳因子
+            has_mode_b_model = restore_models(".mode_b")
             
+        if has_mode_b_model:
+            print("  [續傳/復原] 成功從備份還原模式 B 模型，跳過特徵重建與重訓 (B2/B3)。")
+        else:
             # B2. 重建特徵工程
             run_cmd([sys.executable, "auto_pipeline.py", "-s", "f"], "模式 B：重建特徵工程 (全數據覆蓋)")
             
             # B3. 重訓模型 B (包含牛市數據)
             run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], "模式 B：重訓 LightGBM 模型 (包含超級牛市)")
             
+            backup_models(".mode_b")
+            
+        mode_b_params = {}
+        if has_checkpoint_trading_b:
+            print(f"\n[續傳/復原] 偵測到已存在的模式 B 風控參數 {trading_mode_b_saved}，直接載入並跳過優化...")
+            shutil.copy2(trading_mode_b_saved, BEST_TRADING_PARAMS_PATH)
+            mode_b_params = load_trading_params(trading_mode_b_saved)
+        else:
             # B4. 移除模式 A 的最佳交易參數以防干擾模式 B 優化
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
                 os.remove(BEST_TRADING_PARAMS_PATH)
@@ -716,13 +800,12 @@ def main():
                 "-s", "2023-01-01",
                 "-e", latest_date,
                 "-c", str(args.capital),
+                "-j", str(optuna_jobs),
                 "-wf"
             ], f"模式 B：交易與風控參數全週期最佳化 (Walk-Forward, 2023-01-01 ~ {latest_date})")
             
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
-                with open(BEST_TRADING_PARAMS_PATH, "r", encoding="utf-8") as f:
-                    mode_b_data = json.load(f)
-                    mode_b_params = mode_b_data.get("best_params", {})
+                mode_b_params = load_trading_params(BEST_TRADING_PARAMS_PATH)
                 shutil.copy2(BEST_TRADING_PARAMS_PATH, trading_mode_b_saved)
                 print(f"  已將模式 B 風控參數另存至 best_trading_params_mode_b.json")
                 
@@ -731,9 +814,9 @@ def main():
         
         # B7. 執行全週期模擬交易回測 (2023-01-01 ~ 2026-06-05)
         has_checkpoint_sim_b = ("full_return" in results["mode_b"]) and ("full_mdd" in results["mode_b"]) and not args.fresh
-        # 修正：若模擬結果為 0.0 (先前編碼解析錯誤導致)，則強制重新執行以獲取正確數據
-        if has_checkpoint_sim_b and results["mode_b"].get("full_return") == 0.0 and results["mode_b"].get("full_mdd") == 0.0:
-            print("  [提示] 偵測到模擬交易結果為 0.0% (可能為先前編碼解析錯誤的無效數據)，將重新執行模擬...")
+        # 修正：若模擬結果為 None (先前解析錯誤導致)，則強制重新執行以獲取正確數據
+        if has_checkpoint_sim_b and (results["mode_b"].get("full_return") is None or results["mode_b"].get("full_mdd") is None):
+            print("  [提示] 偵測到模擬交易結果為 None (可能為先前解析錯誤的無效數據)，將重新執行模擬...")
             has_checkpoint_sim_b = False
             
         if has_checkpoint_sim_b:
@@ -750,6 +833,8 @@ def main():
             ], f"模式 B：全週期 (含大牛市) 模擬交易回測 (Model B, 2023-01-01 ~ {latest_date})")
             
             ret_b, mdd_b = parse_sim_output(sim_stdout_b)
+            if ret_b is None or mdd_b is None:
+                print("⚠️ [警告] 無法解析模式 B 模擬交易結果！請檢查 trading_sim.py 輸出是否正常。")
             results["mode_b"]["full_return"] = ret_b
             results["mode_b"]["full_mdd"] = mdd_b
             save_progress(results)

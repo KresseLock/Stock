@@ -329,6 +329,7 @@ def crawl_daily_price(date_str: str, skip: dict) -> str:
       "ok"            - 成功下載並存檔
       "skip"          - 有 skip 記錄但 reason 不是 market_closed
       "error"         - 網路錯誤或解析失敗，應計入 fail_log
+      "not_ready"     - 今日資料尚未上架，不計入 fail_log，待稍後重試
     """
     path = os.path.join(DATA_DIR, "raw_price", f"{date_str}_price.csv")
     if _already_exists(path):
@@ -356,7 +357,7 @@ def crawl_daily_price(date_str: str, skip: dict) -> str:
             return "market_closed"
         else:
             print(f"  [提示] 今日 ({date_str}) 資料在證交所尚未上架或正在更新，暫不標記為休市，待稍後重試。")
-            return "error"
+            return "not_ready"
 
     df = None
     if "tables" in data:
@@ -916,6 +917,12 @@ def download_history_data(
                 _save_fail_log(fail_log)
             print("休市")
             skipped_days += 1
+            curr += delta
+            continue
+
+        if price_result == "not_ready":
+            # 今日資料尚未上架，不計入失敗次數且不列入 skip，下次仍可重試
+            _polite_sleep()
             curr += delta
             continue
 

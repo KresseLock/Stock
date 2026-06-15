@@ -29,10 +29,13 @@ TRAIN_INDUSTRIES = {
 }
 
 # ── 2. 交易與實戰策略參數 (inference.py & trading_sim.py 共享) ──
-BUY_THRESHOLD  = 10.0      # Day1 多空淨分數達此值才觸發買進 (%)
+BUY_THRESHOLD  = 12.0      # Day1 多空淨分數達此值才觸發買進 (%)
 SELL_THRESHOLD = 0.0       # Day3 多空淨分數低於此值觸發賣出 (%)
 STOP_LOSS_PCT  = -8.0      # 固定的個股停損趴數 (%)
 MAX_POSITIONS  = 5         # 最大持倉上限檔數
+MIN_HOLD_DAYS  = 20        # 最少持股天數 (防止頻繁交易)
+ORDER_MARKUP_PCT = -2.0    # 預設掛單溢價幅度 (%)，負數為折價逢低買進。若為 None 則沿用 D1 信心分數動態加價
+
 
 FEE_RATE       = 0.001425  # 單邊券商手續費
 TAX_RATE       = 0.003     # 賣出證交稅 (非當沖)
@@ -42,6 +45,24 @@ MKT_PANIC_MA5     = -0.010 # 大盤 5 日滾動平均報酬率避險門檻 (-1.0
 MKT_PANIC_BREADTH = 0.30   # 全市場上漲家數比例避險門檻 (30% 代表 0.30)
 TS_ACTIVATION_PCT = 10.0   # 個股浮盈達到此百分比才開啟移動止盈 (%)
 TS_PULLBACK_PCT   = -6.0   # 啟動後自最高收盤價回撤此百分比執行止盈 (%)
+
+# ── 2.3 市況過濾器：依昨日市況動態調整買入門檻 (趨勢市進攻、震盪/空頭防守) ──
+# 經 param_sensitivity.py 證實：靜態 buy_threshold 無解 (多頭要低門檻、震盪要高門檻)，
+# 故依 trading_sim 既有的 Bull/Sideways/Bear regime 分類動態切換門檻。
+# 僅在「未顯式指定 buy_threshold」時生效 (CLI 覆寫與敏感度掃描仍走靜態值，避免破壞診斷工具)。
+REGIME_ADAPTIVE_ENABLED = True
+REGIME_BUY_THRESHOLD = {
+    "Bull":     5.0,    # 趨勢多頭：低門檻積極進攻 (資料證實低門檻大賺且 MDD 可控)
+    "Sideways": 21.5,   # 震盪盤整：高門檻防守 (資料證實滿倉必爆，高門檻為最不爛解)
+    "Bear":     99.0,   # 空頭：實質空倉持現金
+}
+# 市況分類門檻 (以大盤 20 日滾動平均日報酬 market_trend_20d 為主軸，趨勢導向)。
+# 刻意不用 breadth 判 Bull：2026 為權值股帶動的窄牛市 (breadth 低但趨勢強)，
+# 用 breadth 會嚴重低估多頭。校準自 param_sensitivity：+0.2%/日可涵蓋 2026 約 71% 天數、2025 僅 29%。
+REGIME_BULL_TREND = 0.002    # market_trend_20d > 此值 → Bull (趨勢多頭)
+REGIME_BEAR_TREND = -0.002   # market_trend_20d < 此值 → Bear (趨勢空頭)，其餘為 Sideways
+REGIME_TREND_WINDOW = 20     # 市況趨勢判定的滾動視窗天數 (大盤平均日報酬)
+REGIME_TREND_MIN_PERIODS = 5 # 滾動視窗最少有效天數 (trading_sim 與 inference 共用)
 
 # ── 2.2 限價掛單加價幅度 (inference.py & trading_sim.py 共享) ──
 # 根據 D1 多空信心分數動態決定建議加價幅度，兩個腳本必須保持一致
@@ -150,6 +171,8 @@ if os.path.exists(_best_params_path):
             
             if "buy_threshold" in _params:
                 BUY_THRESHOLD = float(_params["buy_threshold"])
+            if "sell_threshold" in _params:
+                SELL_THRESHOLD = float(_params["sell_threshold"])
             if "stop_loss" in _params:
                 STOP_LOSS_PCT = float(_params["stop_loss"])
             if "panic_ma5" in _params:
@@ -160,7 +183,24 @@ if os.path.exists(_best_params_path):
                 TS_ACTIVATION_PCT = float(_params["ts_activation"])
             if "ts_pullback" in _params:
                 TS_PULLBACK_PCT = float(_params["ts_pullback"])
-                
+            if "min_hold_days" in _params:
+                MIN_HOLD_DAYS = int(_params["min_hold_days"])
+            if "markup_pct" in _params:
+                markup_val = _params["markup_pct"]
+                ORDER_MARKUP_PCT = float(markup_val) if markup_val is not None else None
+
+            # 市況過濾器參數 (若 best_trading_params.json 由 --regime 模式產生)
+            if "regime_bull_buy" in _params:
+                REGIME_BUY_THRESHOLD = {
+                    "Bull":     float(_params["regime_bull_buy"]),
+                    "Sideways": float(_params.get("regime_sideways_buy", REGIME_BUY_THRESHOLD["Sideways"])),
+                    "Bear":     float(_params.get("regime_bear_buy", REGIME_BUY_THRESHOLD["Bear"])),
+                }
+            if "regime_bull_trend" in _params:
+                REGIME_BULL_TREND = float(_params["regime_bull_trend"])
+            if "regime_bear_trend" in _params:
+                REGIME_BEAR_TREND = float(_params["regime_bear_trend"])
+
             if multiprocessing.current_process().name == 'MainProcess':
                 print(f"[系統提示] 偵測到 {os.path.basename(_best_params_path)}，已自動套用最佳化交易風控參數。")
     except Exception as _e:

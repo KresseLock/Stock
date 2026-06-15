@@ -22195,37 +22195,17 @@
     "reason": "no_data",
     "confirmed_at": "2026-06-04"
   },
-<<<<<<< Updated upstream
-=======
-  "chips_20260605": {
-    "reason": "no_data",
-    "confirmed_at": "2026-06-05"
-  },
-  "margin_20260605": {
-    "reason": "no_data",
-    "confirmed_at": "2026-06-05"
-  },
-  "sbl_20260605": {
-    "reason": "no_data",
-    "confirmed_at": "2026-06-05"
-  },
->>>>>>> Stashed changes
   "daytrading_20260605": {
     "reason": "unexpected_format",
     "confirmed_at": "2026-06-05"
   },
   "fini_holding_20260605": {
-<<<<<<< Updated upstream
     "reason": "no_data",
-=======
-    "reason": "empty_response",
->>>>>>> Stashed changes
     "confirmed_at": "2026-06-05"
   },
   "credit_limit_20260605": {
     "reason": "no_data",
     "confirmed_at": "2026-06-05"
-<<<<<<< Updated upstream
   },
   "chips_20251231": {
     "reason": "empty_response",
@@ -22250,7 +22230,105 @@
   "chips_20260513": {
     "reason": "empty_response",
     "confirmed_at": "2026-06-05"
-=======
->>>>>>> Stashed changes
+  },
+  "chips_20260608": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "daytrading_20260608": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-12"
+  },
+  "fini_holding_20260608": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "credit_limit_20260608": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "price_20260609": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-12"
+  },
+  "chips_20260609": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-12"
+  },
+  "twse_per_20260609": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-12"
+  },
+  "taifex_inst_20260609": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-12"
+  },
+  "margin_20260609": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-12"
+  },
+  "sbl_20260609": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-12"
+  },
+  "daytrading_20260609": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-12"
+  },
+  "fini_holding_20260609": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-12"
+  },
+  "credit_limit_20260609": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-06-12"
+  },
+  "chips_20260610": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "daytrading_20260610": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-12"
+  },
+  "fini_holding_20260610": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "credit_limit_20260610": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "daytrading_20260611": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-12"
+  },
+  "fini_holding_20260611": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "credit_limit_20260611": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "margin_20260612": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "sbl_20260612": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
+  },
+  "daytrading_20260612": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-12"
+  },
+  "fini_holding_20260612": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-12"
+  },
+  "credit_limit_20260612": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-12"
   }
 }

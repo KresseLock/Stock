@@ -3,11 +3,20 @@
 # ==========================================
 
 # 1. 忽略所有爬蟲抓下來的大數據與外部檔案
-data/
+# ⚠️ AI 唯讀宣告：允許 AI 讀取 data/ 目錄下的檔案以進行結構與數據分析（已在下方加設豁免），
+# 但「嚴禁」任何 AI 修改、寫入、新建或刪除 data/ 目錄中的任何檔案與資料夾！
 *.csv
 *.parquet
 *.xlsx
 *.json
+
+# 允許 AI 讀取 data/ 的資料夾與其內容（唯讀）
+!data/
+!data/**
+!data/**/*.csv
+!data/**/*.parquet
+!data/**/*.xlsx
+!data/**/*.json
 
 # 允許 AI 讀取重要的設定與快取 JSON 檔
 !configs/best_factors.json
