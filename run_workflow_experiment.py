@@ -31,6 +31,7 @@ import re
 import subprocess
 import time
 import json
+import hashlib
 import argparse
 import threading
 
@@ -242,6 +243,27 @@ def load_trading_params(filepath):
     return params
 
 
+def compute_opt_signature(opt_cmd):
+    """為風控優化建立指紋，用於判定既有 checkpoint 是否仍然有效。
+
+    指紋涵蓋兩項「會讓既有風控參數失效」的來源：
+      1. scripts/optimize_trading_params.py 原始碼 → 捕捉目標函式 / 搜尋空間變動
+         （例如加入 regime_* 動態門檻）。
+      2. 傳入優化器、會影響搜尋行為的 CLI 旗標（如 --regime、-wf）→ 捕捉旗標變動。
+
+    日期 / 資金 / jobs 等執行環境參數不納入（屬模式定義或環境，不應觸發重優化）。
+    任一來源變動都會讓指紋改變，使 run_workflow_experiment 拒絕沿用過時的
+    best_trading_params_mode_a/b.json，改為重新優化，避免靜默套用舊參數。
+    """
+    h = hashlib.sha256()
+    opt_src = os.path.join(BASE_DIR, "scripts", "optimize_trading_params.py")
+    with open(opt_src, "rb") as f:
+        h.update(f.read())
+    flags = sorted(a for a in opt_cmd if a.startswith("--") or a in ("-wf",))
+    h.update("|".join(flags).encode("utf-8"))
+    return h.hexdigest()
+
+
 def backup_models(suffix):
     """將 models/ 目錄下的所有模型備份，加上指定的 suffix (例如 .mode_a)"""
     model_dir = os.path.join(BASE_DIR, "models")
@@ -321,6 +343,30 @@ def write_experiment_report(res):
     _oos_start   = date_info.get("mode_a_oos_start", "2025-08-02")
     _latest      = date_info.get("latest_date",      "N/A")
 
+    # 潔淨 OOS 風控泛化驗證 (問題 6)：凍結參數於雙模型下的未見區間表現夾收
+    oos_ra = res["mode_b"].get("oos_val_return_modelA")
+    oos_ma = res["mode_b"].get("oos_val_mdd_modelA")
+    oos_rb = res["mode_b"].get("oos_val_return_modelB")
+    oos_mb = res["mode_b"].get("oos_val_mdd_modelB")
+    oos_section_md = ""
+    if oos_ra is not None or oos_rb is not None:
+        oos_section_md = f"""
+---
+
+## 🧪 潔淨樣本外 (OOS) 風控參數泛化驗證 (修復問題 6)
+
+> 風控參數凍結於 **2023-01-01 ~ {_cutoff}** 優化（未見 OOS 牛市），再以同一組凍結參數回測未見區間 **{_oos_start} ~ {_latest}**。雙模型夾收真實前瞻泛化力：**Model A = 下界**（對測試期無 lookahead，但模型凍結於 {_cutoff} 會退化）、**Model B = 上界**（含最新訓練無退化，但對測試期有 lookahead）。真實前瞻表現預期落在兩者之間。
+
+| 指標 | 🔻 下界 (Model A, 凍結於 {_cutoff}) | 🔺 上界 (Model B, 含最新訓練) | 對照：mode B 全週期 (樣本內) |
+| :--- | :--- | :--- | :--- |
+| **回測區間** | {_oos_start} ~ {_latest} (未見) | {_oos_start} ~ {_latest} (未見) | 2023-01-01 ~ {_latest} (樣本內) |
+| **累計報酬率 (%)** | `{fmt_pct(oos_ra)}` | `{fmt_pct(oos_rb)}` | `{fmt_pct(res["mode_b"].get("full_return"))}` |
+| **最大回撤 MDD (%)** | `{fmt_mdd(oos_ma)}` | `{fmt_mdd(oos_mb)}` | `{fmt_mdd(res["mode_b"].get("full_mdd"))}` |
+| **Calmar 比率** | `{fmt_calmar(oos_ra, oos_ma)}` | `{fmt_calmar(oos_rb, oos_mb)}` | `{fmt_calmar(res["mode_b"].get("full_return"), res["mode_b"].get("full_mdd"))}` |
+
+*判讀：若**下界 (Model A)** 報酬仍為正且 MDD 受控，代表凍結風控參數本身具泛化力，mode B 樣本內高報酬非純粹過擬合；若下界顯著轉負而上界仍佳，代表優異績效主要來自模型對測試期的 lookahead，實盤須打折看待。本驗證僅檢驗風控參數泛化，模型 lookahead 屬另一獨立議題。*
+"""
+
     shap_table = res["mode_a"].get("shap_drift_table", "")
     shap_section_md = ""
     if shap_table:
@@ -367,7 +413,7 @@ def write_experiment_report(res):
 | **Calmar 比率 (報酬/MDD)** | `{fmt_calmar(res["mode_a"].get("oos_return"), res["mode_a"].get("oos_mdd"))}` | `{fmt_calmar(res["mode_b"].get("full_return"), res["mode_b"].get("full_mdd"))}` |
 
 *註：模式 A 的回測區間屬於完全未見過的樣本外 (OOS) 測試集，代表策略在全新超級牛市下的防禦與獲利能力。模式 B 的回測區間為包含牛市與熊市的全週期回測，展現策略的長線穩健性。*
-{shap_section_md}
+{oos_section_md}{shap_section_md}
 ---
 
 ## ⚙️ 最佳化風控策略參數對比 (Optimized Trading Params)
@@ -696,8 +742,25 @@ def main():
         
         # A8. 執行風控參數最佳化
         trading_mode_a_saved = os.path.join(BASE_DIR, "configs", "best_trading_params_mode_a.json")
+        opt_cmd_a = [
+            sys.executable, "scripts/optimize_trading_params.py",
+            "-t", str(args.trading_trials),
+            "-s", "2021-01-02",
+            "-e", mode_a_cutoff_str,
+            "-c", str(args.capital),
+            "-j", str(optuna_jobs),
+            "-wf",
+            "--regime"
+        ]
+        expected_sig_a = compute_opt_signature(opt_cmd_a)
         has_checkpoint_trading_a = os.path.exists(trading_mode_a_saved) and not args.fresh
-        
+        # Checkpoint 內容驗證：優化器原始碼或旗標一旦變動（或為舊版無指紋的 checkpoint），
+        # 既有風控參數即視為過時，拒絕沿用並重新優化，避免靜默套用舊參數。
+        if has_checkpoint_trading_a and results["mode_a"].get("opt_signature") != expected_sig_a:
+            print("\n⚠️ [Checkpoint 失效] 模式 A 風控優化器原始碼或旗標已變更（或為舊版無指紋 checkpoint），"
+                  "將忽略既有 best_trading_params_mode_a.json 並重新優化。")
+            has_checkpoint_trading_a = False
+
         mode_a_params = {}
         if has_checkpoint_trading_a:
             print(f"\n[續傳/復原] 偵測到已存在的模式 A 風控參數 {trading_mode_a_saved}，直接載入並跳過優化...")
@@ -707,26 +770,19 @@ def main():
             # 移除舊的交易參數以防干擾風控優化
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
                 os.remove(BEST_TRADING_PARAMS_PATH)
-                
+
             # 更新 config 中的早停設定為風控專用
             update_config_var("EARLY_STOPPING_ROUNDS", trad_es_str)
-            
-            run_cmd([
-                sys.executable, "scripts/optimize_trading_params.py",
-                "-t", str(args.trading_trials),
-                "-s", "2021-01-02",
-                "-e", mode_a_cutoff_str,
-                "-c", str(args.capital),
-                "-j", str(optuna_jobs),
-                "-wf"
-            ], f"模式 A：交易與風控參數最佳化 (Walk-Forward, 2021-01-02 ~ {mode_a_cutoff_str})")
-            
+
+            run_cmd(opt_cmd_a, f"模式 A：交易與風控參數最佳化 (Walk-Forward + 市況過濾器, 2021-01-02 ~ {mode_a_cutoff_str})")
+
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
                 mode_a_params = load_trading_params(BEST_TRADING_PARAMS_PATH)
                 shutil.copy2(BEST_TRADING_PARAMS_PATH, trading_mode_a_saved)
                 print(f"  已將模式 A 風控參數另存至 best_trading_params_mode_a.json")
-                
+
         results["mode_a"]["params"] = mode_a_params
+        results["mode_a"]["opt_signature"] = expected_sig_a
         save_progress(results)
         
         # A9. 在樣本外超級牛市進行模擬交易 (2025-08-02 ~ 2026-06-05)
@@ -762,26 +818,47 @@ def main():
         
         # B6. 執行全週期風控參數優化
         trading_mode_b_saved = os.path.join(BASE_DIR, "configs", "best_trading_params_mode_b.json")
+        opt_cmd_b = [
+            sys.executable, "scripts/optimize_trading_params.py",
+            "-t", str(args.trading_trials),
+            "-s", "2023-01-01",
+            "-e", latest_date,
+            "-c", str(args.capital),
+            "-j", str(optuna_jobs),
+            "-wf",
+            "--regime"
+        ]
+        expected_sig_b = compute_opt_signature(opt_cmd_b)
         has_checkpoint_trading_b = os.path.exists(trading_mode_b_saved) and not args.fresh
-        
+
         # Checkpoint: 檢查是否能復原 Mode B 的模型以節省時間
+        # 注意：模型還原僅依檔案存在判定，與風控優化器指紋解耦——優化器旗標/目標函式變動
+        # 只需重跑風控優化，不應連帶強制重建特徵與重訓模型 (B2/B3)。
         has_mode_b_model = False
         if has_checkpoint_trading_b:
             has_mode_b_model = restore_models(".mode_b")
-            
+
         if has_mode_b_model:
             print("  [續傳/復原] 成功從備份還原模式 B 模型，跳過特徵重建與重訓 (B2/B3)。")
         else:
             # B2. 重建特徵工程
             run_cmd([sys.executable, "auto_pipeline.py", "-s", "f"], "模式 B：重建特徵工程 (全數據覆蓋)")
-            
+
             # B3. 重訓模型 B (包含牛市數據)
             run_cmd([sys.executable, "auto_pipeline.py", "-s", "t"], "模式 B：重訓 LightGBM 模型 (包含超級牛市)")
-            
+
             backup_models(".mode_b")
-            
+
+        # 風控參數 checkpoint 內容驗證：優化器原始碼或旗標一旦變動（或為舊版無指紋 checkpoint），
+        # 既有風控參數即視為過時，拒絕沿用並重新優化。與上方模型還原刻意解耦。
+        param_checkpoint_valid_b = has_checkpoint_trading_b
+        if param_checkpoint_valid_b and results["mode_b"].get("opt_signature") != expected_sig_b:
+            print("\n⚠️ [Checkpoint 失效] 模式 B 風控優化器原始碼或旗標已變更（或為舊版無指紋 checkpoint），"
+                  "將忽略既有 best_trading_params_mode_b.json 並重新優化。")
+            param_checkpoint_valid_b = False
+
         mode_b_params = {}
-        if has_checkpoint_trading_b:
+        if param_checkpoint_valid_b:
             print(f"\n[續傳/復原] 偵測到已存在的模式 B 風控參數 {trading_mode_b_saved}，直接載入並跳過優化...")
             shutil.copy2(trading_mode_b_saved, BEST_TRADING_PARAMS_PATH)
             mode_b_params = load_trading_params(trading_mode_b_saved)
@@ -789,27 +866,20 @@ def main():
             # B4. 移除模式 A 的最佳交易參數以防干擾模式 B 優化
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
                 os.remove(BEST_TRADING_PARAMS_PATH)
-                
+
             # B5. 更新 config 中的早停設定為風控專用
             update_config_var("EARLY_STOPPING_ROUNDS", trad_es_str)
-            
+
             # B6. 執行全週期風控參數優化 (覆蓋整個牛市)
-            run_cmd([
-                sys.executable, "scripts/optimize_trading_params.py",
-                "-t", str(args.trading_trials),
-                "-s", "2023-01-01",
-                "-e", latest_date,
-                "-c", str(args.capital),
-                "-j", str(optuna_jobs),
-                "-wf"
-            ], f"模式 B：交易與風控參數全週期最佳化 (Walk-Forward, 2023-01-01 ~ {latest_date})")
-            
+            run_cmd(opt_cmd_b, f"模式 B：交易與風控參數全週期最佳化 (Walk-Forward + 市況過濾器, 2023-01-01 ~ {latest_date})")
+
             if os.path.exists(BEST_TRADING_PARAMS_PATH):
                 mode_b_params = load_trading_params(BEST_TRADING_PARAMS_PATH)
                 shutil.copy2(BEST_TRADING_PARAMS_PATH, trading_mode_b_saved)
                 print(f"  已將模式 B 風控參數另存至 best_trading_params_mode_b.json")
-                
+
         results["mode_b"]["params"] = mode_b_params
+        results["mode_b"]["opt_signature"] = expected_sig_b
         save_progress(results)
         
         # B7. 執行全週期模擬交易回測 (2023-01-01 ~ 2026-06-05)
@@ -851,7 +921,101 @@ def main():
             run_cmd([sys.executable, "auto_pipeline.py", "-s", "i"], "模式 B：模型推理預測，產生明日實盤下單建議")
             results["mode_b"]["inference_completed"] = True
             save_progress(results)
-            
+
+        # ── C. 潔淨樣本外 (OOS) 風控參數泛化驗證 (修復問題 6) ─────────────────
+        # mode B 的全週期報酬屬樣本內 (優化窗 = 回測窗)，無法回答「風控參數是否過擬合於
+        # 2023~2025-08」。本階段把風控參數凍結在「2023-01-01 ~ MODE_A_CUTOFF」優化 (未見
+        # OOS 牛市)，再以同一組凍結參數回測未見區間 (mode_a_oos_start ~ latest)，雙模型夾收
+        # 真實前瞻泛化力：
+        #   • Model A (凍結於 cutoff，無 lookahead 但會退化) → 下界
+        #   • Model B (含最新訓練，無退化但對測試期有 lookahead) → 上界
+        # 優化階段一律用 Model A，確保調參本身不偷看 cutoff 之後；兩次回測共用同一組凍結參數。
+        trading_oos_saved = os.path.join(BASE_DIR, "configs", "best_trading_params_mode_b_oos.json")
+        opt_cmd_oos = [
+            sys.executable, "scripts/optimize_trading_params.py",
+            "-t", str(args.trading_trials),
+            "-s", "2023-01-01",
+            "-e", mode_a_cutoff_str,
+            "-c", str(args.capital),
+            "-j", str(optuna_jobs),
+            "-wf",
+            "--regime"
+        ]
+        expected_sig_oos = compute_opt_signature(opt_cmd_oos)
+        has_checkpoint_trading_oos = os.path.exists(trading_oos_saved) and not args.fresh
+        if has_checkpoint_trading_oos and results["mode_b"].get("oos_val_opt_signature") != expected_sig_oos:
+            print("\n⚠️ [Checkpoint 失效] OOS 驗證風控優化器原始碼或旗標已變更（或為舊版無指紋 checkpoint），"
+                  "將忽略既有 best_trading_params_mode_b_oos.json 並重新優化。")
+            has_checkpoint_trading_oos = False
+
+        # 還原 Model A 作為「乾淨」預測大腦：優化與下界回測皆用它（對測試期無 lookahead）
+        restore_models(".mode_a")
+        update_config_var("BACKTEST_DATE", f'"{MODE_A_CUTOFF_DATE}"')
+
+        oos_val_params = {}
+        if has_checkpoint_trading_oos:
+            print(f"\n[續傳/復原] 偵測到已存在的 OOS 驗證風控參數 {trading_oos_saved}，直接載入並跳過優化...")
+            shutil.copy2(trading_oos_saved, BEST_TRADING_PARAMS_PATH)
+            oos_val_params = load_trading_params(trading_oos_saved)
+        else:
+            if os.path.exists(BEST_TRADING_PARAMS_PATH):
+                os.remove(BEST_TRADING_PARAMS_PATH)
+            update_config_var("EARLY_STOPPING_ROUNDS", trad_es_str)
+            run_cmd(opt_cmd_oos, f"潔淨 OOS：風控參數凍結最佳化 (Model A, 2023-01-01 ~ {mode_a_cutoff_str}，不看 OOS 牛市)")
+            if os.path.exists(BEST_TRADING_PARAMS_PATH):
+                oos_val_params = load_trading_params(BEST_TRADING_PARAMS_PATH)
+                shutil.copy2(BEST_TRADING_PARAMS_PATH, trading_oos_saved)
+                print(f"  已將 OOS 驗證風控參數另存至 best_trading_params_mode_b_oos.json")
+
+        results["mode_b"]["oos_val_params"] = oos_val_params
+        results["mode_b"]["oos_val_opt_signature"] = expected_sig_oos
+        save_progress(results)
+
+        # C2. 下界回測：凍結參數 + Model A，回測未見區間 (無 lookahead，但模型退化)
+        #     此時 models/ 已是 Model A、BACKTEST_DATE 已對齊 cutoff (上方優化階段設定)。
+        has_ckpt_oos_a = (results["mode_b"].get("oos_val_return_modelA") is not None) \
+                         and (results["mode_b"].get("oos_val_mdd_modelA") is not None) and not args.fresh
+        if has_ckpt_oos_a:
+            print(f"\n[續傳/復原] 偵測到已存在的 OOS 驗證 (Model A 下界) 回測結果，跳過...")
+        else:
+            sim_oos_a, _ = run_cmd([
+                sys.executable, "trading_sim.py",
+                "-s", mode_a_oos_start,
+                "-e", latest_date,
+                "-c", str(args.capital)
+            ], f"潔淨 OOS：凍結風控參數 + Model A 回測 (下界, {mode_a_oos_start} ~ {latest_date})")
+            ret_oos_a, mdd_oos_a = parse_sim_output(sim_oos_a)
+            if ret_oos_a is None or mdd_oos_a is None:
+                print("⚠️ [警告] 無法解析 OOS 驗證 (Model A 下界) 回測結果！")
+            results["mode_b"]["oos_val_return_modelA"] = ret_oos_a
+            results["mode_b"]["oos_val_mdd_modelA"] = mdd_oos_a
+            save_progress(results)
+
+        # C3. 上界回測：同一凍結參數 + Model B，回測同段未見區間 (無退化，但對測試期有 lookahead)
+        has_ckpt_oos_b = (results["mode_b"].get("oos_val_return_modelB") is not None) \
+                         and (results["mode_b"].get("oos_val_mdd_modelB") is not None) and not args.fresh
+        if has_ckpt_oos_b:
+            print(f"\n[續傳/復原] 偵測到已存在的 OOS 驗證 (Model B 上界) 回測結果，跳過...")
+        else:
+            restore_models(".mode_b")
+            update_config_var("BACKTEST_DATE", "None")
+            sim_oos_b, _ = run_cmd([
+                sys.executable, "trading_sim.py",
+                "-s", mode_a_oos_start,
+                "-e", latest_date,
+                "-c", str(args.capital)
+            ], f"潔淨 OOS：凍結風控參數 + Model B 回測 (上界, {mode_a_oos_start} ~ {latest_date})")
+            ret_oos_b, mdd_oos_b = parse_sim_output(sim_oos_b)
+            if ret_oos_b is None or mdd_oos_b is None:
+                print("⚠️ [警告] 無法解析 OOS 驗證 (Model B 上界) 回測結果！")
+            results["mode_b"]["oos_val_return_modelB"] = ret_oos_b
+            results["mode_b"]["oos_val_mdd_modelB"] = mdd_oos_b
+            save_progress(results)
+
+        # 確保實驗結束時 models/ 還原為 Model B (實盤生產大腦)，避免續傳路徑停在 Model A
+        restore_models(".mode_b")
+        update_config_var("BACKTEST_DATE", "None")
+
         # ── 4. 產出最終實驗報告 ──────────────────────────────────────────────
         print("\n" + "=" * 80)
         print("   🎉 全自動化實驗流程順利完成！對比分析報告已輸出。 🎉")

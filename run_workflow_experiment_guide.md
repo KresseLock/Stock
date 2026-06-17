@@ -110,6 +110,21 @@ flowchart TD
 
 ---
 
+### 🧪 步驟 3.5：潔淨樣本外 (OOS) 風控泛化驗證 (Stage C)
+
+模式 B 的全週期報酬（優化窗 = 回測窗）屬**樣本內 (in-sample)**，無法回答「風控參數是否過擬合於 2023~2025-08」。Stage C 在模式 B 推理後自動執行，產出**乾淨的前瞻泛化證據**：
+
+*   **凍結優化**：`python scripts/optimize_trading_params.py -t <trials> -s 2023-01-01 -e 2025-08-01 -wf --regime`——風控參數只在 cutoff 之前優化，且**還原 Model A** 為預測大腦，確保調參本身對測試期無 lookahead。凍結參數另存 `configs/best_trading_params_mode_b_oos.json`。
+*   **雙模型 bracket 回測**（同一組凍結參數、同一未見區間 `2025-08-02 ~ 最新`）：
+    *   **下界 = Model A**（`restore_models(".mode_a")`）：對測試期無 lookahead，但模型凍結於 cutoff 會退化。
+    *   **上界 = Model B**（`restore_models(".mode_b")`）：含最新訓練無退化，但對測試期有 lookahead。
+*   兩次回測共用同一凍結參數，純粹隔離「模型效應」；真實前瞻表現預期落在下界與上界之間。Stage C 結束會無條件還原 Model B，確保實盤生產大腦不被污染。
+*   結果寫入報告新章節「🧪 潔淨樣本外 (OOS) 風控參數泛化驗證」，判讀原則見 §6.3。
+
+> **限制**：本階段僅隔離「風控參數」泛化力；模型本身的 lookahead（Model B）與滾動重訓泛化屬獨立議題，須另靠紙上前瞻追蹤與 `analyze_regime_stability.py` 補強。Stage C 多跑一輪 Optuna（約 2~4 小時），已納入 checkpoint 可續傳。
+
+---
+
 ### 📂 步驟 4：自動還原與異常回復 (Exception Safety)
 *   在 `run_workflow_experiment.py` 中，不論實驗因為鍵盤中斷 (Ctrl+C) 還是內部錯誤 (Exception) 中止，最後的 `finally` 區塊保證會自動將 [config.py](config.py)、`configs/best_factors.json` 和 `configs/best_trading_params.json` 還原為最初備份，避免對每日生產自動化排程造成任何設定污染。
 
@@ -124,8 +139,11 @@ flowchart TD
     *   `reports/mode_a_regime_stability_report.txt`：模式 A 的訊號診斷報告。
     *   `configs/best_trading_params_mode_a.json`：模式 A 的最優風控參數。
     *   `configs/best_trading_params_mode_b.json`：模式 B 的最優風控參數。
+    *   `configs/best_trading_params_mode_b_oos.json`：Stage C 潔淨 OOS 驗證的凍結風控參數（優化窗 2023~2025-08）。
 *   **除錯回滾機制**：若偵測到已存在的模擬交易結果報酬率與最大回撤均為 `0.0` (可能由於 Windows 特殊編碼錯誤導致無效輸出)，續傳機制會**自動判定該 Checkpoint 無效並重新執行**。
-*   **強制重置**：若變更過模型結構或技術指標定義，必須附加 `--fresh` 參數，強制忽略所有 checkpoint 備份進行全新完整運算。
+*   **🔑 優化器指紋自動失效 (2026-06-17)**：三段風控優化（模式 A／模式 B／Stage C）載入既有風控 checkpoint 前，會比對 `compute_opt_signature()` 指紋（= `optimize_trading_params.py` 原始碼 hash ＋ `--regime`/`-wf` 旗標）。**只要優化器原始碼或旗標一變動（或 checkpoint 為舊版無指紋），即印「⚠️ Checkpoint 失效」並自動重新優化**，不再靜默沿用過時參數。因此**改了優化器旗標或目標函式後，不必再手動刪檔**——直接重跑即可。此指紋驗證與模型還原刻意解耦（改優化器只重跑風控優化，不會強制重訓模型）。
+    *   *副作用*：`optimize_trading_params.py` 任何編輯（含註解）都會使三段風控 checkpoint 失效並重優化（偏保守，安全優先）。
+*   **強制重置**：若變更過模型結構或技術指標定義（這類不在指紋涵蓋範圍），仍須附加 `--fresh` 參數，強制忽略所有 checkpoint 備份進行全新完整運算。
 
 ---
 
@@ -153,6 +171,20 @@ flowchart TD
 #### 2. 利用 SHAP 均值方向定位偏見反轉
 *   如果某因子（如 `ret1`）的絕對值 `SHAP (Abs)` 維持穩定或上升，但方向性 `SHAP (Mean)` 的正負號發生反轉（如從 $-0.012$ 變為 $+0.009$），這是市場從 **Mean Reversion 到 Momentum** 機制轉換的鐵證。
 *   這代表模型在訓練集學到的規則在 OOS 產生了偏見。這也是我們第一優先進行 **Step 2 (Time Decay Experiment)** 的根本原因。
+
+---
+
+### 6.3 潔淨樣本外 (OOS) 風控泛化驗證判讀 (Stage C)
+
+報告章節「🧪 潔淨樣本外 (OOS) 風控參數泛化驗證」呈現「凍結風控參數」在未見區間、雙模型下的 bracket。對照下表判讀：
+
+| 情況 | 結論 |
+| :--- | :--- |
+| **下界 (Model A) 報酬仍為正、MDD 受控** | 風控參數本身具泛化力，mode B 樣本內高報酬**非純過擬合** ✅ |
+| **下界轉負、上界 (Model B) 仍佳** | 優異績效主要來自模型對測試期的 **lookahead**，實盤須打折看待 ⚠️ |
+| **下界、上界皆差** | 風控參數過擬合於 2023~2025-08，需回到 §7 流程重新檢視 ❌ |
+
+> 真實前瞻表現預期落在下界與上界之間。本驗證只回答「風控參數是否泛化」；模型 lookahead 與滾動重訓泛化屬獨立議題，仍須靠紙上前瞻追蹤與定期 `analyze_regime_stability.py` 補強。
 
 ---
 
@@ -205,4 +237,55 @@ flowchart TD
 
 ---
 
-*本說明文件為系統研發指南，最後更新時間：2026-06-07*
+## ✅ 9. 升級／改動後的驗證與判讀 SOP (A → E)
+
+每次改動優化器旗標、目標函式或實驗流程後，依下列順序驗證並判讀，再決定是否實盤上線。
+
+### A. 秒級檢查（不花算力）
+```powershell
+# 1. 確認改過的核心腳本無語法錯
+python -m py_compile run_workflow_experiment.py trading_sim.py
+
+# 2. 確認實驗腳本能正常載入、參數解析正常
+python run_workflow_experiment.py -h
+
+# 3. 改了核心程式，提交前的整合測試
+python tests/test_pipeline.py
+```
+**判斷**：(1)(2) 無報錯、(3) 18 項全 PASS，才往下走。
+
+### B. 確認 checkpoint 指紋失效機制（看一行 log 即可，可隨後 Ctrl+C）
+```powershell
+python run_workflow_experiment.py --skip_factor_opt
+```
+進到風控優化階段時，若優化器旗標／原始碼有變動（或既有 checkpoint 為舊版無指紋），log 會印：
+```
+⚠️ [Checkpoint 失效] 模式 A 風控優化器原始碼或旗標已變更（或為舊版無指紋 checkpoint），將忽略既有 best_trading_params_mode_a.json 並重新優化。
+```
+**看到這行＝指紋機制生效**。只想驗證機制可在此 Ctrl+C；要拿 OOS 數據就讓它繼續（見 C）。
+
+> ⚠️ **首次重跑的一次性成本**：既有 `best_trading_params_mode_a/b.json` 是在指紋欄位加入前產生的（無 `opt_signature`），因此第一次重跑會把模式 A／B 風控優化**各重跑一次**（即使參數其實相同），之後才會蓋上指紋並沿用。屬安全優先的預期行為。
+
+### C. 跑出 OOS 數據（完整實驗，建議過夜）
+```powershell
+python run_workflow_experiment.py --skip_factor_opt
+```
+* `--skip_factor_opt`：沿用現有因子，省掉因子 Optuna。
+* 時間預算：模式 A 風控（2~4h）＋模式 B 風控（3~6h）＋ **Stage C OOS 驗證（2~4h）**，約 **7~14 小時**。中途斷掉重跑同指令會從 checkpoint 續傳。
+
+### D. 判讀（開 `reports/workflow_experiment_report.md`）
+1. **Stage C bracket** → 依 §6.3 判讀風控參數泛化力（下界為正且 MDD 受控＝非純過擬合）。
+2. **訊號健康** → 依 §6.1：mode A OOS RankIC > 0.02、Top 1% Alpha 顯著。
+3. **全期績效** → mode B 全期報酬／MDD／Calmar 對照前一基準有無退步。
+4. **確認 regime 動態門檻生效**：
+   ```powershell
+   python -c "import json;d=json.load(open('configs/best_trading_params_mode_b.json',encoding='utf-8'));print('regime keys:',[k for k in d['best_params'] if k.startswith('regime')])"
+   ```
+   印出 `regime_bull_buy / regime_sideways_buy / ...` ＝正確的 `--regime` 模式。
+
+### E. 判斷 OK → 實盤套用
+依 §8 部署：將 `best_trading_params_mode_b.json` 複製覆蓋為 `best_trading_params.json`，再恢復每日 `python Auto_RUN.py`。
+
+---
+
+*本說明文件為系統研發指南，最後更新時間：2026-06-17*

@@ -24,7 +24,7 @@
 | **第一層** 宏觀感知 | 辨識市場多空環境 | 注入全市場日報酬均值、市場寬度（上漲比例）與板塊趨勢強度 |
 | **第二層** 混合型標籤 | 強勢股雙重門檻 | 強勢股需同時滿足：相對排名前 20% **且** 絕對報酬率 > 0%，崩盤日不產生買入標籤 |
 | **第三層** 智慧空倉 | 全面信號惡化自動避險 | Day1 分數全面下滑時，系統自動判定無股可買，100% 空倉持現金 |
-| **第四層** 市況過濾器 | 趨勢市進攻、震盪市防守 | 依昨日大盤趨勢 (20日均報酬) 動態切換買入門檻：多頭低門檻積極進場、震盪盤整高門檻防守、空頭實質空倉。解決靜態門檻「多頭少賺、震盪爆倉」的兩難 |
+| **第四層** 市況過濾器 | 趨勢市進攻、震盪市防守 | 依昨日大盤趨勢 (10日均報酬) 動態切換買入門檻：多頭低門檻積極進場、震盪盤整高門檻防守、空頭實質空倉。解決靜態門檻「多頭少賺、震盪爆倉」的兩難 |
 
 ### 多源數據融合
 
@@ -204,7 +204,8 @@ Stock/
 │   ├── best_trading_params.json # 最佳化交易與風控策略參數存檔
 │   ├── best_factors_mode_a.json # 實驗模式 A 因子參數
 │   ├── best_trading_params_mode_a.json # 實驗模式 A 風控參數
-│   └── best_trading_params_mode_b.json # 實驗模式 B 風控參數
+│   ├── best_trading_params_mode_b.json # 實驗模式 B 風控參數
+│   └── best_trading_params_mode_b_oos.json # Stage C 潔淨 OOS 驗證凍結風控參數 (2023~2025-08)
 ├── run_workflow_experiment.py  # 一鍵全自動雙階段實驗主控腳本
 ├── run_workflow_experiment_guide.md # 實驗主控台使用說明與架構指南
 ├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
@@ -556,11 +557,13 @@ python run_workflow_experiment.py --fresh
 ##### ③ 實驗產出報告與備份存檔
 執行完畢後，系統會自動在 `reports/` 目錄生成一份詳細的 Markdown 對比報告 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，其中包含：
 *   **關鍵績效指標對比**：模式 A（樣本外超級牛市）與模式 B（全週期含牛市）的區間報酬、最大回撤 (MDD) 與 Calmar 比率對比。
+*   **潔淨 OOS 風控泛化驗證 (Stage C)**：凍結風控參數於雙模型（Model A 下界／Model B 上界）回測未見區間，夾收真實前瞻泛化力，獨立章節呈現。
 *   **最佳化風控參數對比**：展示 Optuna 在兩模式下搜尋出的黃金參數差異（如大盤避險紅燈、個股停損線的漂移）。
 *   **獨立存檔參數與診斷**：
     *   模式 A 訊號診斷報告存檔於 [reports/mode_a_regime_stability_report.txt](reports/mode_a_regime_stability_report.txt)。
     *   模式 A 風控參數存檔於 `configs/best_trading_params_mode_a.json`。
     *   模式 B 風控參數存檔於 `configs/best_trading_params_mode_b.json`。
+    *   Stage C 潔淨 OOS 驗證凍結風控參數存檔於 `configs/best_trading_params_mode_b_oos.json`（優化窗 2023~2025-08）。
 ##### ④ Checkpoint 斷點續傳機制
 
 實驗支援自動續傳，**中途崩潰或手動 Ctrl+C 後，重新執行同一指令即可從斷點續跑**。主要 Checkpoint 檔案如下：
@@ -571,6 +574,7 @@ python run_workflow_experiment.py --fresh
 | `reports/mode_a_regime_stability_report.txt` | 模式 A 特徵重建 + 模型訓練 + 訊號診斷 | 20~40 分鐘 |
 | `configs/best_trading_params_mode_a.json` | 模式 A 風控調參（Optuna 400 輪）| 2~4 小時 |
 | `configs/best_trading_params_mode_b.json` | 模式 B 全部步驟（特徵重建 + 模型重訓 + 風控調參）| 3~6 小時 |
+| `configs/best_trading_params_mode_b_oos.json` | Stage C 潔淨 OOS 風控調參（Optuna，凍結窗 2023~2025-08）| 2~4 小時 |
 
 報告判讀詳解請參閱 [run_workflow_experiment_guide.md](run_workflow_experiment_guide.md)。
 
@@ -614,8 +618,22 @@ python tests/test_pipeline.py
 |------|--------|------|
 | `REGIME_ADAPTIVE_ENABLED` | `True` | 市況過濾器總開關 |
 | `REGIME_BUY_THRESHOLD` | `{Bull:5.0, Sideways:21.5, Bear:99.0}` | 各市況對應的 Day1 買入門檻（Bull 低門檻進攻／Bear 實質空倉）|
-| `REGIME_BULL_TREND` | `0.002` | 大盤 20 日均日報酬 > 此值判為 Bull（趨勢導向，不用 breadth 以涵蓋權值股窄牛市）|
-| `REGIME_BEAR_TREND` | `-0.002` | 大盤 20 日均日報酬 < 此值判為 Bear，其餘為 Sideways |
+| `REGIME_BULL_TREND` | `0.0015` | 大盤 10 日均日報酬 > 此值判為 Bull（趨勢導向，不用 breadth 以涵蓋權值股窄牛市）|
+| `REGIME_BEAR_TREND` | `-0.002` | 大盤 10 日均日報酬 < 此值判為 Bear，其餘為 Sideways |
+| `REGIME_TREND_WINDOW` | `10` | 市況趨勢判定的滾動視窗天數（2026-06-16：20→10 去滯後，避免牛市起漲被誤判 Sideways）|
+
+### 2.2 風控優化目標函式權重與全期 MDD 懲罰（optimize_trading_params.py）
+> Optuna 風控調參的評分公式 `combined_score`，其權重與回撤懲罰皆集中於 `config.py`（嚴禁寫死）。**改動後須重跑優化才生效**（並會自動重建交易參數 checkpoint）。
+
+| 參數 | 預設值 | 說明 |
+|------|--------|------|
+| `PORTFOLIO_ALPHA_WEIGHT` | `0.6` | per-regime 組合 Alpha 權重（核心）|
+| `PORTFOLIO_SPREAD_WEIGHT` | `0.2` | per-regime 多空 Spread 權重（輔助）|
+| `CALMAR_SCORE_WEIGHT` | `0.2` | per-regime Calmar 權重；想更重視回撤可調高 |
+| `MDD_TOLERANCE` | `20.0%` | 全期最大回撤容忍線，超過此值才開始扣分 |
+| `MDD_PENALTY_WEIGHT` | `0.05` | 每超出 1% 全期 MDD 的線性扣分權重（設 `0` 停用）|
+
+> **評分邏輯**：`combined_score = Σregime[ ALPHA·alpha + SPREAD·spread + CALMAR·calmar ] − MDD_PENALTY_WEIGHT · max(0, 全期MDD% − MDD_TOLERANCE)`。前段 per-regime 彙整看不到「跨 regime 交界（Bull→崩盤）」的全期回撤，故由後段全期 MDD 懲罰補上（詳見下方「修復紀錄」2026-06-16 出場參數項）。
 
 ### 3. 機器學習樣本大跌懲罰 (MDD 避險機制) 參數
 | 參數 | 預設值 | 說明 |
@@ -674,68 +692,48 @@ flowchart LR
 ---
 
 <!-- =====================================================================================
-  ⚠️ 已知結構性問題備忘錄 (2026-06-15 診斷)
-  本節記錄目前系統的已知架構缺陷與待修正項目，供後續開發與調參時參照。
-  當問題修復後，請將對應條目標記為 ✅ 並註明修復日期。
+  ⚠️ 已知開放項目與修復紀錄
+  本節只記錄目前「仍開放」的結構性項目；已修復項收於末端「✅ 修復紀錄 (Changelog)」摺疊區。
+  新發現問題請加為「開放項目」，修復後移入 Changelog 並註明日期。
 ======================================================================================== -->
 
-## ⚠️ 已知結構性問題與待修正項目 (2026-06-15 診斷)
+## ⚠️ 已知開放項目與修復紀錄
 
-> [!WARNING]
-> 以下問題已通過回測數據與敏感度分析確認，是系統績效落後大盤的主要根因。
+> [!NOTE]
+> 本節記錄目前**仍開放**的結構性項目；歷史已修復項目收於末端「✅ 修復紀錄」摺疊區，供追溯設定值由來。
 > 詳細診斷數據參見 `reports/bottleneck_attribution.txt` 與 `reports/param_sensitivity_report.md`。
+>
+> **目前狀態（2026-06-17）**：2026-06-16 的空倉偏誤／regime 滯後／breadth 過敏／出場參數空倉假象，以及 2026-06-17 的 checkpoint footgun 均已修復（見 Changelog）。尚有 **2 項開放**：① mode B 乾淨 OOS 驗證待跑數據、② 排序型模型 vs 閾值型框架的架構錯配。
 
-### 問題 1：Optuna 目標函數存在「空倉偏誤」— 🔴 最高優先
+### 開放項目 1：mode B 績效為樣本內，乾淨 OOS 驗證待跑數據 — 🟡 中優先 (2026-06-17)
 
-<!-- TODO: 修正 optimize_trading_params.py 的 run_simulation_scoring，加入曝險懲罰項 -->
+> **🟡 機制已實作（待跑出數據）**：`run_workflow_experiment.py` 新增 **Stage C 潔淨 OOS 驗證階段**——把風控參數凍結在 **2023-01-01 ~ 2025-08-01** 優化（未見 OOS 牛市），再以同一組凍結參數回測未見區間 **2025-08-02 ~ 最新日**，並用**雙模型夾收**真實前瞻泛化力：
+> - **下界 = Model A**（凍結於 2025-08-01，對測試期無 lookahead，但模型會退化）
+> - **上界 = Model B**（含最新訓練無退化，但對測試期有 lookahead）
+>
+> 優化階段一律用 Model A（確保調參不偷看 cutoff 之後），兩次回測共用同一組凍結參數，純粹隔離「模型效應」。凍結參數另存 `configs/best_trading_params_mode_b_oos.json`，結果寫入報告新章節「🧪 潔淨樣本外 (OOS) 風控參數泛化驗證」。**完整執行與判讀 SOP 見 [run_workflow_experiment_guide.md](run_workflow_experiment_guide.md) §6.3 與 §9。**
 
-- **現象**：WFO 調參持續收斂到 `buy_threshold=21.5`，導致系統 **80%+ 交易日完全空倉**，平均曝險僅 3-7%。
-- **根因**：`run_simulation_scoring()` 的評分公式中，空倉策略得分 = 0，而微虧策略得分 < 0。Optuna 發現「不交易」就是分數最穩定的解，等同在優化「怎麼不虧錢」而非「怎麼賺錢」。
-- **實測數據**：
-  | 區間 | buy_thr=21.5 曝險 | buy_thr=0 曝險 | 報酬差距 |
-  |------|-------------------|---------------|---------|
-  | 2025 震盪市 | 6.8% (空倉 79%) | 93.5% | +11.82% |
-  | 2026 大多頭 | 3.1% (空倉 87%) | 95.9% | **+84.72%** |
-- **修正方向**：在 `combined_score` 計算後加入曝險懲罰項，曝險低於 30% 時線性扣分，防止 Optuna 收斂到「不交易」的局部最優。
-- **涉及檔案**：`scripts/optimize_trading_params.py` 第 140-188 行
+- **現象**：mode B 的風控優化區間與回測區間**同為 `2023-01-01 ~ 最新日`**，故 +47.37% / −25.49% 屬**樣本內 (in-sample)**「自己改自己考卷」，非真實前瞻預期。
+- **判讀**：若下界（Model A）報酬仍為正且 MDD 受控 → 風控參數本身有泛化力、mode B 樣本內高報酬非純過擬合；若下界顯著轉負而上界仍佳 → 績效主要來自模型 lookahead，實盤須打折。`stop_loss=-4.75` 偏緊，疑似過擬合於閃避 2023-2026 特定崩盤，實盤留意頻繁停損。
+- **尚待補強**：(1) 實盤前紙上前瞻追蹤 2~4 週；(2) Stage C 跑出數據後填回本節；(3) 定期 `analyze_regime_stability.py` 監控 RankIC / PSI 漂移。本驗證僅隔離「風控參數」泛化力，模型 lookahead 與滾動重訓泛化屬獨立議題。
 
-### 問題 2：Regime 分類器滯後嚴重（20 日均線延遲）— 🟡 高優先
+### 開放項目 2：模型預測相對排名，但決策框架用絕對門檻做二元閘門 — 🔵 架構層
 
-<!-- TODO: 考慮將 REGIME_TREND_WINDOW 從 20 縮短至 10，或將 SMA 改為 EMA -->
-
-- **現象**：OOS 207 天中僅 27 天（13%）被判定為 Bull，149 天（72%）被判為 Sideways，導致多數牛市日子使用防守門檻 21.5%（≈不買）。
-- **根因**：`REGIME_TREND_WINDOW = 20` 的 SMA 是強滯後指標，牛市起漲時前 20 天均線仍在 0 附近，系統誤判為 Sideways。
-- **修正方向**：
-  - 方案 A（最小改動）：`REGIME_TREND_WINDOW` 從 20 縮至 10，`REGIME_BULL_TREND` 從 0.002 降至 0.0015
-  - 方案 B（進階）：將 `.rolling().mean()` 改為 `.ewm().mean()`，加速對趨勢的反應
-- **涉及檔案**：`config.py` 第 62-64 行、`trading_sim.py` 第 86-100 行
-
-### 問題 3：Panic Breadth 門檻在窄牛市過度敏感 — 🟡 高優先
-
-<!-- TODO: 評估是否在 Bull regime 下放寬或停用 panic_breadth 紅燈 -->
-
-- **現象**：2026 年權值股帶動的窄牛市中（大盤漲但多數個股跌），`MKT_PANIC_BREADTH = 0.33` 頻繁觸發紅燈（兩段回測共 37 天），每次紅燈 = 當天完全禁止買進。
-- **根因**：`config.py` 第 60 行自己的註解已寫：「2026 為權值股帶動的窄牛市 (breadth 低但趨勢強)，用 breadth 會嚴重低估多頭」，但 `panic_breadth` 仍設 0.33，認知未落實到參數。
-- **修正方向**：考慮在 Bull regime 下放寬（或停用）breadth 紅燈，僅在 Sideways/Bear 時啟用。
-- **涉及檔案**：`trading_sim.py` 第 311-318 行、`config.py` 第 45 行
-
-### 問題 4：WFO 出場參數在「空倉假象」下校準，無實質意義 — 🟠 中優先
-
-<!-- TODO: 修正問題 1 後，重跑 WFO 讓出場參數在滿倉狀態下被校準 -->
-
-- **現象**：`sell_threshold`、`ts_activation`、`ts_pullback` 在敏感度掃描中幾乎無作用（跨市況報酬擺幅 0-2.3%）。
-- **根因**：這些出場參數掃描時的基準 `buy_threshold=21.5`，系統幾乎不持股，出場邏輯無部位可作用。
-- **修正方向**：先修正問題 1（加入曝險懲罰），讓 WFO 在合理曝險下重新校準出場參數。在低 `buy_threshold`（滿倉）狀態下重掃 `param_sensitivity.py --base buy_threshold=5` 才能得到有意義的出場參數建議。
-- **實測對比**（rescan 報告 `buy_threshold=5` 基準）：
-  | 參數 | buy_thr=21.5 基準報酬擺幅 | buy_thr=5 基準報酬擺幅 |
-  |------|--------------------------|----------------------|
-  | `ts_activation` | 0.0% (完全惰性) | 10.2% (有效) |
-  | `sell_threshold` | 2.2% (微弱) | 25.3% (強影響) |
-
-### 問題 5：模型預測相對排名，但決策框架用絕對門檻做二元閘門 — 🔵 架構層
-
-<!-- NOTE: 長期架構改善方向，非短期修正項 -->
-
-- **現象**：LightGBM 標籤為橫截面相對排名（top 20% = class 2），`D1_net = (P(strong) - P(weak)) × 100` 的分布不因市場環境改善而提升，買入門檻 21.5% 是固定的「硬牆」。
+- **現象**：LightGBM 標籤為橫截面相對排名（top 20% = class 2），`D1_net = (P(strong) - P(weak)) × 100` 的分布不因市場環境改善而提升，買入門檻是固定的「硬牆」。
 - **根因**：模型設計適合「永遠有持股，選誰比較好」（排序型），但決策框架是「分數夠高才買」（閾值型），兩者不匹配。
 - **長期方向**：考慮將系統改為「永遠持有 N 檔，用模型排序後買排名最高的 N 檔，出現更好候選時換股輪動」的持續滿倉架構，讓 alpha 完全來自選股排序能力。
+- **狀態**：🔵 維持開放。regime 動態門檻修復後決策框架已大幅改善（取代固定硬牆），但「排序型模型 vs 閾值型框架」的根本錯配仍在，屬重構而非調參，待前述修復穩定後再評估。
+
+<details>
+<summary><b>✅ 修復紀錄 (Changelog)</b></summary>
+
+| 日期 | 問題 | 修復摘要 |
+| :--- | :--- | :--- |
+| 2026-06-17 | checkpoint 靜默跳過重優化 | `run_workflow_experiment.py` 加 `compute_opt_signature()` 指紋（優化器原始碼 hash ＋ `--regime`/`-wf` 旗標），不符即自動失效重優化；與模型還原解耦。手動清檔已非必要，`--fresh` 仍可全重跑。**副作用**：`optimize_trading_params.py` 任何編輯（含註解）都會使風控 checkpoint 失效重優化（偏保守）。 |
+| 2026-06-17 | mode B 缺乏乾淨 OOS 驗證（機制） | 新增 Stage C 雙模型 bracket 驗證（見上方開放項目 1，數據待跑）。 |
+| 2026-06-16 | Optuna 空倉偏誤（buy_threshold 收斂到 21.5、曝險僅 3~7%、80%+ 交易日空倉） | 兩段 `optimize_trading_params.py` 加 `--regime`，改搜尋 regime 動態門檻（`regime_bull_buy`/`regime_sideways_buy`/`regime_bull_trend`）取代靜態 buy_threshold；mode B 報酬恢復 +47.37%。**殘留**：`run_simulation_scoring` 無顯式曝險獎勵，若改回靜態門檻偏誤會重現。 |
+| 2026-06-16 | Regime 分類器滯後（20 日均線延遲，OOS 僅 13% 判為 Bull） | `config.py`：`REGIME_TREND_WINDOW` 20→10、`REGIME_BULL_TREND` 0.002→0.0015（採方案 A；EMA 方案未採用）。 |
+| 2026-06-16 | Panic breadth 在窄牛市過度敏感（2026 權值股窄牛市頻觸紅燈禁買） | `trading_sim.py`：Bull regime 停用 breadth 紅燈，僅 Sideways/Bear 啟用。 |
+| 2026-06-16 | WFO 出場參數在「空倉假象」下校準無意義 | 修空倉偏誤後重跑 WFO（出場參數在實際持股下重校準）＋新增全期 MDD 懲罰（`MDD_TOLERANCE`/`MDD_PENALTY_WEIGHT`，見 §2.2）；mode B 全期 MDD −44.01%→−25.49%、Calmar 1.03→1.86。 |
+
+</details>
