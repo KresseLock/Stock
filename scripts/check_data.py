@@ -270,9 +270,10 @@ def check_price_anomalies():
                 
                 # 從黑名單中移除，確保 scraper.py 下次會勇敢去抓
                 removed_from_cache = False
-                if bad_date in skip_dates:
-                    del skip_dates[bad_date]
-                    removed_from_cache = True
+                for k in list(skip_dates.keys()):
+                    if k.endswith(f"_{bad_date}"):
+                        del skip_dates[k]
+                        removed_from_cache = True
                 if bad_date in fail_log:
                     del fail_log[bad_date]
                     removed_from_cache = True

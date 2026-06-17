@@ -155,12 +155,11 @@ def main(target_date_str=None):
     if REGIME_ADAPTIVE_ENABLED and "market_mean_pct" in df.columns:
         _trend = df.groupby("date")["market_mean_pct"].first().sort_index().rolling(window=REGIME_TREND_WINDOW, min_periods=REGIME_TREND_MIN_PERIODS).mean()
         t20 = _trend.get(latest_date, _trend.iloc[-1] if len(_trend) else 0.0)
-        if t20 > REGIME_BULL_TREND:
-            current_regime = "Bull"
-        elif t20 < REGIME_BEAR_TREND:
-            current_regime = "Bear"
-        else:
-            current_regime = "Sideways"
+        try:
+            from scripts.utils import get_regime_label
+        except ImportError:
+            from utils import get_regime_label
+        current_regime = get_regime_label(t20, REGIME_BULL_TREND, REGIME_BEAR_TREND)
         eff_buy_threshold = REGIME_BUY_THRESHOLD.get(current_regime, BUY_THRESHOLD)
         print(f"  [市況過濾器] 最新日 regime = {current_regime} (趨勢t20={t20:+.4f}) → 買入門檻動態調整為 {eff_buy_threshold:.1f}%")
 

@@ -99,7 +99,20 @@ def main():
     preds = model.predict(X)
     df["net_score"] = (preds[:, 2] - preds[:, 0]) * 100
     
-    split_date = pd.to_datetime("2025-08-01")
+    try:
+        import config as _cfg
+        cfg_backtest_date = _cfg.BACKTEST_DATE
+    except Exception:
+        cfg_backtest_date = None
+
+    if cfg_backtest_date:
+        try:
+            split_date = pd.to_datetime(cfg_backtest_date)
+        except Exception:
+            split_date = pd.to_datetime("2025-08-01")
+    else:
+        split_date = pd.to_datetime("2025-08-01")
+
     df_is = df[df["date"] <= split_date].copy()
     df_oos = df[df["date"] > split_date].copy()
     
@@ -255,7 +268,7 @@ def main():
             })
     df_feat_drift = pd.DataFrame(feat_rank_ics).sort_values("Abs_IC_Drift", ascending=False).reset_index(drop=True)
     
-    # ── 7. 動能疊加測試 (Momentum Overlay Test) ──
+    # ── 8. 動能疊加測試 (Momentum Overlay Test) ──
     # 目的：驗證模型在昨日大漲股票（強動能 > 2%）與一般股票（弱動能 <= 2%）的選股預測力 (RankIC) 是否有結構性差異
     momentum_stats = []
     
@@ -293,7 +306,7 @@ def main():
         })
     df_mom = pd.DataFrame(momentum_stats)
     
-    # ── 8. SHAP & 特徵重要性漂移分析 (SHAP & Importance Drift) ──
+    # ── 9. SHAP & 特徵重要性漂移分析 (SHAP & Importance Drift) ──
     print("計算特徵重要性與 SHAP 漂移 (Step 4 & 4.5)...")
     X_is = df_is.reindex(columns=feature_cols).astype(np.float32)
     X_oos = df_oos.reindex(columns=feature_cols).astype(np.float32)
@@ -324,7 +337,7 @@ def main():
         })
     df_shap_drift = pd.DataFrame(shap_drift_list).sort_values("shap_oos_abs", ascending=False).reset_index(drop=True)
     
-    # ── 9. 生成診斷文字報告 ──
+    # ── 10. 生成診斷文字報告 ──
     os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
     with open(REPORT_PATH, "w", encoding="utf-8") as f_out:
         f_out.write("======================================================================\n")

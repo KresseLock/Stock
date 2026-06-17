@@ -43,6 +43,46 @@ class FinMindLimitExceeded(Exception):
     """Raised when FinMind API limit (429/402) is reached."""
     pass
 
+
+class _SingleInstanceLock:
+    """跨平台單一實例鎖：防止兩個 scraper 同時跑而互相覆寫 failed_dates.json / skip_dates.json。
+    以對 lock 檔的作業系統建議鎖實作 (Windows: msvcrt / POSIX: fcntl)，行程結束自動釋放，
+    不會像「鎖檔存在即視為佔用」那樣在當機後留下死鎖。"""
+
+    def __init__(self, lock_path):
+        self.lock_path = lock_path
+        self._fh = None
+
+    def __enter__(self):
+        self._fh = open(self.lock_path, "w")
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(self._fh.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            self._fh.close()
+            self._fh = None
+            raise RuntimeError(
+                "偵測到另一個 scraper 實例正在執行 (lock 被佔用)。"
+                "請等待其結束，避免兩個實例互相覆寫 failed_dates.json。"
+            )
+        return self
+
+    def __exit__(self, *exc):
+        if self._fh is not None:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    self._fh.seek(0)
+                    msvcrt.locking(self._fh.fileno(), msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
+            self._fh.close()
+            self._fh = None
+
 try:
     from taiwan_holidays.taiwan_calendar import TaiwanCalendar
     _th = TaiwanCalendar()
@@ -183,8 +223,11 @@ def _load_fail_log() -> dict:
 
 
 def _save_fail_log(log: dict):
-    with open(FAIL_LOG_PATH, "w", encoding="utf-8") as f:
+    # 原子寫入：先寫暫存檔再 os.replace，避免磁碟滿/中斷時留下截斷的 JSON。
+    tmp_path = FAIL_LOG_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(log, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, FAIL_LOG_PATH)
 
 
 # ── Skip Dates 快取 (取代空白 CSV) ──────────────────
@@ -698,7 +741,8 @@ def _fm_get(
                 resume_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
                 print(f"\n    [FinMind] 觸發限速 (狀態碼 {r.status_code})，每小時額度已用盡。")
                 print(f"    [FinMind] 預計於 {resume_time.strftime('%H:%M:%S')} 額度重置，自動繼續...")
-                time.sleep(3600)
+                for _ in range(60):
+                    time.sleep(60)
                 # 限速不扣重試次數，繼續等待
                 continue
 
@@ -1281,7 +1325,9 @@ def check_data_integrity():
             for d in twse_dirs:
                 for bad_f in glob.glob(os.path.join(DATA_DIR, d, f"{bad_date}_*.csv")):
                     os.remove(bad_f)
-            if bad_date in skip_dates: del skip_dates[bad_date]
+            for k in list(skip_dates.keys()):
+                if k.endswith(f"_{bad_date}"):
+                    del skip_dates[k]
             if bad_date in fail_log: del fail_log[bad_date]
             ghost_del += 1
             curr["price"] = prev["price"]
@@ -1362,9 +1408,14 @@ if __name__ == "__main__":
         stock_list = sorted(list(target_stocks))
         print(f"下載目標股票數量: {len(stock_list)} 檔 (模式: {FINMIND_FETCH_MODE})")
         
+        import sys
         try:
-            download_history_data(START_DATE, datetime.date.today(), target_stocks=stock_list)
+            with _SingleInstanceLock(os.path.join(DATA_DIR, "scraper.lock")):
+                download_history_data(START_DATE, datetime.date.today(), target_stocks=stock_list)
+        except RuntimeError as e:
+            # 另一個 scraper 實例正在執行 (單一實例鎖被佔用)
+            print(f"[中止] {e}")
+            sys.exit(1)
         except FinMindLimitExceeded:
             # 退出碼 99 通知上層 Pipeline 可以跳過並繼續
-            import sys
             sys.exit(99)

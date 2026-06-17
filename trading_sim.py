@@ -93,11 +93,13 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     # 趨勢門檻可由外部覆寫 (供 optimize_trading_params.py 校準)，否則用 config 預設。
     _bull_trend = regime_bull_trend if regime_bull_trend is not None else REGIME_BULL_TREND
     _bear_trend = regime_bear_trend if regime_bear_trend is not None else REGIME_BEAR_TREND
-    conditions = [
-        df_daily_mkt["market_trend_20d"] > _bull_trend,
-        df_daily_mkt["market_trend_20d"] < _bear_trend
-    ]
-    df_daily_mkt["regime"] = np.select(conditions, ["Bull", "Bear"], default="Sideways")
+    
+    try:
+        from scripts.utils import filter_stocks_by_train_industries, get_regime_label
+    except ImportError:
+        from utils import filter_stocks_by_train_industries, get_regime_label
+
+    df_daily_mkt["regime"] = df_daily_mkt["market_trend_20d"].apply(lambda v: get_regime_label(v, _bull_trend, _bear_trend))
     
     # 把 regime 合併回 df
     df = df.merge(df_daily_mkt[["date", "market_trend_20d", "market_breadth_20d", "regime"]], on="date", how="left")
@@ -278,25 +280,13 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                 settled_amount += pending_settlements.pop(s_date)
         bank_cash += settled_amount
         
-        today_data = df_sim[df_sim['date'] == today].set_index('stock_id')
-        prev_data = df_sim[df_sim['date'] == prev_day].set_index('stock_id')
+        today_data = df_sim[df_sim['date'] == today].drop_duplicates(subset=['stock_id']).set_index('stock_id')
+        prev_data = df_sim[df_sim['date'] == prev_day].drop_duplicates(subset=['stock_id']).set_index('stock_id')
         
         # 獲取今日市況
         regime = "Sideways"
         if not today_data.empty and 'regime' in today_data.columns:
             regime = today_data['regime'].iloc[0]
-        
-        # --- A. 更新今日持倉價格與歷史最高收盤價 ---
-        for sid, pos in positions.items():
-            if sid in today_data.index:
-                new_price = today_data.loc[sid, 'close']
-                if not pd.isna(new_price) and new_price > 0:
-                    pos['current_price'] = new_price
-                    # 更新買入後的最高收盤價
-                    if 'max_close_price' not in pos:
-                        pos['max_close_price'] = new_price
-                    else:
-                        pos['max_close_price'] = max(pos['max_close_price'], new_price)
 
         # --- A1. 讀取大盤指標與判斷硬風控紅燈 (Market Sentiment Filter) ---
         mkt_ma5 = 0.0
@@ -472,7 +462,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                 continue
             
             # 動態分配剩餘資金
-            available_slots = max_positions - len(positions)
+            available_slots = max(1, max_positions - len(positions))
             target_investment = available_cash / available_slots
             invest_amount = min(target_investment, available_cash)
             if invest_amount < 1000:
@@ -532,6 +522,17 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             else:
                 pending_settlements[settlement_date] = net_change
 
+        # --- A. 更新今日持倉價格與歷史最高收盤價 (移至日終，避免移動止盈前視偏差) ---
+        for sid, pos in positions.items():
+            if sid in today_data.index:
+                new_price = today_data.loc[sid, 'close']
+                if not pd.isna(new_price) and new_price > 0:
+                    pos['current_price'] = new_price
+                    if 'max_close_price' not in pos:
+                        pos['max_close_price'] = new_price
+                    else:
+                        pos['max_close_price'] = max(pos['max_close_price'], new_price)
+
         # --- D. 計算今日日終淨值並寫入歷史 ---
         final_stock_value = sum(pos['shares'] * pos['current_price'] for pos in positions.values())
         pending_cash = sum(pending_settlements.values())
@@ -584,7 +585,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     print("  回測結束 - 績效結算")
     print("=" * 70)
     
-    final_equity = cash + sum(pos['shares'] * pos['current_price'] for pos in positions.values())
+    final_equity = bank_cash + sum(pending_settlements.values()) + sum(pos['shares'] * pos['current_price'] for pos in positions.values())
     total_return = ((final_equity / initial_capital) - 1) * 100
     
     print(f"期初資金: {initial_capital:,.0f}")

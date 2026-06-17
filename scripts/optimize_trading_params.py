@@ -45,7 +45,8 @@ try:
     from config import (
         BACKTEST_DATE, MAX_POSITIONS, OPTIMIZATION_TRIALS, EARLY_STOPPING_ROUNDS,
         MDD_TOLERANCE, MDD_PENALTY_WEIGHT,
-        PORTFOLIO_ALPHA_WEIGHT, PORTFOLIO_SPREAD_WEIGHT, CALMAR_SCORE_WEIGHT
+        PORTFOLIO_ALPHA_WEIGHT, PORTFOLIO_SPREAD_WEIGHT, CALMAR_SCORE_WEIGHT,
+        TRADING_PARAM_BOUNDS,
     )
     from trading_sim import run_simulation
 except ImportError as e:
@@ -77,26 +78,31 @@ default_start_date = (dt_end - datetime.timedelta(days=365 * 2.5)).strftime("%Y-
 RESULT_PATH = os.path.join(BASE_DIR, "configs", "best_trading_params.json")
 
 
+def _suggest(trial, name):
+    """依 config.TRADING_PARAM_BOUNDS 的邊界定義建議參數 (3-tuple=float, 2-tuple=int)。"""
+    bounds = TRADING_PARAM_BOUNDS[name]
+    if len(bounds) == 3:
+        lo, hi, step = bounds
+        return trial.suggest_float(name, lo, hi, step=step)
+    lo, hi = bounds
+    return trial.suggest_int(name, lo, hi)
+
+
 def suggest_trial_params(trial, regime_mode):
-    """集中定義 Optuna 搜尋空間。regime_mode 時搜尋 REGIME_* 動態門檻，否則搜尋靜態 buy_threshold。"""
+    """集中定義 Optuna 搜尋空間。regime_mode 時搜尋 REGIME_* 動態門檻，否則搜尋靜態 buy_threshold。
+    搜尋邊界統一由 config.TRADING_PARAM_BOUNDS 控制 (常數集中原則)。"""
     p = {
-        "sell_threshold": trial.suggest_float("sell_threshold", -20.0, 5.0, step=0.5),
-        "stop_loss": trial.suggest_float("stop_loss", -15.0, -3.0, step=0.5),
-        "panic_ma5": trial.suggest_float("panic_ma5", -0.025, 0.00, step=0.001),
-        "panic_breadth": trial.suggest_float("panic_breadth", 0.15, 0.45, step=0.01),
-        "ts_activation": trial.suggest_float("ts_activation", 5.0, 25.0, step=0.5),
-        "ts_pullback": trial.suggest_float("ts_pullback", -12.0, -1.0, step=0.5),
-        "min_hold_days": trial.suggest_int("min_hold_days", 1, 25),
-        "markup_pct": trial.suggest_float("markup_pct", -3.0, 2.0, step=0.5),
+        name: _suggest(trial, name)
+        for name in ("sell_threshold", "stop_loss", "panic_ma5", "panic_breadth",
+                     "ts_activation", "ts_pullback", "min_hold_days", "markup_pct")
     }
     if regime_mode:
         # 市況過濾器：趨勢市低門檻進攻、震盪市高門檻防守、空頭固定空倉(99)
-        p["regime_bull_buy"] = trial.suggest_float("regime_bull_buy", 0.0, 15.0, step=0.5)
-        p["regime_sideways_buy"] = trial.suggest_float("regime_sideways_buy", 8.0, 25.0, step=0.5)
-        p["regime_bull_trend"] = trial.suggest_float("regime_bull_trend", 0.0005, 0.004, step=0.0005)
-        p["regime_bear_trend"] = trial.suggest_float("regime_bear_trend", -0.004, -0.0005, step=0.0005)
+        for name in ("regime_bull_buy", "regime_sideways_buy",
+                     "regime_bull_trend", "regime_bear_trend"):
+            p[name] = _suggest(trial, name)
     else:
-        p["buy_threshold"] = trial.suggest_float("buy_threshold", 5.0, 25.0, step=0.5)
+        p["buy_threshold"] = _suggest(trial, "buy_threshold")
     return p
 
 

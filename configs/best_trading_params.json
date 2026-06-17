@@ -1,0 +1,169 @@
+{
+    "best_score": 0.0,
+    "optimized_at": "2026-06-15 23:29:35",
+    "date_range": "2023-01-01 to 2026-06-12",
+    "best_params": {
+        "sell_threshold": -7.5,
+        "stop_loss": -4.75,
+        "panic_ma5": -0.0195,
+        "panic_breadth": 0.32499999999999996,
+        "ts_activation": 12.25,
+        "ts_pullback": -5.5,
+        "min_hold_days": 11.5,
+        "markup_pct": -1.0,
+        "regime_bull_buy": 5.5,
+        "regime_sideways_buy": 15.25,
+        "regime_bull_trend": 0.0025,
+        "regime_bear_trend": -0.003
+    },
+    "overall_metrics": {
+        "return_pct": 0.0,
+        "mdd_pct": 0.0
+    },
+    "walk_forward_metrics": {
+        "sell_threshold": {
+            "values": [
+                -8.5,
+                -6.5,
+                2.5,
+                -11.0
+            ],
+            "median": -7.5,
+            "iqr": 4.875,
+            "cv": 0.8666132704006937,
+            "stability": "不穩定"
+        },
+        "stop_loss": {
+            "values": [
+                -14.5,
+                -5.0,
+                -4.5,
+                -4.5
+            ],
+            "median": -4.75,
+            "iqr": 2.875,
+            "cv": 0.5982944878940328,
+            "stability": "不穩定"
+        },
+        "panic_ma5": {
+            "values": [
+                -0.005000000000000001,
+                -0.023,
+                -0.016,
+                -0.023
+            ],
+            "median": -0.0195,
+            "iqr": 0.009749999999999998,
+            "cv": 0.4394755780398643,
+            "stability": "不穩定"
+        },
+        "panic_breadth": {
+            "values": [
+                0.43000000000000005,
+                0.3,
+                0.16,
+                0.35
+            ],
+            "median": 0.32499999999999996,
+            "iqr": 0.10499999999999998,
+            "cv": 0.31688520490949196,
+            "stability": "不穩定"
+        },
+        "ts_activation": {
+            "values": [
+                5.5,
+                22.0,
+                6.0,
+                18.5
+            ],
+            "median": 12.25,
+            "iqr": 13.5,
+            "cv": 0.5659207295985447,
+            "stability": "不穩定"
+        },
+        "ts_pullback": {
+            "values": [
+                -5.0,
+                -6.0,
+                -2.0,
+                -9.0
+            ],
+            "median": -5.5,
+            "iqr": 2.5,
+            "cv": 0.45454545454545453,
+            "stability": "不穩定"
+        },
+        "min_hold_days": {
+            "values": [
+                12.0,
+                11.0,
+                2.0,
+                22.0
+            ],
+            "median": 11.5,
+            "iqr": 5.75,
+            "cv": 0.602920311289564,
+            "stability": "不穩定"
+        },
+        "markup_pct": {
+            "values": [
+                -1.0,
+                -1.5,
+                -1.0,
+                -1.0
+            ],
+            "median": -1.0,
+            "iqr": 0.125,
+            "cv": 0.19245008972987523,
+            "stability": "需注意"
+        },
+        "regime_bull_buy": {
+            "values": [
+                15.0,
+                1.0,
+                8.5,
+                2.5
+            ],
+            "median": 5.5,
+            "iqr": 8.0,
+            "cv": 0.8190127550924438,
+            "stability": "不穩定"
+        },
+        "regime_sideways_buy": {
+            "values": [
+                9.5,
+                19.0,
+                17.0,
+                13.5
+            ],
+            "median": 15.25,
+            "iqr": 5.0,
+            "cv": 0.24503105584408408,
+            "stability": "需注意"
+        },
+        "regime_bull_trend": {
+            "values": [
+                0.0015,
+                0.001,
+                0.004,
+                0.0035
+            ],
+            "median": 0.0025,
+            "iqr": 0.0022500000000000003,
+            "cv": 0.5099019513592784,
+            "stability": "不穩定"
+        },
+        "regime_bear_trend": {
+            "values": [
+                -0.0035,
+                -0.0025,
+                -0.004,
+                -0.0025
+            ],
+            "median": -0.003,
+            "iqr": 0.0011250000000000001,
+            "cv": 0.20784609690826525,
+            "stability": "需注意"
+        }
+    }
+}

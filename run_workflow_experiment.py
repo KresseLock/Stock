@@ -264,6 +264,14 @@ def compute_opt_signature(opt_cmd):
     return h.hexdigest()
 
 
+def _atomic_copy(src, dst):
+    """原子備份：先複製到暫存檔再 os.replace，避免磁碟空間不足/中斷時留下截斷的備份檔。
+    若直接寫 dst 中途失敗，後續啟動的「自動還原」會把損毀檔還原回主檔。"""
+    tmp = dst + ".tmp"
+    shutil.copy2(src, tmp)
+    os.replace(tmp, dst)
+
+
 def backup_models(suffix):
     """將 models/ 目錄下的所有模型備份，加上指定的 suffix (例如 .mode_a)"""
     model_dir = os.path.join(BASE_DIR, "models")
@@ -455,8 +463,11 @@ def save_progress(results):
     # 1. 寫入 JSON 檔
     progress_json_path = os.path.join(report_dir, "workflow_experiment_results.json")
     try:
-        with open(progress_json_path, "w", encoding="utf-8") as f:
+        # 原子寫入：避免中斷時留下截斷的 checkpoint JSON，否則下次續傳會讀到壞檔。
+        tmp_path = progress_json_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, progress_json_path)
         print(f"  [進度更新] 實驗結果 JSON 已存檔: {progress_json_path}")
     except Exception as e:
         print(f"  [警告] 儲存進度 JSON 失敗: {e}")
@@ -526,23 +537,23 @@ def main():
         print("  [還原] 偵測到上次中斷留下的 best_trading_params.json.workflow.bak，正在自動還原...")
         shutil.copy2(BEST_TRADING_PARAMS_BAK, BEST_TRADING_PARAMS_PATH)
 
-    # 現在可以安全進行備份
+    # 現在可以安全進行備份 (原子寫入，避免磁碟滿時留下截斷的 .workflow.bak)
     if os.path.exists(CONFIG_PATH):
-        shutil.copy2(CONFIG_PATH, CONFIG_BAK)
+        _atomic_copy(CONFIG_PATH, CONFIG_BAK)
         print(f"  已備份 config.py -> config.py.workflow.bak")
     else:
         print("[嚴重錯誤] 找不到 config.py！")
         sys.exit(1)
-        
+
     backup_factors_exists = False
     if os.path.exists(BEST_FACTORS_PATH):
-        shutil.copy2(BEST_FACTORS_PATH, BEST_FACTORS_BAK)
+        _atomic_copy(BEST_FACTORS_PATH, BEST_FACTORS_BAK)
         backup_factors_exists = True
         print(f"  已備份 best_factors.json -> best_factors.json.workflow.bak")
-        
+
     backup_trading_exists = False
     if os.path.exists(BEST_TRADING_PARAMS_PATH):
-        shutil.copy2(BEST_TRADING_PARAMS_PATH, BEST_TRADING_PARAMS_BAK)
+        _atomic_copy(BEST_TRADING_PARAMS_PATH, BEST_TRADING_PARAMS_BAK)
         backup_trading_exists = True
         print(f"  已備份 best_trading_params.json -> best_trading_params.json.workflow.bak")
 
@@ -1044,15 +1055,29 @@ def main():
             os.remove(CONFIG_BAK)
             print("  已還原 config.py 并清理臨時備份")
             
-        if backup_factors_exists and os.path.exists(BEST_FACTORS_BAK):
-            shutil.copy2(BEST_FACTORS_BAK, BEST_FACTORS_PATH)
-            os.remove(BEST_FACTORS_BAK)
-            print("  已還原 best_factors.json 并清理臨時備份")
+        if backup_factors_exists:
+            if os.path.exists(BEST_FACTORS_BAK):
+                shutil.copy2(BEST_FACTORS_BAK, BEST_FACTORS_PATH)
+                os.remove(BEST_FACTORS_BAK)
+                print("  已還原 best_factors.json 并清理臨時備份")
+        else:
+            if os.path.exists(BEST_FACTORS_PATH):
+                os.remove(BEST_FACTORS_PATH)
+                print("  已刪除實驗中新增的 best_factors.json 以還原原始狀態")
+            if os.path.exists(BEST_FACTORS_BAK):
+                os.remove(BEST_FACTORS_BAK)
             
-        if backup_trading_exists and os.path.exists(BEST_TRADING_PARAMS_BAK):
-            shutil.copy2(BEST_TRADING_PARAMS_BAK, BEST_TRADING_PARAMS_PATH)
-            os.remove(BEST_TRADING_PARAMS_BAK)
-            print("  已還原 best_trading_params.json 并清理臨時備份")
+        if backup_trading_exists:
+            if os.path.exists(BEST_TRADING_PARAMS_BAK):
+                shutil.copy2(BEST_TRADING_PARAMS_BAK, BEST_TRADING_PARAMS_PATH)
+                os.remove(BEST_TRADING_PARAMS_BAK)
+                print("  已還原 best_trading_params.json 并清理臨時備份")
+        else:
+            if os.path.exists(BEST_TRADING_PARAMS_PATH):
+                os.remove(BEST_TRADING_PARAMS_PATH)
+                print("  已刪除實驗中新增的 best_trading_params.json 以還原原始狀態")
+            if os.path.exists(BEST_TRADING_PARAMS_BAK):
+                os.remove(BEST_TRADING_PARAMS_BAK)
 
 
 if __name__ == "__main__":

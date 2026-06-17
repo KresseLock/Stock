@@ -158,3 +158,16 @@ def filter_stocks_by_train_industries(df, target_col="stock_id") -> "pd.DataFram
         return df_filtered
         
     return df
+
+
+def get_regime_label(trend_val: float, bull_trend: float, bear_trend: float) -> str:
+    """根據大盤滾動均值區分市況 (Bull / Bear / Sideways)"""
+    import pandas as pd
+    if pd.isna(trend_val):
+        return "Sideways"
+    if trend_val > bull_trend:
+        return "Bull"
+    elif trend_val < bear_trend:
+        return "Bear"
+    return "Sideways"
+
