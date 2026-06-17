@@ -59,10 +59,16 @@ REGIME_BUY_THRESHOLD = {
 # 市況分類門檻 (以大盤 20 日滾動平均日報酬 market_trend_20d 為主軸，趨勢導向)。
 # 刻意不用 breadth 判 Bull：2026 為權值股帶動的窄牛市 (breadth 低但趨勢強)，
 # 用 breadth 會嚴重低估多頭。校準自 param_sensitivity：+0.2%/日可涵蓋 2026 約 71% 天數、2025 僅 29%。
-REGIME_BULL_TREND = 0.002    # market_trend_20d > 此值 → Bull (趨勢多頭)
-REGIME_BEAR_TREND = -0.002   # market_trend_20d < 此值 → Bear (趨勢空頭)，其餘為 Sideways
-REGIME_TREND_WINDOW = 20     # 市況趨勢判定的滾動視窗天數 (大盤平均日報酬)
+REGIME_BULL_TREND = 0.0015   # market_trend > 此值 → Bull (趨勢多頭)。配合 10 日窗去滯後後略降門檻
+REGIME_BEAR_TREND = -0.002   # market_trend < 此值 → Bear (趨勢空頭)，其餘為 Sideways
+REGIME_TREND_WINDOW = 10     # 市況趨勢判定的滾動視窗天數。20→10 去滯後：牛市起漲時 20 日 SMA 仍在 0 附近會誤判 Sideways
 REGIME_TREND_MIN_PERIODS = 5 # 滾動視窗最少有效天數 (trading_sim 與 inference 共用)
+
+# ── 2.4 風控優化目標函式：全期 MDD 懲罰 (optimize_trading_params.py run_simulation_scoring 使用) ──
+# WF 優化只看 per-regime calmar (權重 0.2)，看不到跨 regime 交界 (如 Bull→崩盤) 的全期回撤，
+# 會選出高報酬但 -44% MDD 的角落解。故對全期 MDD 超過容忍線的部分線性扣分，逼優化器在報酬與回撤間取捨。
+MDD_TOLERANCE      = 20.0   # 全期最大回撤容忍線 (%)，超過此值才開始扣分
+MDD_PENALTY_WEIGHT = 0.05   # 每超出 1% MDD 的扣分權重 (相對 combined_score 量級，設 0 為停用)
 
 # ── 2.2 限價掛單加價幅度 (inference.py & trading_sim.py 共享) ──
 # 根據 D1 多空信心分數動態決定建議加價幅度，兩個腳本必須保持一致
@@ -79,10 +85,10 @@ START_DATE = datetime.date(2020, 1, 1)  # 數據回溯起點 (建議至少 5 年
 FINMIND_CACHE_DAYS = 15                 # FinMind 基本面資料快取更新間隔天數
 
 # ── 4. 機器學習與平行資源設定 ─────────────────────────────────
-RUN_OPTIMIZATION      = False   # 是否在流水線執行時重新啟動 Optuna 調參
-OPTIMIZATION_TRIALS   = 600     # Optuna 最佳化最大輪數
-EARLY_STOPPING_ROUNDS = 200     # Optuna Early Stopping 輪數 (None 代表不提早結束)
-BACKTEST_DATE         = "20250801" # 訓練與測試的切分分界點 (樣本外評估起點)
+RUN_OPTIMIZATION      = False# 是否在流水線執行時重新啟動 Optuna 調參
+OPTIMIZATION_TRIALS   = 400# Optuna 最佳化最大輪數
+EARLY_STOPPING_ROUNDS = 150# Optuna Early Stopping 輪數 (None 代表不提早結束)
+BACKTEST_DATE         = "20250801"# 訓練與測試的切分分界點 (樣本外評估起點)
 
 FEAT_N_JOBS           = -1      # 特徵工程平行核心數 (-1 為最大核心)
 TRAIN_N_JOBS          = -1      # LightGBM 訓練核心數

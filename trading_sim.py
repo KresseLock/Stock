@@ -308,19 +308,24 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             if 'market_breadth_pct' in prev_data.columns:
                 mkt_breadth = first_row['market_breadth_pct']
                 
+        # 讀「昨日(訊號日)」regime，供 breadth 紅燈在 Bull 放寬與市況過濾器共用。
+        # 刻意讀 prev_data 而非 today_data，因 today 的 regime 含今日市場報酬，用於今日買進屬前視偏差。
+        signal_regime = None
+        if not prev_data.empty and 'regime' in prev_data.columns:
+            signal_regime = prev_data['regime'].iloc[0]
+
         is_market_panic = False
         panic_reason = ""
         if mkt_ma5 < MKT_PANIC_MA5:
             is_market_panic = True
             panic_reason = f"大盤 5 日滾動平均報酬率過低 ({mkt_ma5 * 100:+.2f}%)，低於風控門檻 {MKT_PANIC_MA5 * 100:+.2f}%"
-        elif mkt_breadth < MKT_PANIC_BREADTH:
+        elif mkt_breadth < MKT_PANIC_BREADTH and signal_regime != "Bull":
+            # 窄牛市 (breadth 低但趨勢強) 不應被 breadth 紅燈擋下，故 Bull regime 停用 breadth 紅燈，僅 Sideways/Bear 啟用。
             is_market_panic = True
             panic_reason = f"全市場上漲比例過低 ({mkt_breadth * 100:.1f}%)，低於風控門檻 {MKT_PANIC_BREADTH * 100:.1f}%"
 
-        # 市況過濾器：依「昨日(訊號日)」的 regime 動態決定買入門檻 (趨勢市進攻、震盪/空頭防守)。
-        # 刻意讀 prev_data 而非 today_data，因 today 的 regime 含今日市場報酬，用於今日買進屬前視偏差。
-        if use_regime_filter and not prev_data.empty and 'regime' in prev_data.columns:
-            signal_regime = prev_data['regime'].iloc[0]
+        # 市況過濾器：依昨日 regime 動態決定買入門檻 (趨勢市進攻、震盪/空頭防守)。
+        if use_regime_filter and signal_regime is not None:
             current_buy_threshold = _regime_buy_thr.get(signal_regime, BUY_THRESHOLD)
         else:
             current_buy_threshold = BUY_THRESHOLD

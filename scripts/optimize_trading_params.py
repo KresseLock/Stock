@@ -43,7 +43,9 @@ if BASE_DIR not in sys.path:
 # 載入中央控制面板與模擬交易器
 try:
     from config import (
-        BACKTEST_DATE, MAX_POSITIONS, OPTIMIZATION_TRIALS, EARLY_STOPPING_ROUNDS
+        BACKTEST_DATE, MAX_POSITIONS, OPTIMIZATION_TRIALS, EARLY_STOPPING_ROUNDS,
+        MDD_TOLERANCE, MDD_PENALTY_WEIGHT,
+        PORTFOLIO_ALPHA_WEIGHT, PORTFOLIO_SPREAD_WEIGHT, CALMAR_SCORE_WEIGHT
     )
     from trading_sim import run_simulation
 except ImportError as e:
@@ -166,8 +168,10 @@ def run_simulation_scoring(start_date, end_date, trial_params, capital, max_pos)
                 
         regime_calmar = (regime_ret * 100) / ((regime_max_dd * 100) + 2.0)
         
-        # 套用 0.6 Alpha + 0.2 Spread + 0.2 Calmar 權重公式
-        sub_score = 0.6 * (mean_alpha * 100) + 0.2 * (mean_spread * 100) + 0.2 * regime_calmar
+        # 套用 Alpha / Spread / Calmar 權重公式 (權重集中於 config.py 第 119-121 行)
+        sub_score = (PORTFOLIO_ALPHA_WEIGHT * (mean_alpha * 100)
+                     + PORTFOLIO_SPREAD_WEIGHT * (mean_spread * 100)
+                     + CALMAR_SCORE_WEIGHT * regime_calmar)
         
         # 平方根天數權重歸一化
         w_r = min(1.0, np.sqrt(n_days_r / 60.0))
@@ -186,6 +190,14 @@ def run_simulation_scoring(start_date, end_date, trial_params, capital, max_pos)
         }
         
     combined_score = (weighted_sum / total_w) if total_w > 0 else -999.0
+
+    # 全期 MDD 懲罰：上面的 combined_score 只彙整 per-regime alpha/spread/calmar，
+    # 看不到跨 regime 交界 (Bull→崩盤) 的全期回撤。在此對全期 max_dd 超出容忍線的部分線性扣分，
+    # 逼優化器避開「高報酬但 -44% MDD」的角落解 (WF 與標準模式共用此回傳值，故兩者皆生效)。
+    if combined_score > -999.0 and MDD_PENALTY_WEIGHT > 0:
+        mdd_excess = max(0.0, max_dd * 100 - MDD_TOLERANCE)
+        combined_score -= MDD_PENALTY_WEIGHT * mdd_excess
+
     return combined_score, regime_details, total_return, max_dd
 
 

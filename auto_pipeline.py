@@ -48,7 +48,7 @@ except ImportError:
     RUN_OPTIMIZATION      = False
     OPTIMIZATION_TRIALS   = 600
     EARLY_STOPPING_ROUNDS = 200
-    BACKTEST_DATE         = "20250801"
+    BACKTEST_DATE         = None
     START_DATE            = datetime.date(2020, 1, 1)
     FEAT_N_JOBS           = -1
     TRAIN_N_JOBS          = -1
