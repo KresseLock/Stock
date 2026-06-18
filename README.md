@@ -580,6 +580,54 @@ python run_workflow_experiment.py --fresh
 
 ---
 
+#### 5. 📝 實驗報告判讀後的部署與 Paper Trading 前瞻驗證自動化 (2026-06-18 建立)
+
+> 跑完 `run_workflow_experiment.py` 拿到 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md) 後，這是「如何照報告把利潤最大化」的標準處理流程。**避免日後忘記，完整記錄於此。**
+
+##### ① 正確判讀報告（別被 +47.37% 誤導）
+封面的 **mode B 全週期 +47.37% / Calmar 1.86 是樣本內 (in-sample)**，不能當實盤預期。真實前瞻預期看「🧪 潔淨 OOS 驗證」那張雙模型 bracket：
+
+| | 下界 Model A（無 lookahead） | 上界 Model B（有 lookahead） |
+| :--- | :--- | :--- |
+| 報酬 | **+5.18%** | +24.34% |
+| MDD | **-32.41%** | -12.75% |
+| Calmar | 0.16 | 1.91 |
+
+下界偏弱（Calmar 0.16、MDD -32%）代表 mode B 高報酬有相當部分來自模型對測試期的 lookahead → **實盤須打折、先紙上驗證**。
+
+##### ② 部署 mode_b 風控（一次性）
+```powershell
+Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.json -Force
+```
+`config.py` 啟動時自動讀取覆寫。部署後門檻會從舊值變為 mode_b（買進 ~15%→~20%、賣出 -8%→-14%、停損 -5%→-6%，即「牛市配置：買得嚴、抱得鬆」）。
+
+##### ③ 每日一鍵（已自動化，無腦使用）
+收盤後（約 15:40 三大法人更新完）：
+```powershell
+.\run_daily.ps1
+```
+此腳本依序執行：(1) `python Auto_RUN.py -s all`（下載→重訓→推理→備份 Drive）→ (2) `python paper_trading\record_paper_trades.py`（自動記錄掛單簿）。
+
+##### ④ 掛單簿自動記錄器 `paper_trading/record_paper_trades.py`
+**完全無前視偏差**地把每日預測轉成可驗證的交易紀錄：
+1. 解析 `predictions/prediction_<date>.txt` 的買/賣掛單 → 自動新增列到 `paper_trading/trades.csv`（掛單日 = 次一交易日）。
+2. 隔日該交易日價格到位後，依**真實次日價格**自動判定成交：
+   - **買（限價）**：次日 `最低價 ≤ 建議掛單價` 才成交（填成交價）；否則 `N`（限價買不到 → 搓合率原始資料）。
+   - **賣（開盤賣）**：以次日 `開盤價` 成交。
+3. FIFO 配對賣單 → 自動算買進持倉的 `出場價 / 持有天數 / 損益%`（已扣 0.585% 摩擦）。
+4. **冪等**（重跑同日不重複）；次一交易日尚未產生的掛單維持 pending，下次自動回補。
+- 用法：`python paper_trading\record_paper_trades.py`（最新預測）或 `-d 20260618`（指定基準日）。
+
+> **設計邊界（刻意不做，交給 `trading_sim.py`）**：`總資產 / 損益金額 / 股數` 需完整資金配置與 T+2 交割模擬，本工具不重造引擎、只填無歧義的 `損益%`。要完整資產曲線/Excel 報表，直接跑 `python trading_sim.py --start <上線日> --end <今日>`。
+
+##### ⑤ 監控與加碼決策門檻
+- **每週**：`python scripts\analyze_regime_stability.py` 看 RankIC / PSI。RankIC 轉弱或 PSI ≥ 0.25 → 模型在 regime 轉換中退化，降載或暫停。
+- **加碼門檻**：累計報酬 ≥ **+5%（下界）** 且 MDD 未破 -32% → 開始小額實單；接近 **+24%（上界）** 且搓合率高、訊號健康 → 放大資金；報酬轉負或 MDD 逼近 -32% → 停手查模型 lookahead。
+- **驗證期**：建議 1~2 個月且最好涵蓋一次 regime 切換（震盪↔牛↔熊）。
+- 詳見 [paper_trading/README.md](paper_trading/README.md)。
+
+---
+
 ### Step 7 — 執行系統整合測試
 
 在提交程式碼或更動主要演算法前，請確保 18 項關鍵整合測試 100% 通過：
@@ -703,7 +751,7 @@ flowchart LR
 > 本節記錄目前**仍開放**的結構性項目；歷史已修復項目收於末端「✅ 修復紀錄」摺疊區，供追溯設定值由來。
 > 詳細診斷數據參見 `reports/bottleneck_attribution.txt` 與 `reports/param_sensitivity_report.md`。
 >
-> **目前狀態（2026-06-17）**：2026-06-16 的空倉偏誤／regime 滯後／breadth 過敏／出場參數空倉假象，以及 2026-06-17 的 checkpoint footgun 均已修復（見 Changelog）。尚有 **2 項開放**：① mode B 乾淨 OOS 驗證待跑數據、② 排序型模型 vs 閾值型框架的架構錯配。
+> **目前狀態（2026-06-18）**：2026-06-16 的空倉偏誤／regime 滯後／breadth 過敏／出場參數空倉假象、2026-06-17 的 checkpoint footgun 均已修復（見 Changelog）。Stage C 潔淨 OOS 數據已跑出、mode_b 已部署並進入 paper trading 前瞻驗證（見 Step 6 §5）。尚有 **2 項開放**：① mode B 紙上驗證累積中、待達加碼門檻再投真錢、② 排序型模型 vs 閾值型框架的架構錯配。
 
 ### 開放項目 1：mode B 績效為樣本內，乾淨 OOS 驗證待跑數據 — 🟡 中優先 (2026-06-17)
 
@@ -715,7 +763,8 @@ flowchart LR
 
 - **現象**：mode B 的風控優化區間與回測區間**同為 `2023-01-01 ~ 最新日`**，故 +47.37% / −25.49% 屬**樣本內 (in-sample)**「自己改自己考卷」，非真實前瞻預期。
 - **判讀**：若下界（Model A）報酬仍為正且 MDD 受控 → 風控參數本身有泛化力、mode B 樣本內高報酬非純過擬合；若下界顯著轉負而上界仍佳 → 績效主要來自模型 lookahead，實盤須打折。`stop_loss=-4.75` 偏緊，疑似過擬合於閃避 2023-2026 特定崩盤，實盤留意頻繁停損。
-- **尚待補強**：(1) 實盤前紙上前瞻追蹤 2~4 週；(2) Stage C 跑出數據後填回本節；(3) 定期 `analyze_regime_stability.py` 監控 RankIC / PSI 漂移。本驗證僅隔離「風控參數」泛化力，模型 lookahead 與滾動重訓泛化屬獨立議題。
+- **進度（2026-06-18）**：Stage C 數據已跑出（下界 +5.18%/MDD-32.41%、上界 +24.34%/MDD-12.75%，見實驗報告）；mode_b 風控已部署上線，並建立 `paper_trading/` 自動掛單簿 + `run_daily.ps1` 一鍵流程進入紙上前瞻驗證（處理流程見 Step 6 §5）。
+- **尚待補強**：(1) 紙上前瞻追蹤累積 1~2 個月達加碼門檻（+5% 下界）再投真錢；(2) 定期 `analyze_regime_stability.py` 監控 RankIC / PSI 漂移。本驗證僅隔離「風控參數」泛化力，模型 lookahead 與滾動重訓泛化屬獨立議題。
 
 ### 開放項目 2：模型預測相對排名，但決策框架用絕對門檻做二元閘門 — 🔵 架構層
 
@@ -729,6 +778,7 @@ flowchart LR
 
 | 日期 | 問題 | 修復摘要 |
 | :--- | :--- | :--- |
+| 2026-06-18 | 實驗報告判讀後缺部署與前瞻驗證 SOP | 部署 mode_b 風控（複製為 `best_trading_params.json`）；新增 `paper_trading/record_paper_trades.py`（無前視偏差自動記錄掛單簿、依真實次日價格判成交、FIFO 算損益%）與 `run_daily.ps1` 一鍵流程；完整處理流程記於 Step 6 §5。 |
 | 2026-06-17 | checkpoint 靜默跳過重優化 | `run_workflow_experiment.py` 加 `compute_opt_signature()` 指紋（優化器原始碼 hash ＋ `--regime`/`-wf` 旗標），不符即自動失效重優化；與模型還原解耦。手動清檔已非必要，`--fresh` 仍可全重跑。**副作用**：`optimize_trading_params.py` 任何編輯（含註解）都會使風控 checkpoint 失效重優化（偏保守）。 |
 | 2026-06-17 | mode B 缺乏乾淨 OOS 驗證（機制） | 新增 Stage C 雙模型 bracket 驗證（見上方開放項目 1，數據待跑）。 |
 | 2026-06-16 | Optuna 空倉偏誤（buy_threshold 收斂到 21.5、曝險僅 3~7%、80%+ 交易日空倉） | 兩段 `optimize_trading_params.py` 加 `--regime`，改搜尋 regime 動態門檻（`regime_bull_buy`/`regime_sideways_buy`/`regime_bull_trend`）取代靜態 buy_threshold；mode B 報酬恢復 +47.37%。**殘留**：`run_simulation_scoring` 無顯式曝險獎勵，若改回靜態門檻偏誤會重現。 |
