@@ -432,9 +432,18 @@ python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold 
 
 1. **第一階段：技術指標與因子最佳化 (Optimize Factors)**
    - **目的**：搜尋最適合目前選定板塊與自選股的技術指標週期參數（如均線長短、RSI/KD天數等），使機器學習模型預測最準確。
-   - **執行指令**：`python auto_pipeline.py -s o`
+   - **執行指令**：`python auto_pipeline.py -s o`（**必須在模式 A，`BACKTEST_DATE="20250801"`**，確保 Optuna 評估窗口不碰 OOS 資料）
    - **產出**：儲存最佳技術指標參數至 `configs/best_factors.json`。
-   - **後續步驟**：執行特徵重建 `python auto_pipeline.py -s f` 與模型重新訓練 `python auto_pipeline.py -s t`，以將新因子應用到特徵數據與模型中。
+   - **後續步驟**：執行特徵重建與模型重訓，再跑 OOS 回測驗證因子是否真的更好：
+     ```powershell
+     python auto_pipeline.py -s f   # 用新因子重建特徵
+     python auto_pipeline.py -s t   # 重訓模型
+     python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000  # OOS 驗證
+     ```
+   - **決策規則**：拿 OOS 結果（報酬 / MDD）與當前基準（**+90.78% / MDD -18.50%**）比較：
+     - 新因子 OOS 報酬更高且 MDD 未明顯惡化 → 保留新 `best_factors.json`，繼續使用
+     - 沒有改善或 MDD 更大 → 還原舊 `best_factors.json`，維持現狀
+   - **⚠️ 注意**：`Auto_RUN.py`（模式 B）的因子優化評估窗口含近期牛市，分數天然偏高，**沒有乾淨 OOS 可以驗**，不能與模式 A 的分數直接比較，也不能作為因子好壞的決策依據。
 
 2. **第二階段：交易策略與避險風控最佳化 (Optimize Trading Params)**
    - **目的**：在模型預測力固定下，搜尋最佳的實戰交易風控參數（如個股停損線、大盤避險紅燈、移動止盈啟動線），以最大化獲利率並抑制最大回撤 (MDD)。
@@ -482,12 +491,13 @@ python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold 
         python auto_pipeline.py -s o
         ```
         *   *為什麼*：使用 Optuna 尋找最適合指定產業的技術指標參數（如均線窗口、KD週期），產生 `configs/best_factors.json`。
-    3.  **重建特徵工程與訓練模型**：
+    3.  **重建特徵工程與訓練模型，並立即跑 OOS 回測驗證因子**：
         ```powershell
-        python auto_pipeline.py -s f
-        python auto_pipeline.py -s t
+        python auto_pipeline.py -s f   # 用新 best_factors.json 重建特徵
+        python auto_pipeline.py -s t   # 重訓模型（截止 2025-08-01）
+        python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000  # OOS 驗證
         ```
-        *   *為什麼*：模型訓練會嚴格截斷在 2025-08-01 之前，確保模型不會有前視偏差。
+        *   *為什麼*：模型訓練嚴格截斷在 2025-08-01 之前，確保無前視偏差。OOS 回測（2025-08-02 起）是驗證新因子是否真的更好的唯一客觀依據——若 OOS 報酬高於基準 **+90.78%** 且 MDD 未惡化，保留新因子；否則還原舊 `best_factors.json`。`Auto_RUN.py`（模式 B）的因子優化分數因含近期牛市資料，無法作為比較基準，**勿直接拿來判斷因子優劣**。
     4.  **訊號層健康診斷**（`analyze_regime_stability.py`）：
         ```powershell
         python scripts/analyze_regime_stability.py
@@ -500,7 +510,7 @@ python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold 
         *   *為什麼*：搜尋結束日期必須鎖在 2025-08-01。讓 Optuna 在歷史多空震盪環境中優化出風控參數（如 `stop_loss = -8.0%`），不讓它偷看未來的超級牛市。
     6.  **樣本外（OOS）模擬交易回測**（`trading_sim.py`）：
         ```powershell
-        python trading_sim.py --start 2025-08-02 --end 2026-06-05 -c 2000000
+        python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000
         ```
         *   *為什麼*：使用步驟 5 優化出的 `configs/best_trading_params.json`，在完全沒看過的 OOS 超級牛市區間執行模擬交易。如果此時的 Return 與 MDD（Return - 2.0*MDD）依然非常優異，代表整個量化系統的泛化能力極強，即可準備進入實盤。
 
