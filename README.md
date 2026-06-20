@@ -13,6 +13,97 @@
 
 ---
 
+## ⚡ 日常操作速查
+
+> 不熟系統架構也能用。找到你的情境，照著跑就對了。
+
+### 🗓️ 每天 / 每週 / 定期要做什麼
+
+| 頻率 | 做什麼 | 指令 |
+| :--- | :--- | :--- |
+| **每天** 收盤後（約 15:40） | 下載資料 → 重訓模型 → 產生明日掛單建議 → 備份 | `python Auto_RUN.py` |
+| **每週** | 檢查模型訊號是否仍健康（RankIC / PSI） | `python scripts/analyze_regime_stability.py` |
+| **每季**（3 個月） | 輕量重訓（跳過因子調參，直接重建特徵與模型） | `python run_workflow_experiment.py --skip_factor_opt --fresh` |
+| **每年 / 重大事件後** | 完整重訓（含重新搜尋最佳技術指標） | `python run_workflow_experiment.py --fresh` |
+
+---
+
+### 📡 每天跑完 Auto_RUN.py 後，看 inference 輸出的這一行
+
+```
+[市況過濾器] regime=Bull | 買入門檻=5.0% | 動能混合: ✅ 啟用 (連續第 3 天)
+```
+
+| 動能混合顯示 | 意思 | 系統行為 |
+| :--- | :--- | :--- |
+| `✅ 啟用` | 牛市確認，動能排序開啟 | 選股 = 30% 模型分 + 70% 相對強度 |
+| `⏳ 確認中 (N/3 天)` | 剛進牛市，等待確認 | 純模型分排序，保守選股 |
+| `❌ 關閉` | 非牛市 | 純模型分排序，門檻自動提高 |
+
+明日掛單建議在 `predictions/prediction_<日期>.txt`。
+
+---
+
+### 🔬 想重新搜尋更好的技術指標因子
+
+**前提**：確認 `config.py` 中 `BACKTEST_DATE = "20250801"`（模式 A）
+
+```powershell
+python auto_pipeline.py -s o   # 搜尋最佳指標參數（可從上次結果暖啟動）
+python auto_pipeline.py -s f   # 用新因子重建特徵
+python auto_pipeline.py -s t   # 重訓模型
+python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000  # OOS 驗證
+```
+
+**判斷結果**：
+
+| OOS 結果 vs 基準（+90.78% / MDD -18.50%） | 決策 |
+| :--- | :--- |
+| 報酬更高 且 MDD 沒有明顯惡化 | 保留新 `configs/best_factors.json` |
+| 沒有改善 或 MDD 更大 | 還原舊 `best_factors.json`，維持現狀 |
+
+> ⚠️ `Auto_RUN.py` 每天自動跑的因子優化（模式 B）評估窗口含近期牛市，分數天然偏高，**不能拿來跟上面的 OOS 數字比較**。
+
+---
+
+### 🚨 週報（analyze_regime_stability.py）看到這些要注意
+
+| 指標 | 警告門檻 | 動作 |
+| :--- | :--- | :--- |
+| 60日滾動 RankIC | < 0.020 且連續下滑 | 🟡 加強監控，下週再確認 |
+| OOS RankIC | < 0.015 | 🟡 加強監控 |
+| PSI（特徵漂移） | > 0.25 | 🟡 加強監控 |
+| OOS RankIC | < 0（連續兩週） | 🔴 本週內跑 `run_workflow_experiment.py --skip_factor_opt --fresh` |
+| Mode A OOS 回測報酬 | < 0% | 🔴 本週內跑完整重訓 |
+| Stage C 下界報酬 | < -5% | ⛔ 立即暫停實倉，等重訓完再說 |
+
+---
+
+### 🔁 重訓完後必做兩件事
+
+```powershell
+# 1. 套用最新風控參數
+Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.json -Force
+
+# 2. 驗證 Stage C 下界仍 > 0%（跑不到正報酬就別投真錢，先 paper trading）
+python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000
+```
+
+---
+
+### 📊 目前系統績效基準（2026-06-21 更新）
+
+| 測試期間 | 報酬 | 最大回撤 |
+| :--- | :--- | :--- |
+| 完整 OOS（2025-08-02 ～ 2026-06-18） | **+90.78%** | -18.50% |
+| 2025 全年崩盤壓測（含 4 月關稅衝擊） | **+19.41%** | -16.07% |
+| Dec 2025 ～ Jun 2026（牛市段） | **+62.15%** | -15.17% |
+| 2024 全年 | **+44.71%** | -23.79% |
+
+> 模型特徵：86 個（含 `beta_60d`、`pct_from_52w_high`）。訓練截止 2025-08-01。
+
+---
+
 ## 🎯 系統核心特色
 
 > 傳統相對選股模型在「市場崩盤日」依然會滿倉買入（在全大跌日買入跌最少的股票），導致資產隨大盤沉淪。本系統透過三層防禦機制徹底解決這個問題。
