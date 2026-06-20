@@ -308,35 +308,67 @@ def main():
     
     # ── 9. SHAP & 特徵重要性漂移分析 (SHAP & Importance Drift) ──
     print("計算特徵重要性與 SHAP 漂移 (Step 4 & 4.5)...")
-    X_is = df_is.reindex(columns=feature_cols).astype(np.float32)
-    X_oos = df_oos.reindex(columns=feature_cols).astype(np.float32)
-    num_features = len(feature_cols)
-    contribs_is = model.predict(X_is, pred_contrib=True)
-    contribs_oos = model.predict(X_oos, pred_contrib=True)
-    class2_start = 2 * (num_features + 1)
-    shap_is = contribs_is[:, class2_start : class2_start + num_features]
-    shap_oos = contribs_oos[:, class2_start : class2_start + num_features]
-    shap_abs_is = np.mean(np.abs(shap_is), axis=0)
-    shap_abs_oos = np.mean(np.abs(shap_oos), axis=0)
-    shap_mean_is = np.mean(shap_is, axis=0)
-    shap_mean_oos = np.mean(shap_oos, axis=0)
-    gain_imp = model.feature_importance(importance_type="gain")
-    split_imp = model.feature_importance(importance_type="split")
-    sum_gain = sum(gain_imp) if sum(gain_imp) > 0 else 1.0
-    sum_split = sum(split_imp) if sum(split_imp) > 0 else 1.0
-    sum_shap_is = sum(shap_abs_is) if sum(shap_abs_is) > 0 else 1.0
-    gain_imp_pct = (gain_imp / sum_gain) * 100
-    split_imp_pct = (split_imp / sum_split) * 100
-    shap_imp_pct = (shap_abs_is / sum_shap_is) * 100
-    shap_drift_list = []
-    for j, feat in enumerate(feature_cols):
-        shap_drift_list.append({
-            "feature": feat, "gain_pct": gain_imp_pct[j], "split_pct": split_imp_pct[j],
-            "shap_is_pct": shap_imp_pct[j], "shap_is_abs": shap_abs_is[j], "shap_oos_abs": shap_abs_oos[j],
-            "shap_is_mean": shap_mean_is[j], "shap_oos_mean": shap_mean_oos[j], "shap_mean_drift": shap_mean_oos[j] - shap_mean_is[j]
-        })
-    df_shap_drift = pd.DataFrame(shap_drift_list).sort_values("shap_oos_abs", ascending=False).reset_index(drop=True)
-    
+    df_shap_drift = None
+    _shap_error_msg = None
+    try:
+        X_is = df_is.reindex(columns=feature_cols).astype(np.float32)
+        X_oos = df_oos.reindex(columns=feature_cols).astype(np.float32)
+        num_features = len(feature_cols)
+        contribs_is = model.predict(X_is, pred_contrib=True)
+        contribs_oos = model.predict(X_oos, pred_contrib=True)
+        class2_start = 2 * (num_features + 1)
+        shap_is = contribs_is[:, class2_start : class2_start + num_features]
+        shap_oos = contribs_oos[:, class2_start : class2_start + num_features]
+        shap_abs_is = np.mean(np.abs(shap_is), axis=0)
+        shap_abs_oos = np.mean(np.abs(shap_oos), axis=0)
+        shap_mean_is = np.mean(shap_is, axis=0)
+        shap_mean_oos = np.mean(shap_oos, axis=0)
+        gain_imp = model.feature_importance(importance_type="gain")
+        split_imp = model.feature_importance(importance_type="split")
+        sum_gain = sum(gain_imp) if sum(gain_imp) > 0 else 1.0
+        sum_split = sum(split_imp) if sum(split_imp) > 0 else 1.0
+        sum_shap_is = sum(shap_abs_is) if sum(shap_abs_is) > 0 else 1.0
+        gain_imp_pct = (gain_imp / sum_gain) * 100
+        split_imp_pct = (split_imp / sum_split) * 100
+        shap_imp_pct = (shap_abs_is / sum_shap_is) * 100
+        shap_drift_list = []
+        for j, feat in enumerate(feature_cols):
+            shap_drift_list.append({
+                "feature": feat, "gain_pct": gain_imp_pct[j], "split_pct": split_imp_pct[j],
+                "shap_is_pct": shap_imp_pct[j], "shap_is_abs": shap_abs_is[j], "shap_oos_abs": shap_abs_oos[j],
+                "shap_is_mean": shap_mean_is[j], "shap_oos_mean": shap_mean_oos[j], "shap_mean_drift": shap_mean_oos[j] - shap_mean_is[j]
+            })
+        df_shap_drift = pd.DataFrame(shap_drift_list).sort_values("shap_oos_abs", ascending=False).reset_index(drop=True)
+    except Exception as _shap_ex:
+        _shap_error_msg = str(_shap_ex)
+        print(f"[警告] SHAP 計算失敗，Section 7 將略過。原因: {_shap_error_msg}")
+
+    # ── 10.5 Regime 穩定性計算（使用 trading_sim 實際定義：N日趨勢，無 breadth）──
+    _no_backtest = "--no-backtest" in sys.argv or "--silent" in sys.argv
+    try:
+        from config import (
+            REGIME_BULL_TREND as _rbt, REGIME_BEAR_TREND as _rbr,
+            REGIME_TREND_WINDOW as _rtw, REGIME_TREND_MIN_PERIODS as _rtmp,
+        )
+    except ImportError:
+        _rbt, _rbr, _rtw, _rtmp = 0.0015, -0.002, 10, 5
+
+    _mkt2 = df.groupby("date")[["market_mean_pct"]].first().reset_index()
+    _mkt2["trend_sim"] = _mkt2["market_mean_pct"].rolling(window=_rtw, min_periods=_rtmp).mean()
+    _mkt2["regime_sim"] = np.select(
+        [_mkt2["trend_sim"] > _rbt, _mkt2["trend_sim"] < _rbr],
+        ["Bull", "Bear"], default="Sideways"
+    )
+    _mkt2["regime_block"] = (_mkt2["regime_sim"] != _mkt2["regime_sim"].shift()).cumsum()
+    _regime_persist = _mkt2.groupby("regime_block")["regime_sim"].agg(regime="first", length="count")
+    _n_transitions = (_mkt2["regime_sim"] != _mkt2["regime_sim"].shift()).sum()
+    _n_months = len(_mkt2) / 20
+    _transition_rate = _n_transitions / _n_months if _n_months > 0 else 0.0
+    _oos_sim = _mkt2[_mkt2["date"] > split_date]
+    _bull_ratio_oos = ((_oos_sim["regime_sim"] == "Bull").mean() * 100) if len(_oos_sim) > 0 else 0.0
+    _bull_persist = _regime_persist[_regime_persist["regime"] == "Bull"]["length"]
+    _phase3_ok = (_transition_rate <= 4.0) and (len(_bull_persist) > 0 and _bull_persist.median() >= 10)
+
     # ── 10. 生成診斷文字報告 ──
     os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
     with open(REPORT_PATH, "w", encoding="utf-8") as f_out:
@@ -411,19 +443,77 @@ def main():
         # 新增第 7 部分：SHAP 與特徵重要性漂移對比
         f_out.write("7. SHAP 與特徵重要性漂移 (SHAP & Importance Drift Top 15)\n")
         f_out.write("-" * 80 + "\n")
-        f_out.write(f"{'特徵名稱':<28} | {'Gain%':<6} | {'Split%':<6} | {'IS_SHAP_A':<9} | {'OOS_SHAP_A':<10} | {'IS_SHAP_M':<9} | {'OOS_SHAP_M':<10} | {'Drift(Mean)':<11}\n")
-        f_out.write("-" * 80 + "\n")
-        for idx, row in df_shap_drift.head(15).iterrows():
-            f_out.write(f"{row['feature']:<28} | {row['gain_pct']:5.1f}% | {row['split_pct']:5.1f}% | {row['shap_is_abs']:9.4f} | {row['shap_oos_abs']:10.4f} | {row['shap_is_mean']:+9.4f} | {row['shap_oos_mean']:+10.4f} | {row['shap_mean_drift']:+11.4f}\n")
-        f_out.write("-" * 80 + "\n")
-        f_out.write("診斷指引:\n")
-        f_out.write("- 比較 IS_SHAP_M 與 OOS_SHAP_M (SHAP Direction)，若正負號反轉，即為市場機制反轉之鐵證\n")
-        f_out.write("- 比較 Gain% (擬合) 與 OOS_SHAP_A (實質)，若 Gain% 高但 OOS SHAP 極低，說明特徵過度擬合且失效\n")
-            
+        if df_shap_drift is not None:
+            f_out.write(f"{'特徵名稱':<28} | {'Gain%':<6} | {'Split%':<6} | {'IS_SHAP_A':<9} | {'OOS_SHAP_A':<10} | {'IS_SHAP_M':<9} | {'OOS_SHAP_M':<10} | {'Drift(Mean)':<11}\n")
+            f_out.write("-" * 80 + "\n")
+            for idx, row in df_shap_drift.head(15).iterrows():
+                f_out.write(f"{row['feature']:<28} | {row['gain_pct']:5.1f}% | {row['split_pct']:5.1f}% | {row['shap_is_abs']:9.4f} | {row['shap_oos_abs']:10.4f} | {row['shap_is_mean']:+9.4f} | {row['shap_oos_mean']:+10.4f} | {row['shap_mean_drift']:+11.4f}\n")
+            f_out.write("-" * 80 + "\n")
+            f_out.write("診斷指引:\n")
+            f_out.write("- 比較 IS_SHAP_M 與 OOS_SHAP_M (SHAP Direction)，若正負號反轉，即為市場機制反轉之鐵證\n")
+            f_out.write("- 比較 Gain% (擬合) 與 OOS_SHAP_A (實質)，若 Gain% 高但 OOS SHAP 極低，說明特徵過度擬合且失效\n")
+        else:
+            f_out.write(f"[略過] SHAP 計算失敗，無法產生此區段。原因: {_shap_error_msg}\n")
+
+        # ── Section 8：Regime 穩定性驗證（交易實際定義：%dd趨勢，無 breadth）──
+        f_out.write(f"\n8. Regime 穩定性驗證（交易實際定義：{_rtw}日趨勢，無 breadth 條件）\n")
+        f_out.write("-" * 70 + "\n")
+        f_out.write(f"全期 Regime 切換頻率: {_transition_rate:.1f} 次/月（門檻：≤4 次/月）\n")
+        f_out.write(f"OOS 期間 Bull 佔比: {_bull_ratio_oos:.1f}%\n")
+        f_out.write("各 Regime 連續持續天數統計:\n")
+        for _rg in ["Bull", "Sideways", "Bear"]:
+            _sub = _regime_persist[_regime_persist["regime"] == _rg]["length"]
+            if len(_sub) > 0:
+                f_out.write(f"  {_rg:<10}: 中位數 {_sub.median():.0f} 天 | 最短 {_sub.min()} 天 | 最長 {_sub.max()} 天 | 段數 {len(_sub)}\n")
+        f_out.write("\nPhase 3 動能過濾前提條件判讀:\n")
+        if _phase3_ok:
+            f_out.write("  [通過] Bull 切換頻率可接受且持續天數充足 → Phase 3 動能過濾條件成立\n")
+        else:
+            _reason = []
+            if _transition_rate > 4.0:
+                _reason.append(f"切換頻率 {_transition_rate:.1f} 次/月 > 4 次/月")
+            if len(_bull_persist) == 0 or _bull_persist.median() < 10:
+                _reason.append(f"Bull 持續中位數 {_bull_persist.median():.0f} 天 < 10 天" if len(_bull_persist) > 0 else "無完整 Bull 段")
+            f_out.write(f"  [暫緩] {' / '.join(_reason)} → Phase 3 動能過濾風險高\n")
+        f_out.write("\n")
+
+    # ── Section 9：OOS 回測績效摘要（--silent / --no-backtest 時跳過）──
+    if not _no_backtest:
+        import contextlib, io as _sio
+        try:
+            from trading_sim import run_simulation
+            from config import MAX_POSITIONS, SIM_DEFAULT_CAPITAL
+            oos_start_str = (split_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+            oos_end_str   = df["date"].max().strftime("%Y-%m-%d")
+            print(f"\n[OOS 回測] 靜默執行 {oos_start_str} ~ {oos_end_str}，請稍候...")
+            _buf = _sio.StringIO()
+            with contextlib.redirect_stdout(_buf):
+                _ret, _mdd, _hist = run_simulation(
+                    start_date=oos_start_str, end_date=oos_end_str,
+                    initial_capital=SIM_DEFAULT_CAPITAL, max_positions=MAX_POSITIONS,
+                )
+            _calmar = abs(_ret / (_mdd * 100)) if _mdd > 0 else 0.0
+            _n_trades = sum(1 for h in _hist if h.get("portfolio_return", 0) != 0) if _hist else 0
+            with open(REPORT_PATH, "a", encoding="utf-8") as _fa:
+                _fa.write("9. OOS 回測績效摘要\n")
+                _fa.write("-" * 70 + "\n")
+                _fa.write(f"回測區間: {oos_start_str} ~ {oos_end_str}\n")
+                _fa.write(f"初始資金: {SIM_DEFAULT_CAPITAL:,} 元\n")
+                _fa.write(f"累計報酬率: {_ret:+.2f}%\n")
+                _fa.write(f"最大回撤 MDD: -{_mdd*100:.2f}%\n")
+                _fa.write(f"Calmar 比率: {_calmar:.2f}\n")
+                _fa.write("\n判讀門檻:\n")
+                _fa.write(f"  報酬 > 0% 且 MDD < 30% → 風控參數具泛化力\n")
+                _fa.write(f"  Calmar > 0.5 → 報酬/回撤比可接受\n")
+        except Exception as _e9:
+            with open(REPORT_PATH, "a", encoding="utf-8") as _fa:
+                _fa.write("9. OOS 回測績效摘要\n")
+                _fa.write(f"  [執行失敗] {_e9}\n")
+
     # 同步印出報告至控制台
     with open(REPORT_PATH, "r", encoding="utf-8") as f_in:
         print(f_in.read())
-        
+
     if "--silent" not in sys.argv:
         print(f"\n[成功] 診斷分析完成，完整報告已存檔至: {REPORT_PATH}\n")
 

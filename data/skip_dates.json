@@ -22371,32 +22371,16 @@
     "reason": "no_data",
     "confirmed_at": "2026-06-17"
   },
-  "chips_20260618": {
-    "reason": "no_data",
-    "confirmed_at": "2026-06-18"
-  },
-  "margin_20260618": {
-    "reason": "no_data",
-    "confirmed_at": "2026-06-18"
-  },
-  "sbl_20260618": {
-    "reason": "no_data",
-    "confirmed_at": "2026-06-18"
-  },
-  "twse_per_20260618": {
-    "reason": "no_data",
-    "confirmed_at": "2026-06-18"
-  },
   "daytrading_20260618": {
     "reason": "unexpected_format",
-    "confirmed_at": "2026-06-18"
+    "confirmed_at": "2026-06-20"
   },
   "fini_holding_20260618": {
-    "reason": "empty_response",
-    "confirmed_at": "2026-06-18"
+    "reason": "no_data",
+    "confirmed_at": "2026-06-20"
   },
   "credit_limit_20260618": {
     "reason": "no_data",
-    "confirmed_at": "2026-06-18"
+    "confirmed_at": "2026-06-20"
   }
 }

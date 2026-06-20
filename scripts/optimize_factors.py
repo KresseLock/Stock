@@ -81,7 +81,7 @@ import re
 # 識別 TA 欄位前綴 (這些欄位每輪都需重新計算)
 _TA_PREFIXES = (
     "boll_", "rsi", "macd", "atr", "vol_ma", "vol_ratio",
-    "ret1", "ret5", "amplitude"
+    "ret1", "ret5", "ret3", "ret20", "amplitude", "up_days_5",
 )
 _KD_PATTERN = re.compile(r'^[kd]\d+$')
 _MA_PATTERN = re.compile(r'^ma\d+$')
@@ -190,6 +190,11 @@ def compute_ta(df: pd.DataFrame, p: dict) -> pd.DataFrame:
         new_features["ret1"]      = c.pct_change(1)
         new_features["ret5"]      = c.pct_change(5)
         new_features["amplitude"] = (h - l) / (o + 1e-9)
+
+        # 多週期動能特徵
+        for w in [3, 10, 20]:
+            new_features[f"ret{w}"] = c.pct_change(w)
+        new_features["up_days_5"] = (c.diff() > 0).astype(int).rolling(5, min_periods=1).sum()
 
         result_dfs.append(g.assign(**new_features))
 

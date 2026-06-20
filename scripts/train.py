@@ -33,6 +33,7 @@ try:
         LGBM_SUBSAMPLE, LGBM_COLSAMPLE, LGBM_EARLY_STOPPING,
         SAMPLE_WEIGHT_DROP_THRESHOLD, SAMPLE_WEIGHT_PENALTY,
         DEFAULT_DECAY_LAMBDA,
+        EXCLUDE_FEATURES,
         BACKTEST_DATE,
     )
     N_JOBS = TRAIN_N_JOBS
@@ -44,6 +45,7 @@ except ImportError:
     LGBM_EARLY_STOPPING = 30
     SAMPLE_WEIGHT_DROP_THRESHOLD = -0.05; SAMPLE_WEIGHT_PENALTY = 2.0
     DEFAULT_DECAY_LAMBDA = 0.002
+    EXCLUDE_FEATURES = []
     BACKTEST_DATE = None
 
 # 共用過濾工具
@@ -185,7 +187,8 @@ def main():
     ignore_cols = ["stock_id", "date"] + label_cols + ret_cols
     numeric_cols = df.select_dtypes(include=[np.number, bool]).columns
     feature_cols = [c for c in numeric_cols if c not in ignore_cols]
-    
+    feature_cols = [c for c in feature_cols if c not in EXCLUDE_FEATURES]
+
     # 統一將特徵轉為 float32
     df[feature_cols] = df[feature_cols].astype(np.float32)
     

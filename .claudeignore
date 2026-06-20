@@ -63,6 +63,8 @@ reports/*
 !reports/workflow_experiment_results.json
 !reports/mode_a_regime_stability_report.txt
 predictions/
+*.7z
+*.zip
 
 # rclone 雲端密鑰與設定檔 (防外洩)
 config
@@ -73,4 +75,4 @@ rclone.conf
 rclone.conf.bak
 
 # 本地臨時/除錯腳本
-scratch/
+scratch/
