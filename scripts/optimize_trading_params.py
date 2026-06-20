@@ -345,9 +345,66 @@ def main():
             return score
 
         study = optuna.create_study(direction="maximize")
-        
+
+        # 暖啟動：若存在上一輪結果，將最佳參數 enqueue 為 trial #0，
+        # 讓 TPE 從已知好解附近展開搜尋，避免浪費前幾輪在純隨機探索。
+        if os.path.exists(RESULT_PATH):
+            try:
+                with open(RESULT_PATH, encoding="utf-8") as _f:
+                    _prev = json.load(_f)
+                _prev_params = _prev.get("best_params", {})
+                if _prev_params:
+                    # 確認與目前搜尋模式相容（regime / 非 regime）
+                    if args.regime:
+                        _expected = {"sell_threshold", "stop_loss", "panic_ma5", "panic_breadth",
+                                     "ts_activation", "ts_pullback", "min_hold_days", "markup_pct",
+                                     "regime_bull_buy", "regime_sideways_buy",
+                                     "regime_bull_trend", "regime_bear_trend"}
+                    else:
+                        _expected = {"sell_threshold", "stop_loss", "panic_ma5", "panic_breadth",
+                                     "ts_activation", "ts_pullback", "min_hold_days", "markup_pct",
+                                     "buy_threshold"}
+                    _filtered = {k: v for k, v in _prev_params.items() if k in _expected}
+                    if len(_filtered) == len(_expected):
+                        study.enqueue_trial(_filtered)
+                        print(f"  [暖啟動] 已從上輪結果載入最佳參數作為起點（得分: {_prev.get('best_score', '?')}）")
+                    else:
+                        print("  [暖啟動] 上輪使用不同模式（regime/非regime），跳過暖啟動")
+            except Exception as _e:
+                print(f"  [暖啟動] 讀取失敗，跳過（{_e}）")
+
         import threading
         _print_lock = threading.Lock()
+
+        def _save_checkpoint(study, trial):
+            """發現新最佳解時立即寫入 JSON，防止中途中斷遺失進度。"""
+            try:
+                _bt = study.best_trial
+                _chk = {
+                    "best_score": study.best_value,
+                    "optimized_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "date_range": f"{args.start} to {args.end}",
+                    "best_params": _bt.params,
+                    "overall_metrics": {
+                        "return_pct": _bt.user_attrs.get("overall_return", 0.0),
+                        "mdd_pct": _bt.user_attrs.get("overall_mdd", 0.0)
+                    },
+                    "regime_metrics": {
+                        r: {
+                            "days": _bt.user_attrs.get(f"regime_days_{r}", 0),
+                            "return_pct": _bt.user_attrs.get(f"regime_ret_{r}", 0.0),
+                            "mdd_pct": _bt.user_attrs.get(f"regime_mdd_{r}", 0.0),
+                            "alpha_pct": _bt.user_attrs.get(f"regime_alpha_{r}", 0.0),
+                            "spread_pct": _bt.user_attrs.get(f"regime_spread_{r}", 0.0),
+                            "score": _bt.user_attrs.get(f"regime_score_{r}", 0.0)
+                        }
+                        for r in ["Bull", "Bear", "Sideways"]
+                    }
+                }
+                with open(RESULT_PATH, "w", encoding="utf-8") as _f_chk:
+                    json.dump(_chk, _f_chk, indent=4, ensure_ascii=False)
+            except Exception:
+                pass  # 不因存檔失敗而中斷優化
 
         def callback(study, trial):
             try:
@@ -355,7 +412,7 @@ def main():
                 val = trial.value if trial.value is not None else -999.0
                 best = study.best_value
                 is_best = abs(val - best) < 1e-6
-                
+
                 if is_best or n % 50 == 0 or n == 1:
                     tag = " << 新最佳解!" if is_best else ""
                     sub_info = []
@@ -363,7 +420,7 @@ def main():
                         sub_score = trial.user_attrs.get(f"regime_score_{r}", 0.0)
                         sub_info.append(f"{r}:{sub_score:.2f}")
                     sub_str = " | ".join(sub_info)
-                    
+
                     tp = trial.params
                     if "regime_bull_buy" in tp:
                         buy_str = (f"市況門檻[多:{tp['regime_bull_buy']}/盤:{tp['regime_sideways_buy']}]% "
@@ -386,7 +443,15 @@ def main():
                         )
             except Exception:
                 pass
-            
+
+            # 新最佳解即時寫入 checkpoint（在 print lock 外執行，不卡輸出）
+            try:
+                val = trial.value if trial.value is not None else -999.0
+                if study.best_value is not None and abs(val - study.best_value) < 1e-6:
+                    _save_checkpoint(study, trial)
+            except Exception:
+                pass
+
             if EARLY_STOPPING_ROUNDS is not None and EARLY_STOPPING_ROUNDS > 0:
                 try:
                     best_trial_number = study.best_trial.number
