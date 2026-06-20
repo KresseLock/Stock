@@ -152,6 +152,12 @@ def main(target_date_str=None):
     # ── 市況過濾器：依最新日(D) regime 動態決定隔日買入門檻 (與 trading_sim 同邏輯、無前視) ──
     eff_buy_threshold = BUY_THRESHOLD
     current_regime = "靜態"
+    consecutive_bull_days = 0
+    momentum_active = False
+    try:
+        from config import MOMENTUM_BULL_CONFIRM_DAYS
+    except ImportError:
+        MOMENTUM_BULL_CONFIRM_DAYS = 5
     if REGIME_ADAPTIVE_ENABLED and "market_mean_pct" in df.columns:
         _trend = df.groupby("date")["market_mean_pct"].first().sort_index().rolling(window=REGIME_TREND_WINDOW, min_periods=REGIME_TREND_MIN_PERIODS).mean()
         t20 = _trend.get(latest_date, _trend.iloc[-1] if len(_trend) else 0.0)
@@ -161,7 +167,24 @@ def main(target_date_str=None):
             from utils import get_regime_label
         current_regime = get_regime_label(t20, REGIME_BULL_TREND, REGIME_BEAR_TREND)
         eff_buy_threshold = REGIME_BUY_THRESHOLD.get(current_regime, BUY_THRESHOLD)
-        print(f"  [市況過濾器] 最新日 regime = {current_regime} (趨勢t20={t20:+.4f}) → 買入門檻動態調整為 {eff_buy_threshold:.1f}%")
+
+        # Hysteresis：往回數連續 Bull 天數（stateless，每日從資料重算，無需跨日持久化）
+        _trend_clean = _trend.dropna()
+        for _t in reversed(_trend_clean.values):
+            if get_regime_label(float(_t), REGIME_BULL_TREND, REGIME_BEAR_TREND) == 'Bull':
+                consecutive_bull_days += 1
+            else:
+                break
+        momentum_active = (current_regime == 'Bull' and consecutive_bull_days >= MOMENTUM_BULL_CONFIRM_DAYS)
+
+        _momentum_status = (
+            f"✅ 啟用 (30/70 RS_20d，連續第 {consecutive_bull_days} 天)"
+            if momentum_active else
+            f"⏳ 確認中 (Bull {consecutive_bull_days}/{MOMENTUM_BULL_CONFIRM_DAYS} 天，純模型排序)"
+            if current_regime == 'Bull' else
+            "❌ 關閉 (非 Bull，純模型排序)"
+        )
+        print(f"  [市況過濾器] regime={current_regime} (t20={t20:+.4f}) | 買入門檻={eff_buy_threshold:.1f}% | 動能混合: {_momentum_status}")
 
     target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     ignore_cols = ["stock_id", "date"] + target_cols
@@ -367,7 +390,14 @@ def main(target_date_str=None):
         (~results_market["stock_id"].isin(sells_sids)) &
         (~results_market["stock_id"].astype(str).isin(etf_set))
     )
-    buy_candidates = results_market[buy_cond].sort_values("Day1_net", ascending=False).head(5)
+    # Hysteresis 動能混合：連續 Bull 確認後才用 RS_20d 重排序（與 trading_sim 邏輯一致）
+    if momentum_active and "RS_20d" in results_market.columns:
+        _rs_rank = results_market["RS_20d"].rank(pct=True, na_option='bottom') * 100
+        results_market = results_market.copy()
+        results_market["_sort_score"] = 0.30 * results_market["Day1_net"] + 0.70 * _rs_rank
+        buy_candidates = results_market[buy_cond].sort_values("_sort_score", ascending=False).head(5)
+    else:
+        buy_candidates = results_market[buy_cond].sort_values("Day1_net", ascending=False).head(5)
     
     if buy_candidates.empty:
         output_lines.append("     全市場無符合條件之標的")

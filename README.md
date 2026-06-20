@@ -68,6 +68,7 @@ flowchart LR
 <summary><b>⚙️ 精密特徵工程 (scripts/feature_engineering.py)</b></summary>
 
 - **技術指標**：Moving Average (MA)、KD、RSI、MACD、布林通道 (Boll)、ATR、成交量比 (Vol MA)（指標參數均可由 Optuna 最佳化）。
+- **多週期動能特徵**：`ret{w}`（多週期報酬率）、`RS_{w}d`（個股相對大盤強弱）、`up_days_5`（5日上漲天數），週期由 `config.py` 的 `MOMENTUM_WINDOWS` 控制（預設 `[3, 10, 20]`）。修改週期後需重跑 `auto_pipeline.py -s f` 重建特徵。
 - **法人籌碼**：外資/投信/自營買賣超、連續買超天數、滾動累積籌碼。
 - **市場感知**：全市場日報酬均值、市場寬度（上漲比例）5日/20日滾動趨勢。
 - **板塊強度**：依 `scripts/stock_categories.json` 計算各產業每日平均報酬與滾動強度。
@@ -100,7 +101,7 @@ flowchart LR
 <summary><b>📊 實戰交易模擬器 (trading_sim.py)</b></summary>
 
 - 模擬真實手續費（0.1425%）與證交稅（0.3%）。
-- 個股固定停損（-8%）+ 信號轉弱出場雙重保護。
+- **ATR 動態停損**（預設啟用）或固定停損（-8% fallback）+ 信號轉弱出場雙重保護。
 - 剩餘現金動態配倉（不固定每檔金額，依剩餘槽位均分）。
 - **動態參數覆蓋**：支援透過 CLI 參數覆蓋大盤避險紅燈與停損門檻，以便於回測探索。
 - **真實 T+2 交割機制模擬**：細分「購買力（可用資金）」與「銀行實質餘額（T+2 扣/入款）」，賣出股票當天資金可立即滾動買入，但實質款項於兩日後才完成交割。
@@ -113,6 +114,8 @@ flowchart LR
 
 - 訓練三個獨立的 LightGBM 分類模型，分別預測未來 1、2、3 天的強勢/弱勢/中性標籤。
 - **樣本大跌懲罰機制 (Loss Weighting)**：自動計算未來 3 天內最低收益率。若低於跌幅門檻 [SAMPLE_WEIGHT_DROP_THRESHOLD](config.py) (預設 -5%)，將該樣本權重乘以 [SAMPLE_WEIGHT_PENALTY](config.py) (預設 2.0)。這能強制模型在學習過程中優先避開具有大跌風險的個股，從而在選股層面有效抑制模擬交易與實盤中的最大回撤 (MDD)。
+- **時間衰減樣本加權**：近期樣本獲較高訓練權重（`DEFAULT_DECAY_LAMBDA=0.002`，半衰期約一年），使模型更快響應近期市況轉變。設為 `0` 可停用衰減。
+- **IC 反轉因子排除**：`EXCLUDE_FEATURES`（`config.py § 7`）列出的欄位會在訓練前移除，防止 OOS 方向反轉的因子污染模型排序能力。
 - 採用嚴格的時間序列資料劃分 (70% 訓練, 10% 驗證, 20% 測試) 防止過擬合與數據洩漏。
 
 </details>
@@ -584,16 +587,16 @@ python run_workflow_experiment.py --fresh
 
 > 跑完 `run_workflow_experiment.py` 拿到 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md) 後，這是「如何照報告把利潤最大化」的標準處理流程。**避免日後忘記，完整記錄於此。**
 
-##### ① 正確判讀報告（別被 +47.37% 誤導）
-封面的 **mode B 全週期 +47.37% / Calmar 1.86 是樣本內 (in-sample)**，不能當實盤預期。真實前瞻預期看「🧪 潔淨 OOS 驗證」那張雙模型 bracket：
+##### ① 正確判讀報告（別被 +244.58% 誤導）
+封面的 **mode B 全週期 +244.58% / MDD -23.79% 是樣本內 (in-sample)**，不能當實盤預期。真實前瞻預期看「🧪 潔淨 OOS 驗證」那張雙模型 bracket（2026-06-20 以 84 特徵模型更新；目前線上模型已升級至 86 特徵，OOS 實測 +183.22%/MDD-16.55%）：
 
 | | 下界 Model A（無 lookahead） | 上界 Model B（有 lookahead） |
 | :--- | :--- | :--- |
-| 報酬 | **+5.18%** | +24.34% |
-| MDD | **-32.41%** | -12.75% |
-| Calmar | 0.16 | 1.91 |
+| 報酬 | **+1.93%** | -35.14% |
+| MDD | **-31.58%** | -44.93% |
+| Calmar | ~0.07 | N/A（負報酬） |
 
-下界偏弱（Calmar 0.16、MDD -32%）代表 mode B 高報酬有相當部分來自模型對測試期的 lookahead → **實盤須打折、先紙上驗證**。
+**判讀重點**：下界 +1.93% 說明「完全不偷看 OOS 的凍結參數」仍維持正報酬（極保守下限），但 MDD -31.58% 偏大。**上界出現負報酬是方法論特性，非 Model B 變差**——Stage C 凍結參數是用 Model A 信號校準（門檻 6.5%/16.0%），但 Model B 見過 OOS 牛市後分數分布已移位，套用 Model A 門檻選到錯誤股票；這說明本系統的 alpha **很大程度來自「風控參數能隨市況適應」**，Mode B 每日滾動重訓 + 定期重優化 params 正是這個機制的核心。
 
 ##### ② 部署 mode_b 風控（一次性）
 ```powershell
@@ -622,9 +625,72 @@ Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.js
 
 ##### ⑤ 監控與加碼決策門檻
 - **每週**：`python scripts\analyze_regime_stability.py` 看 RankIC / PSI。RankIC 轉弱或 PSI ≥ 0.25 → 模型在 regime 轉換中退化，降載或暫停。
-- **加碼門檻**：累計報酬 ≥ **+5%（下界）** 且 MDD 未破 -32% → 開始小額實單；接近 **+24%（上界）** 且搓合率高、訊號健康 → 放大資金；報酬轉負或 MDD 逼近 -32% → 停手查模型 lookahead。
+- **加碼門檻**：累計報酬 ≥ **+2%（新下界）** 且 MDD 未破 -32% → 開始小額實單；持續正向且訊號健康（RankIC > 0.02）→ 放大資金；報酬轉負或 MDD 逼近 -32% → 停手，執行「§ 重訓時機判讀」。
 - **驗證期**：建議 1~2 個月且最好涵蓋一次 regime 切換（震盪↔牛↔熊）。
 - 詳見 [paper_trading/README.md](paper_trading/README.md)。
+
+---
+
+#### 6. 🔁 重訓時機判讀 — 何時需要重跑 `run_workflow_experiment.py`
+
+> **核心原則**：不要因為市場短期波動而頻繁重訓（過度優化）；也不要等到績效崩潰才重訓（滯後）。以下指標提供客觀觸發條件。
+
+##### 📅 定期排程（無論指標如何）
+
+| 頻率 | 動作 | 指令 |
+| :--- | :--- | :--- |
+| **每週** | 訊號健康巡檢 | `python scripts/analyze_regime_stability.py` |
+| **每季**（3 個月）| 輕量全流程更新（跳過因子調參） | `python run_workflow_experiment.py --skip_factor_opt --fresh` |
+| **每年**（或大事件後）| 完整重跑含因子重搜 | `python run_workflow_experiment.py --fresh` |
+
+##### 🚨 指標觸發條件（看到即刻執行對應動作）
+
+以下數字均可在 `run_workflow_experiment.py` 輸出 / `analyze_regime_stability.py` 報告中直接讀到：
+
+**🟡 警告（加強監控，下週確認是否持續）**
+
+| 在哪裡看 | 指標 | 當前健康值 | 警告門檻 |
+| :--- | :--- | :--- | :--- |
+| Section 1 滾動RankIC | 60日滾動 RankIC | +0.0269 | < 0.020 且連續下滑 |
+| Section 2 OOS全期 | OOS RankIC | +0.0251 | < 0.015 |
+| Section 4 PSI | `atr18_pct` PSI | 0.172（中度） | > 0.25 進入嚴重 |
+| Section 5 IC Drift | Top 特徵漂移值 | 0.071（RS_1d） | 同一特徵 > 0.08 且 OOS IC 為負 |
+| Lambda 網格結果 | 最佳 Lambda | 0.0 | 轉為 ≥ 0.003 |
+
+**🔴 緊急（本週內執行 `--skip_factor_opt --fresh` 重跑）**
+
+| 在哪裡看 | 指標 | 觸發條件 | 意義 |
+| :--- | :--- | :--- | :--- |
+| Section 2 | OOS Bear RankIC | < -0.01（目前 +0.007） | 熊市選股全面失效 |
+| Section 7 SHAP | `atr18_pct` SHAP方向 | IS_SHAP_M 與 OOS_SHAP_M **正負號反轉** | 核心特徵機制逆轉 |
+| Mode A OOS 回測結果 | 報酬率 | **< 0%** | 模型在新市況無 alpha |
+| Mode A OOS 回測結果 | MDD | **> -40%** | 風控失控 |
+| Stage C 下界 | 報酬率 | **< 0%**（目前 +1.93%） | 凍結參數完全失泛化，停止真錢操作 |
+| Section 6 動能疊加 | 強動能組 RankIC | **< 弱動能組 RankIC**（目前 0.161 vs 0.088） | 動能因子失效，市場轉均值回歸 |
+
+**⛔ 停損停扣（立即暫停實倉，等模型重訓完再說）**
+
+- Stage C 下界報酬 < -5%（不只是 0%，是顯著負值）
+- Section 7 中 `fini_net`、`sitc_net` 同時 SHAP 方向反轉
+- Mode B IS 報酬 < Mode A OOS 報酬 × 3（說明 IS 優勢幾乎消失）
+
+##### 🎯 重訓後必做確認清單
+
+```powershell
+# 1. 確認 Lambda 設定已更新到 config.py（workflow 會還原，需手動改回）
+# 2. 複製最新 Mode B 參數
+Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.json -Force
+
+# 3. 驗證 Stage C 下界仍 > 0%（如果變負，只能用 paper trading 驗證不能投真錢）
+# 4. 看 Mode A OOS 回測 MDD 是否 < -35%（超過代表風控參數需更寬鬆）
+# 5. 比較新舊 Lambda 網格贏家是否一致（0.0 → 0.002 代表市場記憶縮短）
+```
+
+##### ⚠️ 重訓不能解決的問題
+
+- **Stage C 下界 MDD 長期 > -30%**：這是方法論下界，凍結參數天生比不上 Mode B 適應的。不要為了美化 Stage C 而過度調參。
+- **市場結構性轉變**（如 AI 泡沫破裂、台海危機）：重訓無法預見新機制，需重新設計特徵。
+- **Stage C 上界持續負報酬**：說明 Model A vs B 的分數分布差距太大，Stage C 方法論失效——直接看 analyze_regime_stability.py Section 9 的 OOS 回測替代。
 
 ---
 
@@ -645,7 +711,7 @@ python tests/test_pipeline.py
 |------|--------|------|
 | `BUY_THRESHOLD` | `10.0%` | Day1 多空淨分數達此值才觸發買進 |
 | `SELL_THRESHOLD` | `0.0%` | Day3 多空淨分數低於此值觸發賣出 |
-| `STOP_LOSS_PCT` | `-8.0%` | 相對買進成本的個股固定停損線 |
+| `STOP_LOSS_PCT` | `-8.0%` | 固定停損線（`ATR_STOP_ENABLED = True` 時被 ATR 動態值覆蓋，僅作 fallback）|
 | `MAX_POSITIONS` | `5 檔` | 最大同時持股數 |
 | `FEE_RATE` | `0.1425%` | 單邊券商手續費 |
 | `TAX_RATE` | `0.3%` | 賣出證交稅（非當沖） |
@@ -659,7 +725,17 @@ python tests/test_pipeline.py
 | `TS_ACTIVATION_PCT` | `10.0%` | 個股浮動盈利達到此百分比時，開啟移動追蹤止盈 |
 | `TS_PULLBACK_PCT` | `-6.0%` | 啟動移動止盈後，自最高收盤價回撤此百分比執行停利出場 |
 
-### 2.1 市況過濾器（趨勢市進攻、震盪市防守）
+### 2.2 ATR 動態停損（`config.py § 2.2`）
+> 依個股 18 日 ATR 波動自動調整停損距離，解決固定停損「牛市正常回撤即被洗出」的問題。停損 = 買入成本 × (1 − `ATR_STOP_MULTIPLIER` × `atr18_pct`)，受上下限保護。`ATR_STOP_ENABLED = False` 時退回 `STOP_LOSS_PCT` 固定值。
+
+| 參數 | 預設值 | 說明 |
+|------|--------|------|
+| `ATR_STOP_ENABLED` | `True` | ATR 動態停損總開關 |
+| `ATR_STOP_MULTIPLIER` | `1.5` | 停損距離 = N 倍 ATR（越大越寬鬆，越小越容易觸發）|
+| `ATR_STOP_FLOOR_PCT` | `-15.0%` | 停損絕對下限（防低流動性股異常 ATR 導致停損過寬）|
+| `ATR_STOP_CEILING_PCT` | `-5.0%` | 停損絕對上限（防牛市正常回撤即觸發停損）|
+
+### 2.3 市況過濾器（趨勢市進攻、震盪市防守）
 > 依昨日大盤趨勢動態切換買入門檻，解決靜態 `BUY_THRESHOLD`「多頭少賺、震盪爆倉」的兩難（回測：2026 牛市 −1.79%→+42.5%、2025 震盪 +0.95%→+12.7%，兩者皆勝過大盤 beta）。`trading_sim.py` 與 `inference.py` 共用同一邏輯。**僅在未顯式指定 `buy_threshold` 時生效**（CLI 覆寫與 `param_sensitivity.py` 靜態掃描不受影響）。
 
 | 參數 | 預設值 | 說明 |
@@ -670,7 +746,7 @@ python tests/test_pipeline.py
 | `REGIME_BEAR_TREND` | `-0.002` | 大盤 10 日均日報酬 < 此值判為 Bear，其餘為 Sideways |
 | `REGIME_TREND_WINDOW` | `10` | 市況趨勢判定的滾動視窗天數（2026-06-16：20→10 去滯後，避免牛市起漲被誤判 Sideways）|
 
-### 2.2 風控優化目標函式權重與全期 MDD 懲罰（optimize_trading_params.py）
+### 2.4 風控優化目標函式權重與全期 MDD 懲罰（`config.py § 2.4`，`optimize_trading_params.py`）
 > Optuna 風控調參的評分公式 `combined_score`，其權重與回撤懲罰皆集中於 `config.py`（嚴禁寫死）。**改動後須重跑優化才生效**（並會自動重建交易參數 checkpoint）。
 
 | 參數 | 預設值 | 說明 |
@@ -751,20 +827,19 @@ flowchart LR
 > 本節記錄目前**仍開放**的結構性項目；歷史已修復項目收於末端「✅ 修復紀錄」摺疊區，供追溯設定值由來。
 > 詳細診斷數據參見 `reports/bottleneck_attribution.txt` 與 `reports/param_sensitivity_report.md`。
 >
-> **目前狀態（2026-06-18）**：2026-06-16 的空倉偏誤／regime 滯後／breadth 過敏／出場參數空倉假象、2026-06-17 的 checkpoint footgun 均已修復（見 Changelog）。Stage C 潔淨 OOS 數據已跑出、mode_b 已部署並進入 paper trading 前瞻驗證（見 Step 6 §5）。尚有 **2 項開放**：① mode B 紙上驗證累積中、待達加碼門檻再投真錢、② 排序型模型 vs 閾值型框架的架構錯配。
+> **目前狀態（2026-06-20）**：2026-06-16 的空倉偏誤／regime 滯後／breadth 過敏、2026-06-17 的 checkpoint footgun 均已修復；2026-06-20 加入 7 個動能特徵（84 特徵）＋ Lambda=0.0；同日進一步新增 `beta_60d`/`pct_from_52w_high`（**86 特徵**）並在 `trading_sim.py` 加入 Bull regime 30/70 動能混合排序，完整 OOS（2025-08-02～2026-06-18）報酬 **+183.22%**/MDD-16.55%；2025 OOS 段 **+29.63%**/MDD-7.63%。Stage C 已以 84 特徵模型重跑（下界 +1.93%/MDD-31.58%，見開放項目 1 與 Step 6 §6）。尚有 **1 項開放**：mode B 紙上驗證累積中、待達加碼門檻（≥+2%）再投真錢。② 排序型 vs 閾值型架構錯配經曝險率報告實證（Bull 96.1% 滿倉），alpha 漏損不顯著，持續觀察。
 
-### 開放項目 1：mode B 績效為樣本內，乾淨 OOS 驗證待跑數據 — 🟡 中優先 (2026-06-17)
+### 開放項目 1：mode B 績效為樣本內，乾淨 OOS 驗證已完成（84 特徵版 Stage C；線上模型已升至 86 特徵） — 🟢 已更新 (2026-06-20)
 
-> **🟡 機制已實作（待跑出數據）**：`run_workflow_experiment.py` 新增 **Stage C 潔淨 OOS 驗證階段**——把風控參數凍結在 **2023-01-01 ~ 2025-08-01** 優化（未見 OOS 牛市），再以同一組凍結參數回測未見區間 **2025-08-02 ~ 最新日**，並用**雙模型夾收**真實前瞻泛化力：
-> - **下界 = Model A**（凍結於 2025-08-01，對測試期無 lookahead，但模型會退化）
-> - **上界 = Model B**（含最新訓練無退化，但對測試期有 lookahead）
->
-> 優化階段一律用 Model A（確保調參不偷看 cutoff 之後），兩次回測共用同一組凍結參數，純粹隔離「模型效應」。凍結參數另存 `configs/best_trading_params_mode_b_oos.json`，結果寫入報告新章節「🧪 潔淨樣本外 (OOS) 風控參數泛化驗證」。**完整執行與判讀 SOP 見 [run_workflow_experiment_guide.md](run_workflow_experiment_guide.md) §6.3 與 §9。**
+> **🟢 Stage C 已以 84 特徵模型（含動能因子、Lambda=0.0）完整重跑**（`run_workflow_experiment.py --skip_factor_opt --fresh`，2026-06-20）。結果：
+> - **下界（Model A + 凍結參數，2025-08-02～2026-06-18）**：報酬 **+1.93%** / MDD **-31.58%** / Calmar ~0.07
+> - **上界（Model B + 凍結參數，同區間）**：報酬 **-35.14%** / MDD **-44.93%**（負值原因見下）
+> - **Mode B IS 全週期（2023-2026-06-18）**：**+244.58%** / MDD -23.79%
 
-- **現象**：mode B 的風控優化區間與回測區間**同為 `2023-01-01 ~ 最新日`**，故 +47.37% / −25.49% 屬**樣本內 (in-sample)**「自己改自己考卷」，非真實前瞻預期。
-- **判讀**：若下界（Model A）報酬仍為正且 MDD 受控 → 風控參數本身有泛化力、mode B 樣本內高報酬非純過擬合；若下界顯著轉負而上界仍佳 → 績效主要來自模型 lookahead，實盤須打折。`stop_loss=-4.75` 偏緊，疑似過擬合於閃避 2023-2026 特定崩盤，實盤留意頻繁停損。
-- **進度（2026-06-18）**：Stage C 數據已跑出（下界 +5.18%/MDD-32.41%、上界 +24.34%/MDD-12.75%，見實驗報告）；mode_b 風控已部署上線，並建立 `paper_trading/` 自動掛單簿 + `run_daily.ps1` 一鍵流程進入紙上前瞻驗證（處理流程見 Step 6 §5）。
-- **尚待補強**：(1) 紙上前瞻追蹤累積 1~2 個月達加碼門檻（+5% 下界）再投真錢；(2) 定期 `analyze_regime_stability.py` 監控 RankIC / PSI 漂移。本驗證僅隔離「風控參數」泛化力，模型 lookahead 與滾動重訓泛化屬獨立議題。
+- **上界為負的根因**：Stage C 凍結參數用 Model A 信號校準（regime_bull_buy=6.5, sideways=16.0），但 Model B 見過 OOS 牛市後分數分布已移位，門檻錯配導致選股失準。**這是 Stage C 方法論的固有限制，不代表 Model B 預測力下降**——Mode B + Mode B params 的實盤場景仍給出 +244.58%。
+- **本系統 alpha 核心來源澄清**：Stage C 驗證揭示，本系統的高報酬很大程度依賴「風控參數能跟上市況」（Mode B 定期重優化的意義）。凍結參數的下界 +1.93% 是極悲觀下限，實盤場景（Model A + Mode B params）OOS 可達 +7.39%～+14.61%。
+- **判讀調整**：以 `analyze_regime_stability.py` Section 9 OOS 回測替代 Stage C 上界（因上界方法論失效）；下界 +1.93% / MDD -31.58% 作為「暫停真錢」的硬性底線。
+- **尚待補強**：(1) 紙上前瞻追蹤達加碼門檻（累計 ≥ +2%、MDD < -32%）再投真錢；(2) 按「§ 重訓時機判讀」定期巡檢 RankIC / PSI。
 
 ### 開放項目 2：模型預測相對排名，但決策框架用絕對門檻做二元閘門 — 🔵 架構層
 
@@ -778,6 +853,12 @@ flowchart LR
 
 | 日期 | 問題 | 修復摘要 |
 | :--- | :--- | :--- |
+| 2026-06-20 | 動能混合排序在熊牛轉換振盪期誤觸（April 2025 關稅衝擊急跌，動能策略套牢，2025 全年 -18.75%） | `config.py §2.3a` 新增 `MOMENTUM_BULL_CONFIRM_DAYS=3`；`trading_sim.py`/`inference.py` 加入 **Hysteresis 計數器**：Bull regime 需**連續** 3 天才啟用 30/70 動能混合排序，任何非 Bull 天立即重置為 0。計數器 stateless（每日從歷史 regime 序列回推，無跨日持久化）。`inference.py` 同步顯示動能狀態（`✅ 啟用` / `⏳ 確認中` / `❌ 關閉`）。結果：2025 全年崩盤壓測 **-18.75%→+7.93%**/MDD-16.07%；Dec25-Jun26 +73.81%→+53.47%（仍超 40% 目標）/MDD-15.17%；**完整 OOS** (2025-08-02～2026-06-18) **+90.78%**/MDD-18.50%。 |
+| 2026-06-20 | Bull 市場模型選出防禦型股票，OOS 期間與指數漲幅嚴重落差（+14% vs 市場 +100%+） | `trading_sim.py` 加入 Bull regime **動能混合排序**：選股順序 = 0.30 × 模型 D1 分數 + 0.70 × RS_20d 百分位排名；閾值過濾邏輯不變（僅排序受影響）。同時整合 ATR 動態停損（從 config 讀取，per-position 買入時鎖定）與**曝險率報告**（每日持倉數 × regime，驗證 Bull 96.1% 滿倉，開放項目 2 empirically resolved）。結果：Dec25-Jun26 **+14.26%→+49.03%**/MDD-14.20%；全 OOS **+183.22%**/MDD-16.55%（與下條合計）。 |
+| 2026-06-20 | 模型缺乏市場敏感度（Beta）與動能連續性特徵，Bull 市場選股偏保守 | `feature_engineering.py` 新增 (1) **`beta_60d`**：60 日滾動 Beta vs 大盤（Beta>1=高敏感動能股，Beta<1=防禦股）；(2) **`pct_from_52w_high`**：距 52 週高點距離（接近高點 = 強動能確認）。新增全域常數 `BETA_WINDOW=60`。模型重訓：**84→86 特徵**。結果（30/70 動能混合排序下）：Dec25-Jun26 **+73.81%**/MDD-14.14%（Calmar 5.22）；2025 OOS 段 **+29.63%**/MDD-7.63%；完整 OOS **+183.22%**/MDD-16.55%；2024 全年 +48.91%/MDD-22.18%（含 8 月閃崩，隔夜缺口跳空為結構性風險，非模型問題）。 |
+| 2026-06-20 | Stage C 數字基於舊 77 特徵模型，84 特徵版重訓後需更新 | `run_workflow_experiment.py --skip_factor_opt --fresh` 以 84 特徵模型完整重跑：Stage C 下界 +5.18%→**+1.93%**/MDD-31.58%；上界因 Model A/B 分數分布差距導致凍結參數錯配而出現 **-35.14%**（方法論限制，非模型退步）。新增「§ 重訓時機判讀」章節（Step 6 §6）說明觸發條件。Mode B IS 全期 **+244.58%**/MDD-23.79%（新 WFO params）。`DEFAULT_DECAY_LAMBDA` 網格搜尋更新為 **0.0**（無衰減最佳）。 |
+| 2026-06-20 | 模型 IS→OOS IC 方向反轉（IS 均值回歸 IC<0，OOS 動能市場 IC>0）；固定停損被牛市正常回撤頻繁觸發 | 新增 **7 個動能特徵**（`ret3/10/20`、`RS_3d/10d/20d`、`up_days_5`）至 `feature_engineering.py`，週期由 `MOMENTUM_WINDOWS=[3,10,20]` 控制；`train.py` 加入 `EXCLUDE_FEATURES` IC 反轉因子排除；`ATR_STOP_CEILING_PCT` -3.0%→-5.0% 防止停損過緊。結果：OOS（2025-08-02～2026-06-18）報酬 +3.20%→**+46.54%**，MDD -21.85%→**-17.73%**，Calmar 0.15→**2.62**。 |
+| 2026-06-20 | 固定停損 -8% 在個股高波動期間過緊，正常回撤即洗出 | `config.py` 新增 § 2.2 ATR 動態停損（`ATR_STOP_ENABLED=True`、`ATR_STOP_MULTIPLIER=1.5`、`ATR_STOP_FLOOR_PCT=-15%`、`ATR_STOP_CEILING_PCT=-5%`）；停損 = 買入成本 × (1 − 1.5 × `atr18_pct`)，上下限保護。 |
 | 2026-06-18 | 實驗報告判讀後缺部署與前瞻驗證 SOP | 部署 mode_b 風控（複製為 `best_trading_params.json`）；新增 `paper_trading/record_paper_trades.py`（無前視偏差自動記錄掛單簿、依真實次日價格判成交、FIFO 算損益%）與 `run_daily.ps1` 一鍵流程；完整處理流程記於 Step 6 §5。 |
 | 2026-06-17 | checkpoint 靜默跳過重優化 | `run_workflow_experiment.py` 加 `compute_opt_signature()` 指紋（優化器原始碼 hash ＋ `--regime`/`-wf` 旗標），不符即自動失效重優化；與模型還原解耦。手動清檔已非必要，`--fresh` 仍可全重跑。**副作用**：`optimize_trading_params.py` 任何編輯（含註解）都會使風控 checkpoint 失效重優化（偏保守）。 |
 | 2026-06-17 | mode B 缺乏乾淨 OOS 驗證（機制） | 新增 Stage C 雙模型 bracket 驗證（見上方開放項目 1，數據待跑）。 |

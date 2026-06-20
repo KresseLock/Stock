@@ -43,12 +43,14 @@ try:
     from config import (
         LABEL_STRONG_QUANTILE, LABEL_WEAK_QUANTILE,
         LABEL_STRONG_MIN_RET, LABEL_WEAK_MAX_RET,
+        MOMENTUM_WINDOWS,
     )
 except ImportError:
     LABEL_STRONG_QUANTILE = 0.80   # 強勢股 (label=2) 横截面百分位排名門櫛 (前 20%)
     LABEL_WEAK_QUANTILE   = 0.20   # 弱勢股 (label=0) 横截面百分位排名門櫛 (後 20%)
     LABEL_STRONG_MIN_RET  = 0.00   # 強勢股絕對報酬率必須 > 此值 (空頭崩盤防線)
     LABEL_WEAK_MAX_RET    = -0.02  # 絕對跌幅超過此值強制歸類弱勢 (大跌個股防線)
+    MOMENTUM_WINDOWS      = [3, 10, 20]
 
 # ══════════════════════════════════════════════════════
 # 可由外部覆寫的全域參數 (預設值)
@@ -82,6 +84,9 @@ ENABLE_SENTIMENT    = True
 
 # 多核心運算設定 (-1 = 使用全部核心)
 N_JOBS              = -1
+
+# 滾動 Beta 計算窗口（交易日）
+BETA_WINDOW         = 60
 
 
 
@@ -168,6 +173,15 @@ def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
     g["ret1"]      = c.pct_change(1)
     g["ret5"]      = c.pct_change(5)
     g["amplitude"] = (h - l) / (o + 1e-9)
+
+    # 多週期動能特徵
+    for w in MOMENTUM_WINDOWS:
+        g[f"ret{w}"] = c.pct_change(w)
+    g["up_days_5"] = (c.diff() > 0).astype(int).rolling(5, min_periods=1).sum()
+
+    # 52 週高點距離（近高點 = 強動能訊號；-0.05 表示距高點 5%）
+    _high_52w = c.rolling(252, min_periods=60).max()
+    g["pct_from_52w_high"] = c / (_high_52w + 1e-9) - 1
 
     # 標籤 (預測未來 N 天收益率)
     for d in FORECAST_DAYS:
@@ -589,7 +603,27 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     # 5日相對大盤強弱 (RS_5d)
     df["close_pct_5d"] = df.groupby("stock_id")["close"].pct_change(periods=5)
     df["RS_5d"] = df["close_pct_5d"] - df.groupby("date")["close_pct_5d"].transform("mean")
-    
+
+    # 多週期相對大盤強弱 (RS_{w}d)
+    _mom_tmp_cols = []
+    for w in MOMENTUM_WINDOWS:
+        tmp_col = f"_close_pct_{w}d"
+        df[tmp_col] = df.groupby("stock_id")["close"].pct_change(periods=w)
+        df[f"RS_{w}d"] = df[tmp_col] - df.groupby("date")[tmp_col].transform("mean")
+        _mom_tmp_cols.append(tmp_col)
+    df = df.drop(columns=_mom_tmp_cols)
+
+    # 滾動 Beta（個股相對大盤的市場敏感度，BETA_WINDOW 日窗口）
+    # close_pct 與 market_mean_pct 均已在 df 中，可直接 groupby 計算
+    # Beta > 1: 高於大盤波動（動能/成長股）；Beta < 1: 低於大盤波動（防禦股）
+    print(f"  計算滾動 Beta 特徵 ({BETA_WINDOW} 日窗口)...")
+    def _beta_group(grp):
+        rolling_cov = grp["close_pct"].rolling(BETA_WINDOW, min_periods=BETA_WINDOW // 2).cov(grp["market_mean_pct"])
+        rolling_var = grp["market_mean_pct"].rolling(BETA_WINDOW, min_periods=BETA_WINDOW // 2).var()
+        grp["beta_60d"] = (rolling_cov / (rolling_var + 1e-12)).clip(-5, 5)
+        return grp
+    df = df.groupby("stock_id", group_keys=False).apply(_beta_group)
+
     # 2. 計算產業板塊情緒特徵 (Sector Strength)
     import json
     cat_path = os.path.join(BASE_DIR, "stock_categories.json")
@@ -743,6 +777,7 @@ if __name__ == "__main__":
                 BOLL_STD_MULT     = params.get("BOLL_STD_MULT", BOLL_STD_MULT)
                 VOL_MA_WINDOW     = params.get("VOL_MA_WINDOW", VOL_MA_WINDOW)
                 CHIPS_SUM_WINDOWS = params.get("CHIPS_SUM_WINDOWS", CHIPS_SUM_WINDOWS)
+                MOMENTUM_WINDOWS  = params.get("MOMENTUM_WINDOWS", MOMENTUM_WINDOWS)
         except Exception as e:
             print(f"[警告] 無法載入 best_factors.json ({e})，將使用預設因子參數。")
 

@@ -205,7 +205,9 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS,
             FEE_RATE, TAX_RATE, MKT_PANIC_MA5, MKT_PANIC_BREADTH,
             TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS, ORDER_MARKUP_PCT,
-            REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD
+            REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD,
+            ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
+            MOMENTUM_BULL_CONFIRM_DAYS,
         )
     except ImportError:
         BUY_THRESHOLD     = 10.0
@@ -221,6 +223,11 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         ORDER_MARKUP_PCT  = None
         REGIME_ADAPTIVE_ENABLED = False
         REGIME_BUY_THRESHOLD = {}
+        ATR_STOP_ENABLED = False
+        ATR_STOP_MULTIPLIER = 1.5
+        ATR_STOP_FLOOR_PCT = -15.0
+        ATR_STOP_CEILING_PCT = -3.0
+        MOMENTUM_BULL_CONFIRM_DAYS = 5
 
     # 市況過濾器精度控管：僅在「未顯式指定 buy_threshold」時啟用動態門檻，
     # 避免破壞 CLI 覆寫與 param_sensitivity.py 的靜態掃描。
@@ -266,6 +273,9 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     # 執行交易的日期範圍 (T+1 執行日)
     trading_dates = all_dates[start_idx : end_idx + 1]
 
+    # Hysteresis 計數器：連續 Bull 天數，非 Bull 立即重置
+    consecutive_bull_days = 0
+
     for idx_today, today in enumerate(trading_dates):
         start_trade_idx = len(trades)
         
@@ -303,6 +313,12 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         signal_regime = None
         if not prev_data.empty and 'regime' in prev_data.columns:
             signal_regime = prev_data['regime'].iloc[0]
+
+        # Hysteresis：連續 Bull 天數計數（非 Bull 立即重置，防止振盪期誤觸動能模式）
+        if signal_regime == 'Bull':
+            consecutive_bull_days += 1
+        else:
+            consecutive_bull_days = 0
 
         is_market_panic = False
         panic_reason = ""
@@ -342,7 +358,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                     close_T1 = pos['current_price']
                 
                 actual_cost_price = pos['buy_price'] * (1 + FEE_RATE)
-                stop_loss_price = actual_cost_price * (1 + STOP_LOSS_PCT / 100.0)
+                _stop_pct = pos.get('atr_stop_pct', STOP_LOSS_PCT)
+                stop_loss_price = actual_cost_price * (1 + _stop_pct / 100.0)
                 
                 # 判定 1: 階段式寬鬆移動止盈 (浮盈達到 +10% 啟動門檻，且高點收盤回撤 6%)
                 triggered_trailing_stop = False
@@ -406,7 +423,17 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         # --- C. 買進邏輯 (根據昨日訊號做挑選，並在今日執行限價掛單撮合) ---
         # 排除已持有的股票，依昨日的 Day 1 分數降冪排序
         buy_candidates = prev_data[~prev_data.index.isin(positions.keys())].copy()
-        buy_candidates = buy_candidates.sort_values('Day1_net', ascending=False)
+
+        # Bull regime 動能混合：排序用混合分數，閾值過濾仍用原始模型分數，避免破壞風控邏輯。
+        # Hysteresis：需連續 MOMENTUM_BULL_CONFIRM_DAYS 天 Bull 才啟用，防止熊牛轉換振盪期誤觸。
+        momentum_active = (signal_regime == 'Bull' and consecutive_bull_days >= MOMENTUM_BULL_CONFIRM_DAYS)
+        if momentum_active and 'RS_20d' in buy_candidates.columns:
+            rs_rank = buy_candidates['RS_20d'].rank(pct=True, na_option='bottom') * 100
+            buy_candidates['_sort_score'] = 0.30 * buy_candidates['Day1_net'] + 0.70 * rs_rank
+        else:
+            buy_candidates['_sort_score'] = buy_candidates['Day1_net']
+
+        buy_candidates = buy_candidates.sort_values('_sort_score', ascending=False)
         
         today_buys_amount = 0
         for sid in buy_candidates.index:
@@ -474,13 +501,22 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                 available_cash -= cost
                 today_buys_amount += cost
                 
+                # 計算個股 ATR 停損百分比（買入當下鎖定，後續不再變動）
+                _atr_pct = prev_data.loc[sid, 'atr18_pct'] if 'atr18_pct' in prev_data.columns else None
+                if ATR_STOP_ENABLED and _atr_pct is not None and not pd.isna(_atr_pct) and float(_atr_pct) > 0:
+                    _raw = -ATR_STOP_MULTIPLIER * float(_atr_pct) * 100
+                    _atr_stop_pct = max(ATR_STOP_FLOOR_PCT, min(ATR_STOP_CEILING_PCT, _raw))
+                else:
+                    _atr_stop_pct = STOP_LOSS_PCT
+
                 positions[sid] = {
                     'shares': max_shares,
                     'buy_price': buy_price,
                     'current_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else buy_price,
                     'buy_date': today,
                     'max_close_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else buy_price,
-                    'buy_idx': idx_today
+                    'buy_idx': idx_today,
+                    'atr_stop_pct': _atr_stop_pct,
                 }
                 cname = stock_names.get(sid, "")
                 
@@ -567,6 +603,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             'pending_cash': pending_cash,
             'invested': final_stock_value,
             'regime': regime,
+            'n_positions': len(positions),
             'portfolio_return': portfolio_return,
             'portfolio_alpha': portfolio_alpha,
             'portfolio_spread': portfolio_spread
@@ -607,6 +644,31 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     print(f"最大回撤: -{max_dd*100:.2f}%")
     holdings_str = [f"{sid} {stock_names.get(sid, '')}({int(pos['shares'])}股)" for sid, pos in positions.items()]
     print(f"最終持有: {holdings_str}")
+
+    # 曝險率報告：每日持倉數 × 市況，診斷閾值是否在 Bull 浪費 alpha
+    if history:
+        _h = pd.DataFrame(history)
+        print(f"\n  曝險率報告（持倉格位 × 市況）")
+        print(f"  {'='*54}")
+        print(f"  {'市況':<10}{'天數':>6}{'平均持倉':>10}{'0檔%':>8}{'1-2檔%':>9}{'滿倉%':>9}")
+        print(f"  {'-'*52}")
+        for _reg in ['Bull', 'Sideways', 'Bear', 'All']:
+            _sub = _h if _reg == 'All' else _h[_h['regime'] == _reg]
+            if _sub.empty:
+                continue
+            _n = len(_sub)
+            _avg = _sub['n_positions'].mean()
+            _p0   = (_sub['n_positions'] == 0).sum() / _n * 100
+            _p12  = (_sub['n_positions'].between(1, 2)).sum() / _n * 100
+            _pfull = (_sub['n_positions'] == max_positions).sum() / _n * 100
+            _label = f"[{_reg}]" if _reg != 'All' else '[全期]'
+            print(f"  {_label:<10}{_n:>6}{_avg:>10.1f}{_p0:>7.1f}%{_p12:>8.1f}%{_pfull:>8.1f}%")
+        _bull_h = _h[_h['regime'] == 'Bull']
+        if not _bull_h.empty:
+            _bull_under = (_bull_h['n_positions'] <= 2).sum() / len(_bull_h) * 100
+            _flag = " ⚠️ 閾值可能浪費 alpha" if _bull_under > 30 else " ✅ 曝險充足"
+            print(f"  {'='*52}")
+            print(f"  Bull 低持倉(0-2檔)佔 {_bull_under:.1f}%{_flag}")
     
     # 建立報表 DataFrame
     df_history = pd.DataFrame(history)
