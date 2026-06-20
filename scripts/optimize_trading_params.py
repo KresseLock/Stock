@@ -444,10 +444,17 @@ def main():
             except Exception:
                 pass
 
-            # 新最佳解即時寫入 checkpoint（在 print lock 外執行，不卡輸出）
+            # 新最佳解即時寫入 checkpoint
+            # 超過 EARLY_STOPPING_ROUNDS 才開始存，避免探索期前幾十輪頻繁寫檔
             try:
                 val = trial.value if trial.value is not None else -999.0
-                if study.best_value is not None and abs(val - study.best_value) < 1e-6:
+                n = trial.number + 1
+                past_exploration = (
+                    EARLY_STOPPING_ROUNDS is None
+                    or EARLY_STOPPING_ROUNDS <= 0
+                    or n > EARLY_STOPPING_ROUNDS
+                )
+                if past_exploration and study.best_value is not None and abs(val - study.best_value) < 1e-6:
                     _save_checkpoint(study, trial)
             except Exception:
                 pass
