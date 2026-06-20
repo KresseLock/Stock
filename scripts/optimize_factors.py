@@ -449,6 +449,39 @@ def main():
             n_startup_trials=40
         ),
     )
+
+    # 暖啟動：若存在上一輪結果，將最佳參數反推為 Optuna 內部格式並排入第一個 trial，
+    # 讓 TPE 從已知好解附近展開搜尋，避免浪費前 40 輪在純隨機探索。
+    if os.path.exists(RESULT_PATH):
+        try:
+            with open(RESULT_PATH, encoding="utf-8") as _f:
+                _prev = json.load(_f).get("best_params_for_run_feature_engineering", {})
+            if _prev:
+                _ma = _prev["MA_WINDOWS"]
+                _ch = _prev["CHIPS_SUM_WINDOWS"]
+                _seed_params = {
+                    "ma_short":       _ma[0],
+                    "ma_mid1_offset": _ma[1] - _ma[0],
+                    "ma_mid2_offset": _ma[2] - _ma[1],
+                    "ma_long_offset": _ma[3] - _ma[2],
+                    "rsi_period":     _prev["RSI_PERIOD"],
+                    "kd_period":      _prev["KD_PERIOD"],
+                    "atr_period":     _prev["ATR_PERIOD"],
+                    "macd_fast":      _prev["MACD_FAST"],
+                    "macd_slow_offset": _prev["MACD_SLOW"] - _prev["MACD_FAST"],
+                    "macd_signal":    _prev["MACD_SIGNAL"],
+                    "boll_window":    _prev["BOLL_WINDOW"],
+                    "boll_std_x100":  round(_prev["BOLL_STD_MULT"] * 100),
+                    "vol_ma":         _prev["VOL_MA_WINDOW"],
+                    "chips_w1":       _ch[0],
+                    "chips_w2_offset": _ch[1] - _ch[0],
+                    "chips_w3_offset": _ch[2] - _ch[1],
+                }
+                study.enqueue_trial(_seed_params)
+                print(f"  [暖啟動] 已從 {RESULT_PATH} 載入上輪最佳參數作為起點")
+        except Exception as _e:
+            print(f"  [暖啟動] 讀取失敗，跳過（{_e}）")
+
     try:
         study.optimize(
             objective, 
