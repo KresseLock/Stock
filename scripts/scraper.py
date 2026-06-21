@@ -1222,6 +1222,10 @@ def patch_stock_finmind(stock_id: str):
 def check_data_integrity():
     """完整資料庫完整性修復工具，檢查空檔、欄位缺失與極端價格幽靈資料 (取代 check_data.py)"""
     import glob
+    try:
+        from config import GHOST_DATA_PCT_THRESHOLD
+    except ImportError:
+        GHOST_DATA_PCT_THRESHOLD = 0.15
     financial_dir = os.path.join(DATA_DIR, "raw_financial")
     specs = {
         "monthly_revenue": ["date", "revenue"],
@@ -1319,18 +1323,37 @@ def check_data_integrity():
     for i in range(1, len(history)):
         prev, curr = history[i-1], history[i]
         pct = abs((curr["price"] - prev["price"]) / prev["price"])
-        if pct > 0.15:
-            bad_date = curr["date"]
-            print(f"  [幽靈資料] {bad_date} 發現 0050 價格異常跳空！")
-            for d in twse_dirs:
-                for bad_f in glob.glob(os.path.join(DATA_DIR, d, f"{bad_date}_*.csv")):
-                    os.remove(bad_f)
-            for k in list(skip_dates.keys()):
-                if k.endswith(f"_{bad_date}"):
-                    del skip_dates[k]
-            if bad_date in fail_log: del fail_log[bad_date]
-            ghost_del += 1
-            curr["price"] = prev["price"]
+        if pct > GHOST_DATA_PCT_THRESHOLD:
+            # 判斷是「真實的股票分割/永久跳空/大型除權息」還是「單日的幽靈資料異常」
+            # 幽靈資料特色：只有單日異常暴跌/暴漲，隔天就立刻彈回原本的價格水準
+            # 股票分割特色：價格跳空後，隔天會維持在新價格附近（永久性位移）
+            is_anomaly = True
+            if i + 1 < len(history):
+                nxt = history[i+1]
+                pct_change_curr_to_next = abs((nxt["price"] - curr["price"]) / curr["price"])
+                pct_change_prev_to_next = abs((nxt["price"] - prev["price"]) / prev["price"])
+                
+                # 如果隔天價格與當天價格相近 (波動 <= GHOST_DATA_PCT_THRESHOLD)，且與前一天相比仍有巨大跳空，代表這是永久性分割/跳空
+                if pct_change_curr_to_next <= GHOST_DATA_PCT_THRESHOLD and pct_change_prev_to_next > GHOST_DATA_PCT_THRESHOLD:
+                    is_anomaly = False
+            else:
+                # 若為歷史最後一天，在無法比對隔天情況下，為了避免分割/跳空造成連續刪除的骨牌效應，
+                # 只有當價格極端異常 (例如 <= 0) 時才判定為異常，其餘跳空先保留，待隔天有新資料時再行判定
+                if curr["price"] > 0:
+                    is_anomaly = False
+            
+            if is_anomaly:
+                bad_date = curr["date"]
+                print(f"  [幽靈資料] {bad_date} 發現 0050 價格異常跳空！")
+                for d in twse_dirs:
+                    for bad_f in glob.glob(os.path.join(DATA_DIR, d, f"{bad_date}_*.csv")):
+                        os.remove(bad_f)
+                for k in list(skip_dates.keys()):
+                    if k.endswith(f"_{bad_date}"):
+                        del skip_dates[k]
+                if bad_date in fail_log: del fail_log[bad_date]
+                ghost_del += 1
+                curr["price"] = prev["price"]
 
     if ghost_del > 0:
         with open(skip_dates_path, "w", encoding="utf-8") as f:
