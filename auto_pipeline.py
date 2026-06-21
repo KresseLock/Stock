@@ -125,6 +125,12 @@ def _resolve_backtest_date() -> str:
 
 def step1_optimize(bt: str):
     """步驟 1: 執行 Optuna 貝葉斯最佳化"""
+    import shutil
+    if os.path.exists(BEST_FACTORS_PATH):
+        backup_path = BEST_FACTORS_PATH + ".bak"
+        shutil.copy2(BEST_FACTORS_PATH, backup_path)
+        print(f"  [無損備份] 偵測到已存在的 {os.path.basename(BEST_FACTORS_PATH)}，已自動備份為 {os.path.basename(backup_path)}")
+
     import scripts.optimize_factors as of_module
 
     # 覆寫最佳化模組的設定 (統一由 config.py 控制)

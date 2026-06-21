@@ -62,6 +62,16 @@ python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000  # OOS 驗�
 | 報酬更高 且 MDD 沒有明顯惡化 | 保留新 `configs/best_factors.json` |
 | 沒有改善 或 MDD 更大 | 還原舊 `best_factors.json`，維持現狀 |
 
+> 💡 **自動備份與還原**：在執行因子最佳化 `python auto_pipeline.py -s o` 前，系統會自動將舊的 `best_factors.json` 備份為 `best_factors.json.bak`。若需還原舊設定，請依您的終端機類型執行對應指令：
+>   * **PowerShell**: `Copy-Item configs/best_factors.json.bak configs/best_factors.json`
+>   * **CMD**: `copy configs\best_factors.json.bak configs\best_factors.json /y`
+>   * ⚠️ **重要提醒**：覆蓋還原 `best_factors.json` 後，**必須重新執行以下指令**以重製硬碟上的特徵矩陣與模型檔：
+>     ```powershell
+>     python auto_pipeline.py -s f   # 用舊因子重新計算並覆寫特徵
+>     python auto_pipeline.py -s t   # 用舊特徵重新訓練並覆寫模型
+>     ```
+>     若不重新執行，系統磁碟中的特徵矩陣（`features_combined.parquet`）與模型仍會維持新（較差）因子的狀態，導致還原失敗。
+
 > ⚠️ `Auto_RUN.py` 每天自動跑的因子優化（模式 B）評估窗口含近期牛市，分數天然偏高，**不能拿來跟上面的 OOS 數字比較**。
 
 ---
