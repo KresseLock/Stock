@@ -109,6 +109,15 @@ REGIME_BUY_THRESHOLD = {
     "Sideways": 21.5,   # 震盪盤整：高門檻防守（滿倉必爆，高門檻為最不爛解）
     "Bear":     99.0,   # 空頭：實質空倉持現金
 }
+# Regime 選擇性曝險：依昨日 regime 動態調整最大持股檔數（時間性降曝險）。
+# 與 REGIME_BUY_THRESHOLD 同步——僅在「未顯式指定 buy_threshold」時生效。
+# 動機：門檻只控制「要不要開新倉」，此處控制「曝險量」。Bull 維持滿倉吃肥尾，
+#       Sideways/Bear 降檔數以化解「滿倉必爆」，不強制平倉（靠自然汰換降至上限，避免振盪洗價）。
+REGIME_MAX_POSITIONS = {
+    "Bull":     5,    # 趨勢多頭：滿倉集中吃肥尾（與 MAX_POSITIONS 一致）
+    "Sideways": 3,    # 震盪盤整：降曝險
+    "Bear":     1,    # 空頭：極低曝險（實質近空手）
+}
 # 市況分類以大盤 REGIME_TREND_WINDOW 日滾動均日報酬為主軸（不用 breadth 判 Bull，
 # 因 2026 為權值股窄牛市，breadth 低但趨勢強，用 breadth 會嚴重低估多頭環境）
 REGIME_BULL_TREND        = 0.0015  # 滾動均日報酬 > 此值 → Bull（趨勢多頭）
@@ -262,6 +271,11 @@ TRADING_PARAM_BOUNDS = {
     "regime_sideways_buy":  (8.0,    25.0,   0.5),
     "regime_bull_trend":    (0.0005,  0.004, 0.0005),
     "regime_bear_trend":    (-0.004, -0.0005, 0.0005),
+    # 市況選擇性曝險：各 regime 持股檔數上限（int）。Bull 亦納入搜尋——實測基準滿倉(5)
+    # 過度曝險，模型第 4~5 名部位為淨拖累，降 Bull 檔數可同時改善報酬與回撤。
+    "regime_bull_pos":      (1, 5),
+    "regime_sideways_pos":  (1, 5),
+    "regime_bear_pos":      (1, 5),
 }
 
 
@@ -307,6 +321,14 @@ if os.path.exists(_best_params_path):
                 REGIME_BULL_TREND = float(_params["regime_bull_trend"])
             if "regime_bear_trend" in _params:
                 REGIME_BEAR_TREND = float(_params["regime_bear_trend"])
+            # 市況選擇性曝險：各 regime 持股檔數上限。Bull 若無 regime_bull_pos（舊參數檔）
+            # 則回退 MAX_POSITIONS（滿倉），確保向後相容。
+            if "regime_sideways_pos" in _params:
+                REGIME_MAX_POSITIONS = {
+                    "Bull":     int(_params.get("regime_bull_pos", MAX_POSITIONS)),
+                    "Sideways": int(_params["regime_sideways_pos"]),
+                    "Bear":     int(_params.get("regime_bear_pos", REGIME_MAX_POSITIONS["Bear"])),
+                }
 
             if multiprocessing.current_process().name == 'MainProcess':
                 print(f"[系統提示] 偵測到 {os.path.basename(_best_params_path)}，已自動套用最佳化交易風控參數。")

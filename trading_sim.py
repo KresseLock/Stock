@@ -69,7 +69,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                    buy_threshold=None, sell_threshold=None, stop_loss_pct=None,
                    ts_activation_pct=None, ts_pullback_pct=None,
                    min_hold_days=None, markup_pct=None,
-                   regime_buy_threshold=None, regime_bull_trend=None, regime_bear_trend=None):
+                   regime_buy_threshold=None, regime_bull_trend=None, regime_bear_trend=None,
+                   regime_max_positions=None):
     print("=" * 70)
     print(f"  啟動量化交易回測 (Out-of-Sample, T+1 限價搓合 + 雙風控防線版)")
     print(f"  期間: {start_date} 到 {end_date}")
@@ -205,7 +206,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS,
             FEE_RATE, TAX_RATE, MKT_PANIC_MA5, MKT_PANIC_BREADTH,
             TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS, ORDER_MARKUP_PCT,
-            REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD,
+            REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD, REGIME_MAX_POSITIONS,
             ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
             MOMENTUM_BULL_CONFIRM_DAYS,
         )
@@ -223,6 +224,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         ORDER_MARKUP_PCT  = None
         REGIME_ADAPTIVE_ENABLED = False
         REGIME_BUY_THRESHOLD = {}
+        REGIME_MAX_POSITIONS = {}
         ATR_STOP_ENABLED = False
         ATR_STOP_MULTIPLIER = 1.5
         ATR_STOP_FLOOR_PCT = -15.0
@@ -233,6 +235,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     # 避免破壞 CLI 覆寫與 param_sensitivity.py 的靜態掃描。
     # regime 買入門檻字典可由外部覆寫 (供 optimize_trading_params.py 校準)。
     _regime_buy_thr = regime_buy_threshold if regime_buy_threshold is not None else REGIME_BUY_THRESHOLD
+    _regime_max_pos = regime_max_positions if regime_max_positions is not None else REGIME_MAX_POSITIONS
     use_regime_filter = (buy_threshold is None) and REGIME_ADAPTIVE_ENABLED
     if use_regime_filter:
         print(f"  [市況過濾器] 已啟用動態買入門檻 (依昨日 regime)：{_regime_buy_thr}")
@@ -339,6 +342,13 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             current_buy_threshold = 99.0
             print(f"  [風控警示] {today.date()} 觸發大盤避險紅燈！原因: {panic_reason}。今日起暫停任何新股買進。")
 
+        # 市況選擇性曝險：依昨日 regime 調整最大持股檔數（與買入門檻同步生效，僅在未顯式指定 buy_threshold 時）。
+        # 超過上限時不強制平倉，僅停止補倉，靠自然汰換（停損／Day3／止盈）降至上限，避免振盪洗價。
+        if use_regime_filter and signal_regime is not None:
+            eff_max_positions = _regime_max_pos.get(signal_regime, max_positions)
+        else:
+            eff_max_positions = max_positions
+
         # --- B. 賣出邏輯 (昨日訊號 Day3 < 0，跌破停損，或是觸發移動止盈) ---
         sells_today = []
         for sid, pos in list(positions.items()):
@@ -437,7 +447,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         
         today_buys_amount = 0
         for sid in buy_candidates.index:
-            if len(positions) >= max_positions:
+            if len(positions) >= eff_max_positions:
                 break
                 
             day1_score = prev_data.loc[sid, 'Day1_net']
@@ -488,7 +498,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                 # 3. 隔天盤中最低價仍然高於限價 ➔ 買不到，跳過
                 continue
             
-            # 動態分配剩餘資金
+            # 動態分配剩餘資金：以「基準」MAX_POSITIONS 為分母，使單檔權重維持 ~1/MAX_POSITIONS。
+            # 故 regime 降檔數（eff_max_positions）時是讓資金「閒置」以降總曝險，而非把同筆資金集中到更少更大的部位。
             available_slots = max(1, max_positions - len(positions))
             target_investment = available_cash / available_slots
             invest_amount = min(target_investment, available_cash)

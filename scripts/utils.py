@@ -57,12 +57,16 @@ def load_target_stocks(file_path: str = "Stocks.txt") -> list:
 def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
     """
     解析 Stocks.txt。
-    支援三種格式：
-      格式 A (僅代號)    : 2330
-      格式 B (含成本)    : 2330,950.0
-      格式 C (成本與股數) : 2330,950.0,1000
+    支援四種格式：
+      格式 A (僅代號)         : 2330
+      格式 B (含成本)         : 2330,950.0
+      格式 C (成本與股數)      : 2330,950.0,1000
+      格式 D (含買入日停損價)   : 2330,950.0,1000,910.5
 
-    回傳 dict: { stock_id: {"cost": buy_cost_or_None, "shares": shares_or_None} }
+    第 4 欄為「買入日鎖定的 ATR 停損價」（由 inference.py 買進建議提供），
+    填了之後 inference.py 以此精確判定停損；未填則退回當日 ATR 近似值。
+
+    回傳 dict: { stock_id: {"cost": ..., "shares": ..., "stop_price": ...} }
     """
     detailed_watchlist = {}
     
@@ -89,6 +93,7 @@ def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
             sid = parts[0].strip()
             cost = None
             shares = None
+            stop_price = None
             if len(parts) >= 2:
                 try:
                     cost = float(parts[1].strip())
@@ -99,7 +104,12 @@ def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
                     shares = int(float(parts[2].strip()))
                 except ValueError:
                     pass
-            detailed_watchlist[sid] = {"cost": cost, "shares": shares}
+            if len(parts) >= 4:
+                try:
+                    stop_price = float(parts[3].strip())
+                except ValueError:
+                    pass
+            detailed_watchlist[sid] = {"cost": cost, "shares": shares, "stop_price": stop_price}
 
     return detailed_watchlist
 

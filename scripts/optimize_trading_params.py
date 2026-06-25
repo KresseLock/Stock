@@ -99,7 +99,8 @@ def suggest_trial_params(trial, regime_mode):
     if regime_mode:
         # 市況過濾器：趨勢市低門檻進攻、震盪市高門檻防守、空頭固定空倉(99)
         for name in ("regime_bull_buy", "regime_sideways_buy",
-                     "regime_bull_trend", "regime_bear_trend"):
+                     "regime_bull_trend", "regime_bear_trend",
+                     "regime_bull_pos", "regime_sideways_pos", "regime_bear_pos"):
             p[name] = _suggest(trial, name)
     else:
         p["buy_threshold"] = _suggest(trial, "buy_threshold")
@@ -135,6 +136,12 @@ def run_simulation_scoring(start_date, end_date, trial_params, capital, max_pos)
         }
         sim_kwargs["regime_bull_trend"] = trial_params["regime_bull_trend"]
         sim_kwargs["regime_bear_trend"] = trial_params["regime_bear_trend"]
+        # 市況選擇性曝險：各 regime 持股檔數上限均由優化器決定（含 Bull，舊版固定滿倉）
+        sim_kwargs["regime_max_positions"] = {
+            "Bull":     trial_params.get("regime_bull_pos", max_pos),
+            "Sideways": trial_params["regime_sideways_pos"],
+            "Bear":     trial_params["regime_bear_pos"],
+        }
     else:
         sim_kwargs["buy_threshold"] = trial_params["buy_threshold"]
 
@@ -359,7 +366,8 @@ def main():
                         _expected = {"sell_threshold", "stop_loss", "panic_ma5", "panic_breadth",
                                      "ts_activation", "ts_pullback", "min_hold_days", "markup_pct",
                                      "regime_bull_buy", "regime_sideways_buy",
-                                     "regime_bull_trend", "regime_bear_trend"}
+                                     "regime_bull_trend", "regime_bear_trend",
+                                     "regime_bull_pos", "regime_sideways_pos", "regime_bear_pos"}
                     else:
                         _expected = {"sell_threshold", "stop_loss", "panic_ma5", "panic_breadth",
                                      "ts_activation", "ts_pullback", "min_hold_days", "markup_pct",
@@ -495,6 +503,9 @@ def main():
             print(f"       - Sideways 防守門檻 : {best_params['regime_sideways_buy']:.1f}%")
             print(f"       - Bear 空頭         : 99.0% (實質空倉)")
             print(f"       - 趨勢分界 (t20)    : Bull > {best_params['regime_bull_trend']:.4f} | Bear < {best_params['regime_bear_trend']:.4f}")
+            if "regime_bull_pos" in best_params:
+                print(f"       - 持股檔數上限      : Bull {int(best_params['regime_bull_pos'])} | "
+                      f"Sideways {int(best_params['regime_sideways_pos'])} | Bear {int(best_params['regime_bear_pos'])} 檔")
         else:
             print(f"  1. 買進分數門檻 (buy_threshold)  : {best_params['buy_threshold']:.1f}%")
         print(f"  1.5 賣出分數門檻 (sell_threshold): {best_params['sell_threshold']:.1f}%")

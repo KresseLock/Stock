@@ -30,6 +30,7 @@ try:
         ORDER_MARKUP_HIGH_PCT, ORDER_MARKUP_MID_PCT, ORDER_MARKUP_LOW_PCT,
         REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD, REGIME_BULL_TREND, REGIME_BEAR_TREND,
         REGIME_TREND_WINDOW, REGIME_TREND_MIN_PERIODS,
+        ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
     )
 except ImportError:
     BUY_THRESHOLD   = 10.0
@@ -43,6 +44,18 @@ except ImportError:
     REGIME_ADAPTIVE_ENABLED = False; REGIME_BUY_THRESHOLD = {}
     REGIME_BULL_TREND = 0.002; REGIME_BEAR_TREND = -0.002
     REGIME_TREND_WINDOW = 20; REGIME_TREND_MIN_PERIODS = 5
+    ATR_STOP_ENABLED = False; ATR_STOP_MULTIPLIER = 1.5
+    ATR_STOP_FLOOR_PCT = -15.0; ATR_STOP_CEILING_PCT = -5.0
+
+
+def compute_stop_pct(atr_pct) -> float:
+    """個股停損趴數，與 trading_sim.py 同一套 ATR 邏輯。
+    ATR 有效時：-ATR_STOP_MULTIPLIER × atr18_pct × 100，夾 [floor, ceiling]；
+    否則退回固定 STOP_LOSS_PCT。"""
+    if ATR_STOP_ENABLED and atr_pct is not None and not pd.isna(atr_pct) and float(atr_pct) > 0:
+        raw = -ATR_STOP_MULTIPLIER * float(atr_pct) * 100
+        return max(ATR_STOP_FLOOR_PCT, min(ATR_STOP_CEILING_PCT, raw))
+    return STOP_LOSS_PCT
 
 
 def load_watchlist_detailed() -> dict:
@@ -142,7 +155,7 @@ def main(target_date_str=None):
 
     watchlist = load_watchlist_detailed()
     if not watchlist:
-        watchlist = {sid: {"cost": None, "shares": None} for sid in sorted(df["stock_id"].unique().tolist())}
+        watchlist = {sid: {"cost": None, "shares": None, "stop_price": None} for sid in sorted(df["stock_id"].unique().tolist())}
 
     df_latest_market = df[df["date"] == latest_date].copy()
     if df_latest_market.empty:
@@ -200,6 +213,8 @@ def main(target_date_str=None):
     X_latest_market = df_latest_market.reindex(columns=feature_cols).astype(np.float32)
     results_market = df_latest_market[["stock_id"]].copy()
     results_market["close"] = df_latest_market["close"].values if "close" in df_latest_market.columns else 0.0
+    # 帶入 ATR 百分比供動態停損判定（與 trading_sim.py 同一套邏輯）
+    results_market["atr18_pct"] = df_latest_market["atr18_pct"].values if "atr18_pct" in df_latest_market.columns else np.nan
 
     for days in [1, 2, 3]:
         model_path = os.path.join(MODEL_DIR, f"lgbm_model_{days}.txt")
@@ -291,7 +306,7 @@ def main(target_date_str=None):
             is_holding = sid in actual_holdings
             type_s = "持倉" if is_holding else "自選"
             
-            info = watchlist.get(sid, {"cost": None, "shares": None})
+            info = watchlist.get(sid, {"cost": None, "shares": None, "stop_price": None})
             cost = info.get("cost")
             shares = info.get("shares")
             
@@ -348,12 +363,21 @@ def main(target_date_str=None):
             reasons = []
             if d3 < SELL_THRESHOLD:
                 reasons.append(f"D3轉弱({d3:+.1f}%)")
+            stored_stop = watchlist.get(sid, {}).get("stop_price")
             pnl_pct = 0.0
             if cost and cost > 0:
                 actual_cost = cost * (1 + FEE_RATE)
                 pnl_pct = (close_p - actual_cost) / actual_cost * 100
-                if pnl_pct <= STOP_LOSS_PCT:
-                    reasons.append(f"停損({pnl_pct:.1f}%)")
+            if stored_stop and stored_stop > 0:
+                # 優先：買入日鎖定的 ATR 停損價（Stocks.txt 第 4 欄），最精確、不隨當日 ATR 漂移。
+                if close_p <= stored_stop:
+                    reasons.append(f"停損(收 {close_p:.2f} <= 鎖定 {stored_stop:.2f})")
+            elif cost and cost > 0:
+                # 退回：未記錄停損價時，以當日 atr18_pct 近似（snapshot 無買入日 ATR），
+                # 夾 floor/ceiling，與 trading_sim.py 計算一致；ATR 無效時退回固定 STOP_LOSS_PCT。
+                _stop_pct = compute_stop_pct(row.get("atr18_pct"))
+                if pnl_pct <= _stop_pct:
+                    reasons.append(f"停損({pnl_pct:.1f}% <= {_stop_pct:.1f}%)")
             if reasons:
                 sells_list.append({
                     "stock_id": sid,
@@ -371,7 +395,9 @@ def main(target_date_str=None):
 
     output_lines.append("")
     output_lines.append("=" * 90)
-    output_lines.append(f"   [實戰下單指令] 買進D1 >= {eff_buy_threshold:.0f}% (市況:{current_regime}) | 賣出D3 < {SELL_THRESHOLD:.0f}% | 停損 {STOP_LOSS_PCT:.0f}%")
+    _stop_label = (f"停損 ATR動態({ATR_STOP_MULTIPLIER:g}×ATR, {ATR_STOP_CEILING_PCT:.0f}%~{ATR_STOP_FLOOR_PCT:.0f}%)"
+                   if ATR_STOP_ENABLED else f"停損 {STOP_LOSS_PCT:.0f}%")
+    output_lines.append(f"   [實戰下單指令] 買進D1 >= {eff_buy_threshold:.0f}% (市況:{current_regime}) | 賣出D3 < {SELL_THRESHOLD:.0f}% | {_stop_label}")
     output_lines.append("=" * 90)
 
     output_lines.append("   明日建議賣出掛單 (開盤賣出釋出倉位):")
@@ -419,13 +445,19 @@ def main(target_date_str=None):
             
             raw_target_price = close_p * (1 + target_pct / 100.0)
             target_price = round_to_tick(raw_target_price)
-            
+
+            # 買入日鎖定的 ATR 停損價：以掛單價為成本基準 × (1+手續費) × (1+停損%)，對齊 Tick。
+            # 成交後請把此價填入 Stocks.txt 第 4 欄（代號,成本,股數,停損價）。
+            _stop_pct = compute_stop_pct(getattr(row, "atr18_pct", None))
+            stop_price = round_to_tick(target_price * (1 + FEE_RATE) * (1 + _stop_pct / 100.0))
+
             tag = "[優先買進]" if (available_slots > 0 and idx <= available_slots) else "[觀察遞補]"
             output_lines.append(
-                f"    {tag} 第 {idx} 檔 -> {sid:<5} {cname:<5} (收盤 {close_p:>6.2f} | D1 {d1:>+5.1f}% | D3 {d3:>+5.1f}% | 建議掛 {target_pct:+.1f}% -> {target_price:>6.2f})"
+                f"    {tag} 第 {idx} 檔 -> {sid:<5} {cname:<5} (收盤 {close_p:>6.2f} | D1 {d1:>+5.1f}% | D3 {d3:>+5.1f}% | 建議掛 {target_pct:+.1f}% -> {target_price:>6.2f} | ATR停損 {stop_price:>6.2f}[{_stop_pct:+.1f}%])"
             )
         output_lines.append("")
         output_lines.append("     [掛單提醒] 建議掛單價已依 D1 信心動態加價並自動對齊台股 Tick 升降單位 (D1>=30%加2.5%, >=20%加2.0%, 其他加1.5%)。")
+        output_lines.append("     [停損記錄] 成交後請將「ATR停損」價填入 Stocks.txt 第 4 欄 (代號,成本,股數,停損價)，系統即以此精確判定停損。")
     output_lines.append("-" * 90)
 
     if has_real_watchlist and len(track_only) > 0:
