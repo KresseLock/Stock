@@ -125,6 +125,32 @@ REGIME_BEAR_TREND        = -0.002  # 滾動均日報酬 < 此值 → Bear，其�
 REGIME_TREND_WINDOW      = 10      # 滾動視窗天數（20→10：去滯後，牛市起漲時不被誤判 Sideways）
 REGIME_TREND_MIN_PERIODS = 5       # 最少有效天數（不足時退回 Sideways）
 
+# ── 2.3.1 市況自適應出場參數（Regime-Adaptive Exit）──────────────────────────
+# *** trading_sim.py、inference.py 共用；optimize_trading_params.py 優化時停用 ***
+# EXIT_REGIME_LAG：切出 Bull 出場模式所需的連續非 Bull 天數（切入 Bull 立即生效）
+# 不對稱遲滯：防止牛市短暫整理誤觸保守出場，同時在真正熊市 7 天後自動切換保護。
+EXIT_REGIME_LAG = 7
+REGIME_EXIT_PARAMS = {
+    "Bull": {
+        "sell_threshold": -8.5,   # 牛市訊號出場門檻（高容忍，讓贏家跑）
+        "ts_activation":  20.5,   # 浮盈達 +20.5% 才啟動移動止盈（捕捉完整趨勢）
+        "ts_pullback":    -9.5,   # 自高點回撤 9.5% 止盈
+        "min_hold_days":  23,     # 最少持股 23 天（牛市趨勢持倉）
+    },
+    "Sideways": {
+        "sell_threshold": -18.5,  # 橫盤出場門檻
+        "ts_activation":  8.0,    # 橫盤及早保護利潤
+        "ts_pullback":    -7.5,
+        "min_hold_days":  11,
+    },
+    "Bear": {
+        "sell_threshold": -14.0,  # 熊市主動出場（-14% 比橫盤 -18.5% 更積極）
+        "ts_activation":  7.0,    # 熊市小利即保
+        "ts_pullback":    -5.5,
+        "min_hold_days":  5,      # 最短持倉，快速換手
+    },
+}
+
 
 # ── 2.4 Optuna 風控調參評分函式權重 ──────────────────────────────
 # *** optimize_trading_params.py 使用 ***

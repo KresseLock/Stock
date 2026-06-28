@@ -31,6 +31,8 @@ try:
         REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD, REGIME_BULL_TREND, REGIME_BEAR_TREND,
         REGIME_TREND_WINDOW, REGIME_TREND_MIN_PERIODS,
         ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
+        REGIME_EXIT_PARAMS,
+        MKT_PANIC_MA5, MKT_PANIC_BREADTH,
     )
 except ImportError:
     BUY_THRESHOLD   = 10.0
@@ -46,6 +48,8 @@ except ImportError:
     REGIME_TREND_WINDOW = 20; REGIME_TREND_MIN_PERIODS = 5
     ATR_STOP_ENABLED = False; ATR_STOP_MULTIPLIER = 1.5
     ATR_STOP_FLOOR_PCT = -15.0; ATR_STOP_CEILING_PCT = -5.0
+    REGIME_EXIT_PARAMS = {}
+    MKT_PANIC_MA5 = -0.010; MKT_PANIC_BREADTH = 0.30
 
 
 def compute_stop_pct(atr_pct) -> float:
@@ -189,6 +193,20 @@ def main(target_date_str=None):
             else:
                 break
         momentum_active = (current_regime == 'Bull' and consecutive_bull_days >= MOMENTUM_BULL_CONFIRM_DAYS)
+
+        # 大盤避險紅燈 (鏡像 trading_sim.py:355-369；無前視，用最新日 D 的 ma5/breadth 決定隔日進場)。
+        # 修正前 inference 缺此邏輯，導致 panic 日仍推薦買入、與 trading_sim 回測脫節 (約 16.7% 交易日)。
+        _mkt_ma5 = df.groupby("date")["market_mean_pct"].first().sort_index().rolling(5, min_periods=1).mean().get(latest_date, 0.0)
+        _mkt_breadth = (df_latest_market["market_breadth_pct"].iloc[0]
+                        if "market_breadth_pct" in df_latest_market.columns else 1.0)
+        _panic_reason = None
+        if _mkt_ma5 < MKT_PANIC_MA5:
+            _panic_reason = f"大盤5日均報酬 {_mkt_ma5*100:+.2f}% < 門檻 {MKT_PANIC_MA5*100:+.2f}%"
+        elif _mkt_breadth < MKT_PANIC_BREADTH and current_regime != "Bull":
+            _panic_reason = f"上漲家數比 {_mkt_breadth*100:.1f}% < 門檻 {MKT_PANIC_BREADTH*100:.1f}% (非Bull)"
+        if _panic_reason:
+            eff_buy_threshold = 99.0
+            print(f"  [風控警示] 觸發大盤避險紅燈！{_panic_reason}，隔日暫停任何新進場。")
 
         _momentum_status = (
             f"✅ 啟用 (30/70 RS_20d，連續第 {consecutive_bull_days} 天)"
@@ -361,7 +379,8 @@ def main(target_date_str=None):
             d3 = row["Day3_net"]
             close_p = row["close"]
             reasons = []
-            if d3 < SELL_THRESHOLD:
+            _exit_sell_thr = REGIME_EXIT_PARAMS.get(current_regime, {}).get('sell_threshold', SELL_THRESHOLD)
+            if d3 < _exit_sell_thr:
                 reasons.append(f"D3轉弱({d3:+.1f}%)")
             stored_stop = watchlist.get(sid, {}).get("stop_price")
             pnl_pct = 0.0
@@ -397,7 +416,8 @@ def main(target_date_str=None):
     output_lines.append("=" * 90)
     _stop_label = (f"停損 ATR動態({ATR_STOP_MULTIPLIER:g}×ATR, {ATR_STOP_CEILING_PCT:.0f}%~{ATR_STOP_FLOOR_PCT:.0f}%)"
                    if ATR_STOP_ENABLED else f"停損 {STOP_LOSS_PCT:.0f}%")
-    output_lines.append(f"   [實戰下單指令] 買進D1 >= {eff_buy_threshold:.0f}% (市況:{current_regime}) | 賣出D3 < {SELL_THRESHOLD:.0f}% | {_stop_label}")
+    _disp_sell_thr = REGIME_EXIT_PARAMS.get(current_regime, {}).get('sell_threshold', SELL_THRESHOLD)
+    output_lines.append(f"   [實戰下單指令] 買進D1 >= {eff_buy_threshold:.0f}% (市況:{current_regime}) | 賣出D3 < {_disp_sell_thr:.0f}% | {_stop_label}")
     output_lines.append("=" * 90)
 
     output_lines.append("   明日建議賣出掛單 (開盤賣出釋出倉位):")

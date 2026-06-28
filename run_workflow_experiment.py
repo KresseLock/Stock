@@ -34,6 +34,7 @@ import json
 import hashlib
 import argparse
 import threading
+import config as _cfg
 
 # 強制設定標準輸出/錯誤編碼為 UTF-8，防止 Windows 終端機 (CP950/Big5) 遇到 Emoji 拋出 UnicodeEncodeError
 if hasattr(sys.stdout, 'reconfigure'):
@@ -43,12 +44,12 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 # ── 1. 實驗核心配置 (最上面易於手動調整的變數，也支援執行時 CLI 參數覆蓋) ────────
 # ⚙️ 因子最佳化設定 (scripts/optimize_factors.py)
-FACTOR_TRIALS         = 400        # 因子最佳化最大搜尋輪數 (預設較少以利快速驗證)
-FACTOR_EARLY_STOPPING = 150        # 因子最佳化早停輪數 (無進度達此輪數自動終止，None 代表不啟用)
+FACTOR_TRIALS         = _cfg.OPTIMIZATION_TRIALS    # 從 config.py 讀取，保持單一來源
+FACTOR_EARLY_STOPPING = _cfg.EARLY_STOPPING_ROUNDS  # 從 config.py 讀取，保持單一來源
 
 # 🎛️ 交易風控最佳化設定 (scripts/optimize_trading_params.py)
-TRADING_TRIALS         = 400      # 風控最佳化最大搜尋輪數 (預設 100 輪以兼顧效率與品質)
-TRADING_EARLY_STOPPING = 150       # 風控最佳化早停輪數 (無進步達此輪數自動終止，None 代表不啟用)
+TRADING_TRIALS         = _cfg.OPTIMIZATION_TRIALS    # 從 config.py 讀取，保持單一來源
+TRADING_EARLY_STOPPING = _cfg.EARLY_STOPPING_ROUNDS  # 從 config.py 讀取，保持單一來源
 
 # 💰 模擬交易基本設定
 CAPITAL        = 2000000          # 回測與優化的初始資金 (200 萬)
@@ -334,7 +335,11 @@ def fmt_calmar(ret, mdd):
 def fmt_param_val(val, suffix=""):
     if val is None or val == "N/A":
         return "未完成"
-    return f"{val}{suffix}"
+    try:
+        rounded = round(float(val), 10)
+        return f"{rounded:g}{suffix}"
+    except (ValueError, TypeError):
+        return f"{val}{suffix}"
 
 
 def write_experiment_report(res):
@@ -342,10 +347,29 @@ def write_experiment_report(res):
     report_dir = os.path.join(BASE_DIR, "reports")
     os.makedirs(report_dir, exist_ok=True)
     report_path = os.path.join(report_dir, "workflow_experiment_report.md")
-    
+
     mode_a_p = res["mode_a"].get("params", {})
     mode_b_p = res["mode_b"].get("params", {})
     args_info = res["args"]
+
+    def _load_stability(path):
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            return {k: v.get("stability", "") for k, v in d.get("walk_forward_metrics", {}).items() if isinstance(v, dict)}
+        except Exception:
+            return {}
+
+    stab_a = _load_stability(os.path.join(BASE_DIR, "configs", "best_trading_params_mode_a.json"))
+    stab_b = _load_stability(os.path.join(BASE_DIR, "configs", "best_trading_params_mode_b.json"))
+
+    def fmt_stab(key):
+        _map = {"穩定": "✅ 穩定", "需注意": "⚠️ 需注意", "不穩定": "❌ 不穩定"}
+        sa = _map.get(stab_a.get(key, ""), stab_a.get(key, "—"))
+        sb = _map.get(stab_b.get(key, ""), stab_b.get(key, "—"))
+        return f"A:{sa} / B:{sb}"
     date_info = res.get("date_info", {})
     _cutoff      = date_info.get("mode_a_cutoff",   "2025-08-01")
     _oos_start   = date_info.get("mode_a_oos_start", "2025-08-02")
@@ -363,7 +387,9 @@ def write_experiment_report(res):
 
 ## 🧪 潔淨樣本外 (OOS) 風控參數泛化驗證 (修復問題 6)
 
-> 風控參數凍結於 **2023-01-01 ~ {_cutoff}** 優化（未見 OOS 牛市），再以同一組凍結參數回測未見區間 **{_oos_start} ~ {_latest}**。雙模型夾收真實前瞻泛化力：**Model A = 下界**（對測試期無 lookahead，但模型凍結於 {_cutoff} 會退化）、**Model B = 上界**（含最新訓練無退化，但對測試期有 lookahead）。真實前瞻表現預期落在兩者之間。
+> 風控參數凍結於 **2023-01-01 ~ {_cutoff}** 優化（未見 OOS 牛市），再以同一組凍結參數回測未見區間 **{_oos_start} ~ {_latest}**。兩次回測共用同一組凍結參數，僅替換預測大腦：**Model A = 下界**（對測試期無 lookahead，但模型凍結於 {_cutoff} 會退化）、**Model B = 上界**（含最新訓練無退化，但對測試期有 lookahead）。
+>
+> ⚠️ **注意：本表下界與主表模式 A 數字不同。** 主表模式 A 回測 (`{fmt_pct(res["mode_a"].get("oos_return"))}`) 使用 **Walk-Forward 2021-01-02 ~ {_cutoff}** 優化的完整風控參數；本表下界使用的是另一組 **凍結於 2023-01-01 ~ {_cutoff}** 的參數。兩者為相同模型，但風控參數的優化起始年份不同，績效差距即反映此差異。
 
 | 指標 | 🔻 下界 (Model A, 凍結於 {_cutoff}) | 🔺 上界 (Model B, 含最新訓練) | 對照：mode B 全週期 (樣本內) |
 | :--- | :--- | :--- | :--- |
@@ -372,7 +398,7 @@ def write_experiment_report(res):
 | **最大回撤 MDD (%)** | `{fmt_mdd(oos_ma)}` | `{fmt_mdd(oos_mb)}` | `{fmt_mdd(res["mode_b"].get("full_mdd"))}` |
 | **Calmar 比率** | `{fmt_calmar(oos_ra, oos_ma)}` | `{fmt_calmar(oos_rb, oos_mb)}` | `{fmt_calmar(res["mode_b"].get("full_return"), res["mode_b"].get("full_mdd"))}` |
 
-*判讀：若**下界 (Model A)** 報酬仍為正且 MDD 受控，代表凍結風控參數本身具泛化力，mode B 樣本內高報酬非純粹過擬合；若下界顯著轉負而上界仍佳，代表優異績效主要來自模型對測試期的 lookahead，實盤須打折看待。本驗證僅檢驗風控參數泛化，模型 lookahead 屬另一獨立議題。*
+*判讀：若**下界 (Model A)** 報酬仍為正且 MDD 受控，代表凍結風控參數本身具泛化力，mode B 樣本內高報酬非純粹過擬合；若下界顯著轉負，代表風控參數對 OOS 牛市無泛化力，實盤須打折看待。若上界反而差於下界，屬正常現象：Model B 的訊號針對牛市校準，套上保守型凍結風控參數易在正常波動中被洗出，並非模型較差，而是模型與參數的市況錯配。本驗證僅檢驗風控參數泛化，模型 lookahead 屬另一獨立議題。*
 """
 
     shap_table = res["mode_a"].get("shap_drift_table", "")
@@ -426,19 +452,20 @@ def write_experiment_report(res):
 
 ## ⚙️ 最佳化風控策略參數對比 (Optimized Trading Params)
 
-本部分對比 Walk-Forward 在兩種模式下搜尋出的最佳交易參數中位數（Median）。**這揭示了牛市與熊市/阻礙市下，最優風控配置的結構性漂移：**
+本部分對比 Walk-Forward 在兩種模式下搜尋出的最佳交易參數。**模式 A 採普通中位數（各窗口均等），模式 B 採 recency_weight=2 加權中位數（最新窗口權重是最舊窗口的 8 倍），以反映 2026 牛市的當前市況。**
 
-| 風控參數 | 🟢 模式 A (未見過牛市的最佳化) | 🔵 模式 B (包含牛市的最佳化) | 參數說明 |
-| :--- | :--- | :--- | :--- |
-| **買入門檻 (`buy_threshold`)** | `{fmt_param_val(mode_a_p.get("buy_threshold"), "%")}` | `{fmt_param_val(mode_b_p.get("buy_threshold"), "%")}` | D1 多空預測分數觸發買進的百分比。 |
-| **賣出門檻 (`sell_threshold`)** | `{fmt_param_val(mode_a_p.get("sell_threshold"), "%")}` | `{fmt_param_val(mode_b_p.get("sell_threshold"), "%")}` | Day 3 多空預測分數低於此值觸發賣出的百分比。 |
-| **個股停損 (`stop_loss`)** | `{fmt_param_val(mode_a_p.get("stop_loss"), "%")}` | `{fmt_param_val(mode_b_p.get("stop_loss"), "%")}` | 買入後的個股固定停損線。 |
-| **避險門檻 (`panic_ma5`)** | `{fmt_param_val(mode_a_p.get("panic_ma5"))}` | `{fmt_param_val(mode_b_p.get("panic_ma5"))}` | 大盤 5 日平均回報低於此值觸發避險紅燈。 |
-| **避險門檻 (`panic_breadth`)**| `{fmt_param_val(mode_a_p.get("panic_breadth"))}` | `{fmt_param_val(mode_b_p.get("panic_breadth"))}` | 全市場上漲比例低於此值觸發避險紅燈。 |
-| **移動止盈啟動 (`ts_activation`)**| `{fmt_param_val(mode_a_p.get("ts_activation"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_activation"), "%")}` | 個股利潤達到此值開啟移動追蹤止盈。 |
-| **移動止盈回撤 (`ts_pullback`)** | `{fmt_param_val(mode_a_p.get("ts_pullback"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_pullback"), "%")}` | 移動止盈開啟後自高點拉回多少執行停利。 |
-| **最少持股天數 (`min_hold_days`)** | `{fmt_param_val(mode_a_p.get("min_hold_days"), " 天")}` | `{fmt_param_val(mode_b_p.get("min_hold_days"), " 天")}` | 防止頻繁交易所限制的最短持倉天數。 |
-| **掛單折溢價幅 (`markup_pct`)**  | `{fmt_param_val(mode_a_p.get("markup_pct"), "%")}` | `{fmt_param_val(mode_b_p.get("markup_pct"), "%")}` | 掛單折溢價比例，負數代表折價拉回買進。 |
+| 風控參數 | 🟢 模式 A (未見過牛市的最佳化) | 🔵 模式 B (包含牛市的最佳化) | Walk-Forward 穩定性 (A / B) | 參數說明 |
+| :--- | :--- | :--- | :--- | :--- |
+| **牛市買入門檻 (`regime_bull_buy`)** | `{fmt_param_val(mode_a_p.get("regime_bull_buy"), "%")}` | `{fmt_param_val(mode_b_p.get("regime_bull_buy"), "%")}` | {fmt_stab("regime_bull_buy")} | 牛市趨勢下，D1 多空預測分數觸發買進的百分比（市況動態門檻）。 |
+| **橫盤買入門檻 (`regime_sideways_buy`)** | `{fmt_param_val(mode_a_p.get("regime_sideways_buy"), "%")}` | `{fmt_param_val(mode_b_p.get("regime_sideways_buy"), "%")}` | {fmt_stab("regime_sideways_buy")} | 橫盤趨勢下，D1 多空預測分數觸發買進的百分比（市況動態門檻）。 |
+| **賣出門檻 (`sell_threshold`)** | `{fmt_param_val(mode_a_p.get("sell_threshold"), "%")}` | `{fmt_param_val(mode_b_p.get("sell_threshold"), "%")}` | {fmt_stab("sell_threshold")} | Day 3 多空預測分數低於此值觸發賣出的百分比。 |
+| **個股停損 (`stop_loss`)** | `{fmt_param_val(mode_a_p.get("stop_loss"), "%")}` | `{fmt_param_val(mode_b_p.get("stop_loss"), "%")}` | {fmt_stab("stop_loss")} | 買入後的個股固定停損線。 |
+| **避險門檻 (`panic_ma5`)** | `{fmt_param_val(mode_a_p.get("panic_ma5"))}` | `{fmt_param_val(mode_b_p.get("panic_ma5"))}` | {fmt_stab("panic_ma5")} | 大盤 5 日平均回報低於此值觸發避險紅燈。 |
+| **避險門檻 (`panic_breadth`)** | `{fmt_param_val(mode_a_p.get("panic_breadth"))}` | `{fmt_param_val(mode_b_p.get("panic_breadth"))}` | {fmt_stab("panic_breadth")} | 全市場上漲比例低於此值觸發避險紅燈。 |
+| **移動止盈啟動 (`ts_activation`)** | `{fmt_param_val(mode_a_p.get("ts_activation"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_activation"), "%")}` | {fmt_stab("ts_activation")} | 個股利潤達到此值開啟移動追蹤止盈。 |
+| **移動止盈回撤 (`ts_pullback`)** | `{fmt_param_val(mode_a_p.get("ts_pullback"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_pullback"), "%")}` | {fmt_stab("ts_pullback")} | 移動止盈開啟後自高點拉回多少執行停利。 |
+| **最少持股天數 (`min_hold_days`)** | `{fmt_param_val(mode_a_p.get("min_hold_days"), " 天")}` | `{fmt_param_val(mode_b_p.get("min_hold_days"), " 天")}` | {fmt_stab("min_hold_days")} | 防止頻繁交易所限制的最短持倉天數。 |
+| **掛單折溢價幅 (`markup_pct`)** | `{fmt_param_val(mode_a_p.get("markup_pct"), "%")}` | `{fmt_param_val(mode_b_p.get("markup_pct"), "%")}` | {fmt_stab("markup_pct")} | 掛單折溢價比例，負數代表折價拉回買進。 |
 
 ### 💡 研究員核心分析與結論：
 1. **為什麼模式 A 與模式 B 的最優風控參數存在差異？**
@@ -837,7 +864,10 @@ def main():
             "-c", str(args.capital),
             "-j", str(optuna_jobs),
             "-wf",
-            "--regime"
+            "--regime",
+            # 模式 B 為實盤部署組，採近期加權中位數讓最新窗口（唯一涵蓋當下牛市）主導，
+            # 權重 = 2^i（最新窗是最舊窗的 8 倍），避免被舊窗中位數稀釋。mode_a/oos 維持普通中位數。
+            "--recency_weight", "2"
         ]
         expected_sig_b = compute_opt_signature(opt_cmd_b)
         has_checkpoint_trading_b = os.path.exists(trading_mode_b_saved) and not args.fresh
@@ -891,6 +921,10 @@ def main():
 
         results["mode_b"]["params"] = mode_b_params
         results["mode_b"]["opt_signature"] = expected_sig_b
+        if not param_checkpoint_valid_b:
+            # 參數已重新優化，舊的回測結果必須作廢，否則報告數字仍是舊參數的
+            results["mode_b"].pop("full_return", None)
+            results["mode_b"].pop("full_mdd", None)
         save_progress(results)
         
         # B7. 執行全週期模擬交易回測 (2023-01-01 ~ 2026-06-05)

@@ -22446,5 +22446,17 @@
   "credit_limit_20260625": {
     "reason": "no_data",
     "confirmed_at": "2026-06-25"
+  },
+  "daytrading_20260626": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-26"
+  },
+  "fini_holding_20260626": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-26"
+  },
+  "credit_limit_20260626": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-26"
   }
 }

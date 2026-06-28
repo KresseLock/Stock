@@ -70,7 +70,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                    ts_activation_pct=None, ts_pullback_pct=None,
                    min_hold_days=None, markup_pct=None,
                    regime_buy_threshold=None, regime_bull_trend=None, regime_bear_trend=None,
-                   regime_max_positions=None):
+                   regime_max_positions=None, regime_exit_params=None,
+                   exit_regime_lag=None):
     print("=" * 70)
     print(f"  啟動量化交易回測 (Out-of-Sample, T+1 限價搓合 + 雙風控防線版)")
     print(f"  期間: {start_date} 到 {end_date}")
@@ -209,6 +210,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD, REGIME_MAX_POSITIONS,
             ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
             MOMENTUM_BULL_CONFIRM_DAYS,
+            REGIME_EXIT_PARAMS as _CFG_REGIME_EXIT, EXIT_REGIME_LAG as _CFG_EXIT_LAG,
         )
     except ImportError:
         BUY_THRESHOLD     = 10.0
@@ -230,6 +232,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         ATR_STOP_FLOOR_PCT = -15.0
         ATR_STOP_CEILING_PCT = -3.0
         MOMENTUM_BULL_CONFIRM_DAYS = 5
+        _CFG_REGIME_EXIT = {}
+        _CFG_EXIT_LAG = 1
 
     # 市況過濾器精度控管：僅在「未顯式指定 buy_threshold」時啟用動態門檻，
     # 避免破壞 CLI 覆寫與 param_sensitivity.py 的靜態掃描。
@@ -259,7 +263,17 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         MIN_HOLD_DAYS = min_hold_days
     if markup_pct is not None:
         ORDER_MARKUP_PCT = markup_pct
-    
+    # regime_exit_params=None → 從 config 載入（部署預設）
+    # regime_exit_params={} → 明確停用（optimize_trading_params.py 優化時使用）
+    if regime_exit_params is None:
+        _regime_exit = _CFG_REGIME_EXIT
+        if exit_regime_lag is None:
+            exit_regime_lag = _CFG_EXIT_LAG
+    else:
+        _regime_exit = regime_exit_params
+    if exit_regime_lag is None:
+        exit_regime_lag = 1
+
     # 建立股票名稱對照表
     stock_names = {}
     cat_path = os.path.join(BASE_DIR, "scripts", "stock_categories.json")
@@ -278,6 +292,10 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
 
     # Hysteresis 計數器：連續 Bull 天數，非 Bull 立即重置
     consecutive_bull_days = 0
+    # 出場 regime 遲滯：切入 Bull 立即生效，切出需連續 N 天才換
+    _exit_hysteresis = int(exit_regime_lag) if exit_regime_lag is not None else 1
+    _exit_non_bull_streak = 0
+    _exit_regime = 'Sideways'
 
     for idx_today, today in enumerate(trading_dates):
         start_trade_idx = len(trades)
@@ -323,6 +341,15 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         else:
             consecutive_bull_days = 0
 
+        # 出場 regime 遲滯：切入 Bull 立即生效；切出需連續 N 天非 Bull 才切換
+        if signal_regime == 'Bull':
+            _exit_non_bull_streak = 0
+            _exit_regime = 'Bull'
+        elif signal_regime is not None:
+            _exit_non_bull_streak += 1
+            if _exit_non_bull_streak >= _exit_hysteresis:
+                _exit_regime = signal_regime
+
         is_market_panic = False
         panic_reason = ""
         if mkt_ma5 < MKT_PANIC_MA5:
@@ -349,6 +376,19 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         else:
             eff_max_positions = max_positions
 
+        # 市況出場：依遲滯後 regime 動態切換出場參數（Bull 立即生效，非 Bull 需連續 N 天）
+        if _regime_exit and _exit_regime in _regime_exit:
+            _re = _regime_exit[_exit_regime]
+            eff_sell_thr = _re.get('sell_threshold', SELL_THRESHOLD)
+            eff_ts_act   = _re.get('ts_activation',  TS_ACTIVATION_PCT)
+            eff_ts_pull  = _re.get('ts_pullback',    TS_PULLBACK_PCT)
+            eff_min_hold = _re.get('min_hold_days',  MIN_HOLD_DAYS)
+        else:
+            eff_sell_thr = SELL_THRESHOLD
+            eff_ts_act   = TS_ACTIVATION_PCT
+            eff_ts_pull  = TS_PULLBACK_PCT
+            eff_min_hold = MIN_HOLD_DAYS
+
         # --- B. 賣出邏輯 (昨日訊號 Day3 < 0，跌破停損，或是觸發移動止盈) ---
         sells_today = []
         for sid, pos in list(positions.items()):
@@ -373,8 +413,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                 
                 # 判定 1: 階段式寬鬆移動止盈 (浮盈達到 +10% 啟動門檻，且高點收盤回撤 6%)
                 triggered_trailing_stop = False
-                if 'max_close_price' in pos and pos['max_close_price'] >= actual_cost_price * (1.0 + TS_ACTIVATION_PCT / 100.0):
-                    trailing_stop_price = pos['max_close_price'] * (1.0 + TS_PULLBACK_PCT / 100.0)  # 自最高收盤回撤一定趴數
+                if 'max_close_price' in pos and pos['max_close_price'] >= actual_cost_price * (1.0 + eff_ts_act / 100.0):
+                    trailing_stop_price = pos['max_close_price'] * (1.0 + eff_ts_pull / 100.0)  # 自最高收盤回撤一定趴數
                     # 我們在 T 日收盤發現跌破止盈點，則在今日 (T+1) 執行賣出
                     # 這裡為了簡化，在昨天的收盤價跌破昨日高點回撤線時，今天開盤直接賣
                     # 使用 pos['current_price'] 作為安全 fallback，避免 close_prev 未定義的 NameError
@@ -391,11 +431,11 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                     sells_today.append((sid, open_T1, f"觸發停損(開盤跳空:{stop_loss_price:.2f})"))
                 elif low_T1 <= stop_loss_price:
                     sells_today.append((sid, stop_loss_price, f"觸發停損(盤中:{stop_loss_price:.2f})"))
-                elif held_trading_days >= MIN_HOLD_DAYS:
-                    if day3_score < SELL_THRESHOLD:
-                        sells_today.append((sid, open_T1, f"Day3預測轉弱 ({day3_score:.1f}% < {SELL_THRESHOLD}%)"))
+                elif held_trading_days >= eff_min_hold:
+                    if day3_score < eff_sell_thr:
+                        sells_today.append((sid, open_T1, f"Day3預測轉弱 ({day3_score:.1f}% < {eff_sell_thr}%)"))
                     elif triggered_trailing_stop:
-                        sells_today.append((sid, open_T1, f"觸發移動止盈(高點 {pos['max_close_price']:.2f} 回撤{abs(TS_PULLBACK_PCT)}%)"))
+                        sells_today.append((sid, open_T1, f"觸發移動止盈(高點 {pos['max_close_price']:.2f} 回撤{abs(eff_ts_pull)}%)"))
 
         today_sells_amount = 0
         for sid, sell_price, reason in sells_today:
@@ -677,7 +717,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         _bull_h = _h[_h['regime'] == 'Bull']
         if not _bull_h.empty:
             _bull_under = (_bull_h['n_positions'] <= 2).sum() / len(_bull_h) * 100
-            _flag = " ⚠️ 閾值可能浪費 alpha" if _bull_under > 30 else " ✅ 曝險充足"
+            _flag = " [!] 閾值可能浪費 alpha" if _bull_under > 30 else " [OK] 曝險充足"
             print(f"  {'='*52}")
             print(f"  Bull 低持倉(0-2檔)佔 {_bull_under:.1f}%{_flag}")
     
@@ -781,8 +821,34 @@ if __name__ == "__main__":
     parser.add_argument("--ts_pullback", type=float, default=None, help="移動止盈回撤門檻 (%)")
     parser.add_argument("--min_hold_days", type=int, default=None, help="最少持股天數 (防止頻繁交易)")
     parser.add_argument("--markup_pct", type=float, default=None, help="掛單溢價幅度 (%)，負數為折價買進")
-    
+    # 市況出場參數（逐 regime 覆蓋，不傳則沿用全域預設）
+    parser.add_argument("--bull_sell",   type=float, default=None, help="Bull regime 賣出門檻 (%)")
+    parser.add_argument("--bull_ts_act", type=float, default=None, help="Bull regime 移動止盈啟動 (%)")
+    parser.add_argument("--bull_ts_pull",type=float, default=None, help="Bull regime 移動止盈回撤 (%)")
+    parser.add_argument("--bull_hold",   type=int,   default=None, help="Bull regime 最少持股天數")
+    parser.add_argument("--side_sell",   type=float, default=None, help="Sideways regime 賣出門檻 (%)")
+    parser.add_argument("--side_ts_act", type=float, default=None, help="Sideways regime 移動止盈啟動 (%)")
+    parser.add_argument("--side_ts_pull",type=float, default=None, help="Sideways regime 移動止盈回撤 (%)")
+    parser.add_argument("--side_hold",   type=int,   default=None, help="Sideways regime 最少持股天數")
+    parser.add_argument("--bear_sell",   type=float, default=None, help="Bear regime 賣出門檻 (%)")
+    parser.add_argument("--bear_ts_act", type=float, default=None, help="Bear regime 移動止盈啟動 (%)")
+    parser.add_argument("--bear_ts_pull",type=float, default=None, help="Bear regime 移動止盈回撤 (%)")
+    parser.add_argument("--bear_hold",   type=int,   default=None, help="Bear regime 最少持股天數")
+    parser.add_argument("--exit_lag",    type=int,   default=None, help="切出 Bull 出場模式所需的連續非 Bull 天數 (不傳則沿用 config EXIT_REGIME_LAG)")
+
     args = parser.parse_args()
+
+    _regime_exit_params = {}
+    bull_p = {k: v for k, v in {'sell_threshold': args.bull_sell, 'ts_activation': args.bull_ts_act,
+              'ts_pullback': args.bull_ts_pull, 'min_hold_days': args.bull_hold}.items() if v is not None}
+    if bull_p: _regime_exit_params['Bull'] = bull_p
+    side_p = {k: v for k, v in {'sell_threshold': args.side_sell, 'ts_activation': args.side_ts_act,
+              'ts_pullback': args.side_ts_pull, 'min_hold_days': args.side_hold}.items() if v is not None}
+    if side_p: _regime_exit_params['Sideways'] = side_p
+    bear_p = {k: v for k, v in {'sell_threshold': args.bear_sell, 'ts_activation': args.bear_ts_act,
+              'ts_pullback': args.bear_ts_pull, 'min_hold_days': args.bear_hold}.items() if v is not None}
+    if bear_p: _regime_exit_params['Bear'] = bear_p
+
     run_simulation(
         args.start, args.end, args.capital, args.max_pos,
         mkt_panic_ma5=args.panic_ma5,
@@ -793,5 +859,7 @@ if __name__ == "__main__":
         ts_activation_pct=args.ts_activation,
         ts_pullback_pct=args.ts_pullback,
         min_hold_days=args.min_hold_days,
-        markup_pct=args.markup_pct
+        markup_pct=args.markup_pct,
+        regime_exit_params=_regime_exit_params or None,
+        exit_regime_lag=args.exit_lag,
     )

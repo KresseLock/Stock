@@ -90,11 +90,16 @@ def _suggest(trial, name):
 
 def suggest_trial_params(trial, regime_mode):
     """集中定義 Optuna 搜尋空間。regime_mode 時搜尋 REGIME_* 動態門檻，否則搜尋靜態 buy_threshold。
-    搜尋邊界統一由 config.TRADING_PARAM_BOUNDS 控制 (常數集中原則)。"""
+    搜尋邊界統一由 config.TRADING_PARAM_BOUNDS 控制 (常數集中原則)。
+
+    僅搜尋「部署時真正生效」的參數：panic_*（大盤恐慌門檻）、markup_pct（限價搓合溢價）為全域生效。
+    stop_loss 由 ATR 動態停損覆蓋 (config.ATR_STOP_ENABLED=True，搜尋值僅為 ATR 缺值 fallback)，
+    sell_threshold / ts_activation / ts_pullback / min_hold_days 在部署時由 config.REGIME_EXIT_PARAMS
+    依市況覆蓋（trading_sim.py 載入 regime_exit_params=None 即套用），故全數移出搜尋空間，
+    避免 Optuna 在「不會被部署」的維度空轉並污染 Walk-Forward 穩定度報表。"""
     p = {
         name: _suggest(trial, name)
-        for name in ("sell_threshold", "stop_loss", "panic_ma5", "panic_breadth",
-                     "ts_activation", "ts_pullback", "min_hold_days", "markup_pct")
+        for name in ("panic_ma5", "panic_breadth", "markup_pct")
     }
     if regime_mode:
         # 市況過濾器：趨勢市低門檻進攻、震盪市高門檻防守、空頭固定空倉(99)
@@ -120,12 +125,11 @@ def run_simulation_scoring(start_date, end_date, trial_params, capital, max_pos)
         max_positions=max_pos,
         mkt_panic_ma5=trial_params["panic_ma5"],
         mkt_panic_breadth=trial_params["panic_breadth"],
-        sell_threshold=trial_params["sell_threshold"],
-        stop_loss_pct=trial_params["stop_loss"],
-        ts_activation_pct=trial_params["ts_activation"],
-        ts_pullback_pct=trial_params["ts_pullback"],
-        min_hold_days=trial_params["min_hold_days"],
         markup_pct=trial_params["markup_pct"],
+        # 與實盤部署完全一致：regime_exit_params=None → trading_sim 載入 config.REGIME_EXIT_PARAMS
+        # 依市況切換出場 (sell_threshold/ts_*/min_hold_days)；stop_loss 不傳 → 由 ATR 動態停損接管。
+        # 這三類參數不在此搜尋 (見 suggest_trial_params)，確保「優化評分 == 部署行為」。
+        regime_exit_params=None,
     )
     if "regime_bull_buy" in trial_params:
         # 市況過濾器模式：搜尋 regime 動態門檻，buy_threshold 留空 (None) 以啟用過濾器
@@ -225,6 +229,8 @@ def main():
     parser.add_argument("-wf", "--walk_forward", action="store_true", help="是否啟用 Walk-Forward 參數穩定性檢驗")
     parser.add_argument("--regime", action="store_true",
                         help="市況過濾器模式：搜尋 REGIME_* 動態門檻 (Bull/Sideways 門檻與趨勢分界)，而非靜態 buy_threshold")
+    parser.add_argument("--recency_weight", type=float, default=1.0,
+                        help="WFO 近期加權係數：>1 時讓最新窗口擁有更高權重（例: 2 = 每窗口權重是前一個的 2 倍），預設 1.0 為普通中位數")
 
     args = parser.parse_args()
     
@@ -290,6 +296,28 @@ def main():
         print(f"{'參數名稱':<15} | {'中位數(Median)':<15} | {'四分位距(IQR)':<15} | {'變異係數(CV)':<12} | {'穩定度':<6}")
         print("-" * 75)
         
+        def _weighted_median(raw_vals, rw):
+            """加權中位數：rw=1 退化為普通中位數，>1 時讓最新窗口（index 最大）主導。
+            weights[i] = rw^i，最舊窗口 = rw^0 = 1，最新窗口 = rw^(n-1)。"""
+            if rw <= 1.0:
+                return float(np.median(raw_vals))
+            n = len(raw_vals)
+            raw_w = [rw ** i for i in range(n)]
+            min_w = min(raw_w)
+            expanded = []
+            for v, w in zip(raw_vals, raw_w):
+                expanded.extend([float(v)] * max(1, round(w / min_w)))
+            expanded.sort()
+            m = len(expanded)
+            if m % 2 == 0:
+                return (expanded[m // 2 - 1] + expanded[m // 2]) / 2.0
+            return expanded[m // 2]
+
+        rw = args.recency_weight
+        if rw > 1.0:
+            print(f"\n  [加權中位數] recency_weight={rw}，窗口權重 = {[round(rw**i, 2) for i in range(len(all_best_params))]}")
+            print("  (穩定度統計仍用普通中位數/IQR，best_params 採加權中位數以反映近期市況)")
+
         for p in param_names:
             vals = np.array([bp[p] for bp in all_best_params])
             med_val = np.median(vals)
@@ -299,16 +327,18 @@ def main():
             mean_val = np.mean(vals)
             cv_val = std_val / abs(mean_val) if abs(mean_val) > 0 else 0.0
             stability = "穩定" if cv_val < 0.15 else "需注意" if cv_val < 0.30 else "不穩定"
-            
+            deploy_val = _weighted_median(list(vals), rw)
+
             if p in ["panic_ma5", "panic_breadth"]:
-                print(f"{p:<15} | {med_val*100:13.2f}% | {iqr_val*100:13.2f}% | {cv_val:12.3f} | {stability}")
+                print(f"{p:<15} | {deploy_val*100:13.2f}% | {iqr_val*100:13.2f}% | {cv_val:12.3f} | {stability}")
             else:
-                print(f"{p:<15} | {med_val:14.2f}  | {iqr_val:14.2f}  | {cv_val:12.3f} | {stability}")
-                
-            median_params[p] = float(med_val)
+                print(f"{p:<15} | {deploy_val:14.2f}  | {iqr_val:14.2f}  | {cv_val:12.3f} | {stability}")
+
+            median_params[p] = deploy_val
             wf_results[p] = {
                 "values": [float(v) for v in vals],
                 "median": float(med_val),
+                "deployed": deploy_val,
                 "iqr": float(iqr_val),
                 "cv": float(cv_val),
                 "stability": stability
