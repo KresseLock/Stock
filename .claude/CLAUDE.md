@@ -36,7 +36,7 @@
 - `scripts/stock_categories.json` — 產業分類與 ETF 清單（全系統共用）
 - `models/feature_cols.json` — 訓練特徵名稱，推論時須 100% 對齊
 - `data/skip_dates.json` / `data/failed_dates.json` — 爬蟲跳過與失敗快取
-- `Stocks.txt` — 自選股／持倉清單；**格式 D 第 4 欄＝買入日鎖定 ATR 停損價**（`代號,成本,股數,停損價`，由 `inference.py` 買進建議提供），填了 `inference.py` 走精確價判停損，未填退回當日 ATR 近似
+- `Stocks.txt` — 自選股／持倉清單；**格式 D 第 4 欄＝買入日鎖定 ATR 停損價**（`代號,成本,股數,停損價`，由 `inference.py` 買進建議提供），填了 `inference.py` 走精確價判停損，未填退回當日 ATR 近似。**格式 E 第 5 欄＝買入日期**（`代號,成本,股數,停損價,買入日期`，YYYY-MM-DD）；填了 `inference.py` 才比照 `trading_sim.py`：D3轉弱／移動止盈出場須滿 `MIN_HOLD_DAYS`（停損不限）且啟用移動止盈判定，未填退回「無視持有天數、D3 轉弱即建議賣」
 
 ---
 

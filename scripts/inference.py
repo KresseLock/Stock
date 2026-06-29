@@ -26,12 +26,13 @@ MODEL_DIR = os.path.join(BASE_DIR, "models")
 try:
     from config import (
         BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS, FEE_RATE, TAX_RATE,
-        ORDER_MARKUP_HIGH_SCORE, ORDER_MARKUP_MID_SCORE,
+        ORDER_MARKUP_PCT, ORDER_MARKUP_HIGH_SCORE, ORDER_MARKUP_MID_SCORE,
         ORDER_MARKUP_HIGH_PCT, ORDER_MARKUP_MID_PCT, ORDER_MARKUP_LOW_PCT,
-        REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD, REGIME_BULL_TREND, REGIME_BEAR_TREND,
+        REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD, REGIME_MAX_POSITIONS,
+        REGIME_BULL_TREND, REGIME_BEAR_TREND,
         REGIME_TREND_WINDOW, REGIME_TREND_MIN_PERIODS,
         ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
-        REGIME_EXIT_PARAMS,
+        REGIME_EXIT_PARAMS, TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS,
         MKT_PANIC_MA5, MKT_PANIC_BREADTH,
     )
 except ImportError:
@@ -41,14 +42,15 @@ except ImportError:
     FEE_RATE        = 0.001425
     TAX_RATE        = 0.003
     MAX_POSITIONS   = 5
+    ORDER_MARKUP_PCT = None
     ORDER_MARKUP_HIGH_SCORE = 30.0; ORDER_MARKUP_MID_SCORE  = 20.0
     ORDER_MARKUP_HIGH_PCT   = 2.5;  ORDER_MARKUP_MID_PCT    = 2.0; ORDER_MARKUP_LOW_PCT = 1.5
-    REGIME_ADAPTIVE_ENABLED = False; REGIME_BUY_THRESHOLD = {}
+    REGIME_ADAPTIVE_ENABLED = False; REGIME_BUY_THRESHOLD = {}; REGIME_MAX_POSITIONS = {}
     REGIME_BULL_TREND = 0.002; REGIME_BEAR_TREND = -0.002
     REGIME_TREND_WINDOW = 20; REGIME_TREND_MIN_PERIODS = 5
     ATR_STOP_ENABLED = False; ATR_STOP_MULTIPLIER = 1.5
     ATR_STOP_FLOOR_PCT = -15.0; ATR_STOP_CEILING_PCT = -5.0
-    REGIME_EXIT_PARAMS = {}
+    REGIME_EXIT_PARAMS = {}; TS_ACTIVATION_PCT = 10.0; TS_PULLBACK_PCT = -6.0; MIN_HOLD_DAYS = 1
     MKT_PANIC_MA5 = -0.010; MKT_PANIC_BREADTH = 0.30
 
 
@@ -159,7 +161,10 @@ def main(target_date_str=None):
 
     watchlist = load_watchlist_detailed()
     if not watchlist:
-        watchlist = {sid: {"cost": None, "shares": None, "stop_price": None} for sid in sorted(df["stock_id"].unique().tolist())}
+        watchlist = {sid: {"cost": None, "shares": None, "stop_price": None, "buy_date": None} for sid in sorted(df["stock_id"].unique().tolist())}
+
+    # 全體交易日序列（供持股天數計算，與 trading_sim 的 idx 差值同義）
+    all_dates_sorted = sorted(pd.Timestamp(d) for d in df["date"].unique())
 
     df_latest_market = df[df["date"] == latest_date].copy()
     if df_latest_market.empty:
@@ -371,6 +376,14 @@ def main(target_date_str=None):
         output_lines.append("   [提示] 目前為全市場掃描。可在 Stocks.txt 中填寫「代號,買入價,股數」啟用損益追蹤。")
         output_lines.append("=" * 90)
 
+    # 出場用 regime 參數（與 trading_sim 對齊；inference 以最新日 regime 取代 trading_sim 的遲滯 regime）
+    _exit_re = REGIME_EXIT_PARAMS.get(current_regime, {})
+    _exit_sell_thr = _exit_re.get('sell_threshold', SELL_THRESHOLD)
+    _exit_ts_act   = _exit_re.get('ts_activation',  TS_ACTIVATION_PCT)
+    _exit_ts_pull  = _exit_re.get('ts_pullback',    TS_PULLBACK_PCT)
+    _exit_min_hold = _exit_re.get('min_hold_days',  MIN_HOLD_DAYS)
+    _latest_idx = all_dates_sorted.index(latest_date) if latest_date in all_dates_sorted else len(all_dates_sorted) - 1
+
     sells_list = []
     for sid, cost in actual_holdings.items():
         row_match = results_market[results_market["stock_id"] == sid]
@@ -379,9 +392,37 @@ def main(target_date_str=None):
             d3 = row["Day3_net"]
             close_p = row["close"]
             reasons = []
-            _exit_sell_thr = REGIME_EXIT_PARAMS.get(current_regime, {}).get('sell_threshold', SELL_THRESHOLD)
-            if d3 < _exit_sell_thr:
-                reasons.append(f"D3轉弱({d3:+.1f}%)")
+
+            # 解析買入日期（Stocks.txt 第 5 欄）→ 對齊交易日、算持股天數。未填則 held_days=None
+            _bd_raw = watchlist.get(sid, {}).get("buy_date")
+            held_days = None
+            buy_ts_aligned = None
+            if _bd_raw:
+                try:
+                    _bd_ts = pd.Timestamp(pd.to_datetime(_bd_raw))
+                    _prior = [d for d in all_dates_sorted if d <= _bd_ts]
+                    if _prior:
+                        buy_ts_aligned = _prior[-1]
+                        held_days = _latest_idx - all_dates_sorted.index(buy_ts_aligned)
+                except Exception:
+                    held_days = None
+
+            # D3 轉弱：有買入日 → 須滿 MIN_HOLD_DAYS 才建議賣（對齊 trading_sim）；未填 → 維持原本無視天數
+            if d3 < _exit_sell_thr and (held_days is None or held_days >= _exit_min_hold):
+                _hold_note = f"，持股{held_days}天" if held_days is not None else ""
+                reasons.append(f"D3轉弱({d3:+.1f}%{_hold_note})")
+
+            # 移動止盈：僅在有買入日且滿 MIN_HOLD_DAYS 時判定（需買入日後最高收盤）
+            if held_days is not None and held_days >= _exit_min_hold and cost and cost > 0 and buy_ts_aligned is not None:
+                actual_cost = cost * (1 + FEE_RATE)
+                _hist = df[(df["stock_id"] == sid) & (df["date"] >= buy_ts_aligned) & (df["date"] <= latest_date)]
+                _max_close = float(_hist["close"].max()) if not _hist.empty else close_p
+                if _max_close >= actual_cost * (1.0 + _exit_ts_act / 100.0):
+                    _ts_line = _max_close * (1.0 + _exit_ts_pull / 100.0)
+                    if close_p <= _ts_line:
+                        reasons.append(f"移動止盈(高{_max_close:.2f}回撤{abs(_exit_ts_pull):g}%→{_ts_line:.2f})")
+
+            # 停損（不受持股天數限制，與 trading_sim 一致）
             stored_stop = watchlist.get(sid, {}).get("stop_price")
             pnl_pct = 0.0
             if cost and cost > 0:
@@ -410,14 +451,19 @@ def main(target_date_str=None):
     current_hold_count = len(actual_holdings)
     sells_count = len(sells_list)
     remaining_hold_count = len(remaining_holdings)
-    available_slots = max(0, MAX_POSITIONS - remaining_hold_count)
+    # 市況降檔：與 trading_sim.py 的 eff_max_positions 對齊（震盪/空頭時減少持倉上限以降曝險）
+    if REGIME_ADAPTIVE_ENABLED and current_regime in REGIME_MAX_POSITIONS:
+        eff_max_positions = REGIME_MAX_POSITIONS.get(current_regime, MAX_POSITIONS)
+    else:
+        eff_max_positions = MAX_POSITIONS
+    available_slots = max(0, eff_max_positions - remaining_hold_count)
 
     output_lines.append("")
     output_lines.append("=" * 90)
     _stop_label = (f"停損 ATR動態({ATR_STOP_MULTIPLIER:g}×ATR, {ATR_STOP_CEILING_PCT:.0f}%~{ATR_STOP_FLOOR_PCT:.0f}%)"
                    if ATR_STOP_ENABLED else f"停損 {STOP_LOSS_PCT:.0f}%")
     _disp_sell_thr = REGIME_EXIT_PARAMS.get(current_regime, {}).get('sell_threshold', SELL_THRESHOLD)
-    output_lines.append(f"   [實戰下單指令] 買進D1 >= {eff_buy_threshold:.0f}% (市況:{current_regime}) | 賣出D3 < {_disp_sell_thr:.0f}% | {_stop_label}")
+    output_lines.append(f"   [實戰下單指令] 買進D1 >= {eff_buy_threshold:.0f}% (市況:{current_regime}, 上限{eff_max_positions}檔) | 賣出D3 < {_disp_sell_thr:.0f}% | {_stop_label} | 最少持有{_exit_min_hold:g}天(僅填買入日者生效，停損不限)")
     output_lines.append("=" * 90)
 
     output_lines.append("   明日建議賣出掛單 (開盤賣出釋出倉位):")
@@ -455,14 +501,17 @@ def main(target_date_str=None):
             d3    = row.Day3_net
             close_p = row.close
             
-            # 根據 D1 多空信心分數動態決定建議加價幅度 (D1 >= ORDER_MARKUP_HIGH_SCORE 建議高加價)
-            if d1 >= ORDER_MARKUP_HIGH_SCORE:
+            # 掛單加價：與 trading_sim.py 對齊——ORDER_MARKUP_PCT 非 None 時用固定值
+            # （負數=折價逢低買進），為 None 才依 D1 信心動態加價。
+            if ORDER_MARKUP_PCT is not None:
+                target_pct = ORDER_MARKUP_PCT
+            elif d1 >= ORDER_MARKUP_HIGH_SCORE:
                 target_pct = ORDER_MARKUP_HIGH_PCT
             elif d1 >= ORDER_MARKUP_MID_SCORE:
                 target_pct = ORDER_MARKUP_MID_PCT
             else:
                 target_pct = ORDER_MARKUP_LOW_PCT
-            
+
             raw_target_price = close_p * (1 + target_pct / 100.0)
             target_price = round_to_tick(raw_target_price)
 
@@ -476,8 +525,11 @@ def main(target_date_str=None):
                 f"    {tag} 第 {idx} 檔 -> {sid:<5} {cname:<5} (收盤 {close_p:>6.2f} | D1 {d1:>+5.1f}% | D3 {d3:>+5.1f}% | 建議掛 {target_pct:+.1f}% -> {target_price:>6.2f} | ATR停損 {stop_price:>6.2f}[{_stop_pct:+.1f}%])"
             )
         output_lines.append("")
-        output_lines.append("     [掛單提醒] 建議掛單價已依 D1 信心動態加價並自動對齊台股 Tick 升降單位 (D1>=30%加2.5%, >=20%加2.0%, 其他加1.5%)。")
-        output_lines.append("     [停損記錄] 成交後請將「ATR停損」價填入 Stocks.txt 第 4 欄 (代號,成本,股數,停損價)，系統即以此精確判定停損。")
+        _markup_hint = (f"固定 {ORDER_MARKUP_PCT:+.1f}%（{'折價逢低買進' if ORDER_MARKUP_PCT < 0 else '溢價搶進'}，對齊 trading_sim）"
+                        if ORDER_MARKUP_PCT is not None
+                        else "依 D1 信心動態加價 (D1>=30%加2.5%, >=20%加2.0%, 其他加1.5%)")
+        output_lines.append(f"     [掛單提醒] 建議掛單價{_markup_hint}並自動對齊台股 Tick 升降單位。")
+        output_lines.append("     [停損記錄] 成交後請將「ATR停損」價填入 Stocks.txt 第 4 欄；可再加第 5 欄買入日期 (代號,成本,股數,停損價,買入日期)，系統即比照回測判定最少持有天數與移動止盈。")
     output_lines.append("-" * 90)
 
     if has_real_watchlist and len(track_only) > 0:

@@ -84,7 +84,15 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
 
     # 1. 載入資料並過濾日期
     df = pd.read_parquet(DATA_PATH)
-    
+
+    # 收盤「最後揭示賣價」(字串型)正規化為數值，供高價股零股買進取成交價（吃賣單）。
+    # 漲停無賣單時為 '0.00'，會在買進邏輯退回限價/開盤價。舊版 parquet 無此欄則為 NaN。
+    if '最後揭示賣價' in df.columns:
+        df['last_ask'] = pd.to_numeric(
+            df['最後揭示賣價'].astype(str).str.replace(',', '', regex=False), errors='coerce')
+    else:
+        df['last_ask'] = float('nan')
+
     # 計算每日大盤特徵與 20 日滾動均值，用以劃分 Regime
     df_daily_mkt = df.groupby("date")[["market_mean_pct", "market_breadth_pct"]].first().reset_index()
     df_daily_mkt["market_trend_20d"] = df_daily_mkt["market_mean_pct"].rolling(window=REGIME_TREND_WINDOW, min_periods=REGIME_TREND_MIN_PERIODS).mean()
@@ -209,7 +217,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS, ORDER_MARKUP_PCT,
             REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD, REGIME_MAX_POSITIONS,
             ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
-            MOMENTUM_BULL_CONFIRM_DAYS,
+            MOMENTUM_BULL_CONFIRM_DAYS, LOT_SIZE, ODD_LOT_ENABLED,
             REGIME_EXIT_PARAMS as _CFG_REGIME_EXIT, EXIT_REGIME_LAG as _CFG_EXIT_LAG,
         )
     except ImportError:
@@ -232,6 +240,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         ATR_STOP_FLOOR_PCT = -15.0
         ATR_STOP_CEILING_PCT = -3.0
         MOMENTUM_BULL_CONFIRM_DAYS = 5
+        LOT_SIZE = 1000
+        ODD_LOT_ENABLED = True
         _CFG_REGIME_EXIT = {}
         _CFG_EXIT_LAG = 1
 
@@ -441,12 +451,14 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         for sid, sell_price, reason in sells_today:
             pos = positions.pop(sid)
             gross = pos['shares'] * sell_price
-            net_proceeds = gross * (1 - FEE_RATE - TAX_RATE)
-            
+            sell_fee = gross * FEE_RATE
+            sell_tax = gross * TAX_RATE
+            net_proceeds = gross - sell_fee - sell_tax
+
             # 賣出當天即刻釋出可用資金 (購買力)
             available_cash += net_proceeds
             today_sells_amount += net_proceeds
-            
+
             profit = net_proceeds - (pos['shares'] * pos['buy_price'] * (1 + FEE_RATE))
             profit_pct = profit / (pos['shares'] * pos['buy_price'] * (1 + FEE_RATE)) * 100
             cname = stock_names.get(sid, "")
@@ -462,6 +474,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                 'Price': sell_price,
                 'Shares': pos['shares'],
                 'Amount': net_proceeds,
+                'Fee': sell_fee,
+                'Tax': sell_tax,
                 'Profit': profit,
                 'Profit_Pct(%)': profit_pct,
                 'Current_Cash': available_cash,
@@ -546,9 +560,26 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             if invest_amount < 1000:
                 continue
                 
-            max_shares = int((invest_amount / (1 + FEE_RATE)) // buy_price)
+            # 台股以「張」(1000股) 為交易單位。買得起 ≥1 張 → 只買整張（零頭忽略，貼近多數散戶）；
+            # 連 1 張都買不起的高價股 → 退而以零股買進，成交價採收盤「最後揭示賣價」(吃賣單)。
+            _affordable = int((invest_amount / (1 + FEE_RATE)) // buy_price)
+            whole_lot_shares = (_affordable // LOT_SIZE) * LOT_SIZE
+            if whole_lot_shares >= LOT_SIZE:
+                max_shares = whole_lot_shares
+                fill_price = buy_price
+                fill_note = ""
+            elif not ODD_LOT_ENABLED:
+                # 純整張模式：連 1 張都買不起就跳過此檔
+                continue
+            else:
+                _ask = today_data.loc[sid, 'last_ask'] if 'last_ask' in today_data.columns else None
+                fill_price = float(_ask) if (_ask is not None and not pd.isna(_ask) and float(_ask) > 0) else buy_price
+                # 零股最多買到 1 張－1 股（買得起整張時不會走此分支）
+                max_shares = min(int((invest_amount / (1 + FEE_RATE)) // fill_price), LOT_SIZE - 1)
+                fill_note = f" | 零股買進 (買不起整張，揭示賣價:{fill_price:.2f})"
             if max_shares > 0:
-                cost = max_shares * buy_price * (1 + FEE_RATE)
+                buy_fee = max_shares * fill_price * FEE_RATE
+                cost = max_shares * fill_price + buy_fee
                 available_cash -= cost
                 today_buys_amount += cost
                 
@@ -562,10 +593,10 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
 
                 positions[sid] = {
                     'shares': max_shares,
-                    'buy_price': buy_price,
-                    'current_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else buy_price,
+                    'buy_price': fill_price,
+                    'current_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else fill_price,
                     'buy_date': today,
-                    'max_close_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else buy_price,
+                    'max_close_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else fill_price,
                     'buy_idx': idx_today,
                     'atr_stop_pct': _atr_stop_pct,
                 }
@@ -579,15 +610,17 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                     'Action': '買進',
                     'Stock_ID': sid,
                     'Stock_Name': cname,
-                    'Price': buy_price,
+                    'Price': fill_price,
                     'Shares': max_shares,
                     'Amount': cost,
+                    'Fee': buy_fee,
+                    'Tax': 0.0,
                     'Profit': 0.0,
                     'Profit_Pct(%)': 0.0,
                     'Current_Cash': available_cash,
                     'Stock_Value': stock_value,
                     'Total_Equity': total_equity,
-                    'Reason': reason_detail
+                    'Reason': reason_detail + fill_note
                 })
 
         # --- C2. 計算今日交易之 T+2 淨交割金額並加入待交割佇列 ---
@@ -696,6 +729,28 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     holdings_str = [f"{sid} {stock_names.get(sid, '')}({int(pos['shares'])}股)" for sid, pos in positions.items()]
     print(f"最終持有: {holdings_str}")
 
+    # 交易成本總覽：判斷是否進出過於頻繁、利潤被手續費／證交稅吃掉
+    _tr = pd.DataFrame(trades)
+    if not _tr.empty:
+        n_buy = int((_tr['Action'] == '買進').sum())
+        n_sell = int((_tr['Action'] == '賣出').sum())
+        total_fee = float(_tr['Fee'].sum())
+        total_tax = float(_tr['Tax'].sum())
+        total_cost = total_fee + total_tax
+        net_profit = final_equity - initial_capital
+        # 毛利＝淨利＋交易成本（若不收費用本可賺到的金額），用以衡量成本侵蝕比例
+        gross_profit = net_profit + total_cost
+        cost_vs_gross = (total_cost / gross_profit * 100) if gross_profit > 0 else float('nan')
+        print(f"\n  交易成本總覽")
+        print(f"  {'-'*40}")
+        print(f"  完成回合(買/賣): {n_buy} / {n_sell}")
+        print(f"  總手續費      : {total_fee:>14,.0f}")
+        print(f"  總證交稅      : {total_tax:>14,.0f}")
+        print(f"  交易成本合計  : {total_cost:>14,.0f}  (佔期初資金 {total_cost/initial_capital*100:.2f}%)")
+        print(f"  區間淨利      : {net_profit:>14,.0f}")
+        print(f"  成本侵蝕毛利  : {cost_vs_gross:.1f}%  (毛利中有多少被費用/稅吃掉)")
+        print(f"  {'-'*40}")
+
     # 曝險率報告：每日持倉數 × 市況，診斷閾值是否在 Bull 浪費 alpha
     if history:
         _h = pd.DataFrame(history)
@@ -751,8 +806,9 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     }, inplace=True)
     df_trades.rename(columns={
         'Date': '日期', 'Action': '操作', 'Stock_ID': '股票編號', 'Stock_Name': '股票名稱',
-        'Price': '價格', 'Shares': '股數', 'Amount': '金額', 'Profit': '利潤', 
-        'Profit_Pct(%)': '利潤率(%)', 'Current_Cash': '可用資金(購買力)', 
+        'Price': '價格', 'Shares': '股數', 'Amount': '金額',
+        'Fee': '手續費', 'Tax': '證交稅', 'Profit': '利潤',
+        'Profit_Pct(%)': '利潤率(%)', 'Current_Cash': '可用資金(購買力)',
         'Stock_Value': '持股市值', 'Total_Equity': '總資產', 'Reason': '原因'
     }, inplace=True)
     df_holdings.rename(columns={

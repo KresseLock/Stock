@@ -57,16 +57,21 @@ def load_target_stocks(file_path: str = "Stocks.txt") -> list:
 def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
     """
     解析 Stocks.txt。
-    支援四種格式：
+    支援五種格式：
       格式 A (僅代號)         : 2330
       格式 B (含成本)         : 2330,950.0
       格式 C (成本與股數)      : 2330,950.0,1000
       格式 D (含買入日停損價)   : 2330,950.0,1000,910.5
+      格式 E (含買入日期)       : 2330,950.0,1000,910.5,2026-06-20
 
     第 4 欄為「買入日鎖定的 ATR 停損價」（由 inference.py 買進建議提供），
     填了之後 inference.py 以此精確判定停損；未填則退回當日 ATR 近似值。
+    第 5 欄為「買入日期」（YYYY-MM-DD 或 YYYYMMDD）；填了之後 inference.py 才能
+    比照 trading_sim.py：D3轉弱／移動止盈出場須滿 MIN_HOLD_DAYS（停損不限），
+    並啟用移動止盈判定；未填則退回「無視持有天數，D3 轉弱即建議賣」。
 
-    回傳 dict: { stock_id: {"cost": ..., "shares": ..., "stop_price": ...} }
+    回傳 dict: { stock_id: {"cost": ..., "shares": ..., "stop_price": ..., "buy_date": ...} }
+    （buy_date 為原始字串或 None，交由呼叫端解析為日期。）
     """
     detailed_watchlist = {}
     
@@ -94,6 +99,7 @@ def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
             cost = None
             shares = None
             stop_price = None
+            buy_date = None
             if len(parts) >= 2:
                 try:
                     cost = float(parts[1].strip())
@@ -109,7 +115,12 @@ def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
                     stop_price = float(parts[3].strip())
                 except ValueError:
                     pass
-            detailed_watchlist[sid] = {"cost": cost, "shares": shares, "stop_price": stop_price}
+            if len(parts) >= 5:
+                _bd = parts[4].strip()
+                if _bd:
+                    buy_date = _bd
+            detailed_watchlist[sid] = {"cost": cost, "shares": shares,
+                                       "stop_price": stop_price, "buy_date": buy_date}
 
     return detailed_watchlist
 
