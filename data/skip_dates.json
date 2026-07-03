@@ -22470,5 +22470,77 @@
   "credit_limit_20260629": {
     "reason": "no_data",
     "confirmed_at": "2026-06-29"
+  },
+  "margin_20260630": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-30"
+  },
+  "sbl_20260630": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-30"
+  },
+  "daytrading_20260630": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-06-30"
+  },
+  "fini_holding_20260630": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-06-30"
+  },
+  "credit_limit_20260630": {
+    "reason": "no_data",
+    "confirmed_at": "2026-06-30"
+  },
+  "daytrading_20260701": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-07-01"
+  },
+  "fini_holding_20260701": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-01"
+  },
+  "credit_limit_20260701": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-01"
+  },
+  "margin_20260702": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-02"
+  },
+  "sbl_20260702": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-02"
+  },
+  "daytrading_20260702": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-07-02"
+  },
+  "fini_holding_20260702": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-07-02"
+  },
+  "credit_limit_20260702": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-02"
+  },
+  "margin_20260703": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-03"
+  },
+  "sbl_20260703": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-03"
+  },
+  "daytrading_20260703": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-07-03"
+  },
+  "fini_holding_20260703": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-07-03"
+  },
+  "credit_limit_20260703": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-03"
   }
 }

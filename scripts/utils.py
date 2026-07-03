@@ -72,57 +72,89 @@ def parse_stocks_detailed(file_path: str = "Stocks.txt") -> dict:
 
     回傳 dict: { stock_id: {"cost": ..., "shares": ..., "stop_price": ..., "buy_date": ...} }
     （buy_date 為原始字串或 None，交由呼叫端解析為日期。）
+
+    ⚠️ 同代號多筆（不同時期／價位買進）時，後者會覆蓋前者、只保留最後一筆。
+       需逐筆保留（每筆各自成本／停損價／買入日）請改用 parse_stocks_lots()。
     """
     detailed_watchlist = {}
-    
-    # 支援絕對與相對路徑
+    fp = _resolve_stocks_path(file_path)
+    if not fp:
+        return detailed_watchlist
+
+    with open(fp, "r", encoding="utf-8") as f:
+        for line in f:
+            parsed = _parse_stock_line(line)
+            if parsed:
+                sid, info = parsed
+                detailed_watchlist[sid] = info
+
+    return detailed_watchlist
+
+
+def parse_stocks_lots(file_path: str = "Stocks.txt") -> list:
+    """
+    逐筆解析 Stocks.txt（同 parse_stocks_detailed 的欄位格式），但**保留同代號多筆**，
+    供「同一檔不同時期／價位買進」的 multi-lot 逐筆停損／出場判定使用。
+
+    回傳 list（保留檔案原始出現順序）：
+      [ {"stock_id": ..., "cost": ..., "shares": ..., "stop_price": ..., "buy_date": ...}, ... ]
+    """
+    lots = []
+    fp = _resolve_stocks_path(file_path)
+    if not fp:
+        return lots
+
+    with open(fp, "r", encoding="utf-8") as f:
+        for line in f:
+            parsed = _parse_stock_line(line)
+            if parsed:
+                sid, info = parsed
+                lots.append({"stock_id": sid, **info})
+
+    return lots
+
+
+def _resolve_stocks_path(file_path: str):
+    """解析 Stocks.txt 路徑（支援絕對／相對），找不到回傳 None。"""
     fp = file_path
     if not os.path.isabs(fp):
         fp = os.path.join(BASE_DIR, file_path)
-        
     if not os.path.exists(fp):
         # 備用降級防呆
         alt_fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), file_path)
         if os.path.exists(alt_fp):
             fp = alt_fp
-            
-    if not os.path.exists(fp):
-        return detailed_watchlist
+    return fp if os.path.exists(fp) else None
 
-    with open(fp, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split(",")
-            sid = parts[0].strip()
-            cost = None
-            shares = None
-            stop_price = None
-            buy_date = None
-            if len(parts) >= 2:
-                try:
-                    cost = float(parts[1].strip())
-                except ValueError:
-                    pass
-            if len(parts) >= 3:
-                try:
-                    shares = int(float(parts[2].strip()))
-                except ValueError:
-                    pass
-            if len(parts) >= 4:
-                try:
-                    stop_price = float(parts[3].strip())
-                except ValueError:
-                    pass
-            if len(parts) >= 5:
-                _bd = parts[4].strip()
-                if _bd:
-                    buy_date = _bd
-            detailed_watchlist[sid] = {"cost": cost, "shares": shares,
-                                       "stop_price": stop_price, "buy_date": buy_date}
 
-    return detailed_watchlist
+def _parse_stock_line(line: str):
+    """解析單行 Stocks.txt；空行或註解回傳 None，否則回傳 (sid, info dict)。"""
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return None
+    parts = line.split(",")
+    sid = parts[0].strip()
+    cost = shares = stop_price = buy_date = None
+    if len(parts) >= 2:
+        try:
+            cost = float(parts[1].strip())
+        except ValueError:
+            pass
+    if len(parts) >= 3:
+        try:
+            shares = int(float(parts[2].strip()))
+        except ValueError:
+            pass
+    if len(parts) >= 4:
+        try:
+            stop_price = float(parts[3].strip())
+        except ValueError:
+            pass
+    if len(parts) >= 5:
+        _bd = parts[4].strip()
+        if _bd:
+            buy_date = _bd
+    return sid, {"cost": cost, "shares": shares, "stop_price": stop_price, "buy_date": buy_date}
 
 
 def filter_stocks_by_train_industries(df, target_col="stock_id") -> "pd.DataFrame":

@@ -64,16 +64,17 @@ def compute_stop_pct(atr_pct) -> float:
     return STOP_LOSS_PCT
 
 
-def load_watchlist_detailed() -> dict:
+def load_watchlist_lots() -> list:
+    """逐筆載入 Stocks.txt（保留同代號多筆），回傳 lot 清單。"""
     try:
-        from scripts.utils import parse_stocks_detailed
-        return parse_stocks_detailed("Stocks.txt")
+        from scripts.utils import parse_stocks_lots
+        return parse_stocks_lots("Stocks.txt")
     except ImportError:
         try:
-            from utils import parse_stocks_detailed
-            return parse_stocks_detailed("Stocks.txt")
+            from utils import parse_stocks_lots
+            return parse_stocks_lots("Stocks.txt")
         except Exception:
-            return {}
+            return []
 
 
 def get_tw_tick_size(price: float) -> float:
@@ -159,9 +160,15 @@ def main(target_date_str=None):
         
     date_str = latest_date.strftime("%Y%m%d")
 
-    watchlist = load_watchlist_detailed()
-    if not watchlist:
-        watchlist = {sid: {"cost": None, "shares": None, "stop_price": None, "buy_date": None} for sid in sorted(df["stock_id"].unique().tolist())}
+    # 逐筆載入自選／持倉（支援同代號多筆：不同時期／價位買進，各自成本/停損價/買入日）
+    lots = load_watchlist_lots()
+    if lots:
+        watchlist_sids = {lot["stock_id"] for lot in lots}
+    else:
+        watchlist_sids = set(df["stock_id"].unique().tolist())
+    holding_lots = [lot for lot in lots if lot.get("cost") is not None]
+    holding_sids = {lot["stock_id"] for lot in holding_lots}
+    track_only_sids = watchlist_sids - holding_sids
 
     # 全體交易日序列（供持股天數計算，與 trading_sim 的 idx 差值同義）
     all_dates_sorted = sorted(pd.Timestamp(d) for d in df["date"].unique())
@@ -273,7 +280,7 @@ def main(target_date_str=None):
             pass
 
     results_watchlist = (
-        results_market[results_market["stock_id"].isin(watchlist.keys())]
+        results_market[results_market["stock_id"].isin(watchlist_sids)]
         .copy()
         .sort_values("Day1_net", ascending=False)
         .reset_index(drop=True)
@@ -299,13 +306,6 @@ def main(target_date_str=None):
     has_real_watchlist = os.path.exists(stocks_file) and os.path.getsize(stocks_file) > 0
     
     if has_real_watchlist:
-        actual_holdings = {sid: info["cost"] for sid, info in watchlist.items() if info["cost"] is not None}
-        track_only = {sid: info["cost"] for sid, info in watchlist.items() if info["cost"] is None}
-    else:
-        actual_holdings = {}
-        track_only = {}
-
-    if has_real_watchlist:
         output_lines.append("\n" + "=" * 108)
         output_lines.append(f"   [持倉與自選追蹤表] 預測基準日: {latest_date.date()}")
         output_lines.append("=" * 108)
@@ -315,7 +315,20 @@ def main(target_date_str=None):
         )
         output_lines.append("-" * 108)
 
-        for i, row in enumerate(results_watchlist.itertuples(), start=1):
+        # 每檔一列市場預測；持倉同代號多筆 → 每筆各一列（各自成本/損益）。依 D1 多空排序。
+        market_by_sid = {r.stock_id: r for r in results_watchlist.itertuples()}
+        display_items = []  # (day1_net_for_sort, market_row, lot_or_None)
+        for lot in holding_lots:
+            mr = market_by_sid.get(lot["stock_id"])
+            if mr is not None:
+                display_items.append((mr.Day1_net, mr, lot))
+        for sid in track_only_sids:
+            mr = market_by_sid.get(sid)
+            if mr is not None:
+                display_items.append((mr.Day1_net, mr, None))
+        display_items.sort(key=lambda x: x[0], reverse=True)
+
+        for i, (_d1sort, row, lot) in enumerate(display_items, start=1):
             sid        = row.stock_id
             close_p    = row.close
             d1, d2, d3 = row.Day1_net, row.Day2_net, row.Day3_net
@@ -326,13 +339,12 @@ def main(target_date_str=None):
             d2_s = f"{d2:+.1f}%"
             d3_s = f"{d3:+.1f}%"
 
-            is_holding = sid in actual_holdings
+            is_holding = lot is not None
             type_s = "持倉" if is_holding else "自選"
-            
-            info = watchlist.get(sid, {"cost": None, "shares": None, "stop_price": None})
-            cost = info.get("cost")
-            shares = info.get("shares")
-            
+
+            cost   = lot.get("cost") if lot else None
+            shares = lot.get("shares") if lot else None
+
             pnl_pct = 0.0
             pnl_amt = 0.0
             
@@ -384,73 +396,86 @@ def main(target_date_str=None):
     _exit_min_hold = _exit_re.get('min_hold_days',  MIN_HOLD_DAYS)
     _latest_idx = all_dates_sorted.index(latest_date) if latest_date in all_dates_sorted else len(all_dates_sorted) - 1
 
+    # 逐筆（lot）判定出場：同代號多筆時各以自己的成本／鎖定停損價／買入日獨立判斷
     sells_list = []
-    for sid, cost in actual_holdings.items():
+    sold_idx = set()
+    for _li, lot in enumerate(holding_lots):
+        sid = lot["stock_id"]
+        cost = lot.get("cost")
         row_match = results_market[results_market["stock_id"] == sid]
-        if not row_match.empty:
-            row = row_match.iloc[0]
-            d3 = row["Day3_net"]
-            close_p = row["close"]
-            reasons = []
+        if row_match.empty:
+            continue
+        row = row_match.iloc[0]
+        d3 = row["Day3_net"]
+        close_p = row["close"]
+        reasons = []
 
-            # 解析買入日期（Stocks.txt 第 5 欄）→ 對齊交易日、算持股天數。未填則 held_days=None
-            _bd_raw = watchlist.get(sid, {}).get("buy_date")
-            held_days = None
-            buy_ts_aligned = None
-            if _bd_raw:
-                try:
-                    _bd_ts = pd.Timestamp(pd.to_datetime(_bd_raw))
-                    _prior = [d for d in all_dates_sorted if d <= _bd_ts]
-                    if _prior:
-                        buy_ts_aligned = _prior[-1]
-                        held_days = _latest_idx - all_dates_sorted.index(buy_ts_aligned)
-                except Exception:
-                    held_days = None
+        # 解析此筆的買入日期（第 5 欄）→ 對齊交易日、算持股天數。未填則 held_days=None
+        _bd_raw = lot.get("buy_date")
+        held_days = None
+        buy_ts_aligned = None
+        if _bd_raw:
+            try:
+                _bd_ts = pd.Timestamp(pd.to_datetime(_bd_raw))
+                _prior = [d for d in all_dates_sorted if d <= _bd_ts]
+                if _prior:
+                    buy_ts_aligned = _prior[-1]
+                    held_days = _latest_idx - all_dates_sorted.index(buy_ts_aligned)
+            except Exception:
+                held_days = None
 
-            # D3 轉弱：有買入日 → 須滿 MIN_HOLD_DAYS 才建議賣（對齊 trading_sim）；未填 → 維持原本無視天數
-            if d3 < _exit_sell_thr and (held_days is None or held_days >= _exit_min_hold):
-                _hold_note = f"，持股{held_days}天" if held_days is not None else ""
-                reasons.append(f"D3轉弱({d3:+.1f}%{_hold_note})")
+        # D3 轉弱：有買入日 → 須滿 MIN_HOLD_DAYS 才建議賣（對齊 trading_sim）；未填 → 維持原本無視天數
+        if d3 < _exit_sell_thr and (held_days is None or held_days >= _exit_min_hold):
+            _hold_note = f"，持股{held_days}天" if held_days is not None else ""
+            reasons.append(f"D3轉弱({d3:+.1f}%{_hold_note})")
 
-            # 移動止盈：僅在有買入日且滿 MIN_HOLD_DAYS 時判定（需買入日後最高收盤）
-            if held_days is not None and held_days >= _exit_min_hold and cost and cost > 0 and buy_ts_aligned is not None:
-                actual_cost = cost * (1 + FEE_RATE)
-                _hist = df[(df["stock_id"] == sid) & (df["date"] >= buy_ts_aligned) & (df["date"] <= latest_date)]
-                _max_close = float(_hist["close"].max()) if not _hist.empty else close_p
-                if _max_close >= actual_cost * (1.0 + _exit_ts_act / 100.0):
-                    _ts_line = _max_close * (1.0 + _exit_ts_pull / 100.0)
-                    if close_p <= _ts_line:
-                        reasons.append(f"移動止盈(高{_max_close:.2f}回撤{abs(_exit_ts_pull):g}%→{_ts_line:.2f})")
+        # 移動止盈：僅在有買入日且滿 MIN_HOLD_DAYS 時判定（需買入日後最高收盤）
+        if held_days is not None and held_days >= _exit_min_hold and cost and cost > 0 and buy_ts_aligned is not None:
+            actual_cost = cost * (1 + FEE_RATE)
+            _hist = df[(df["stock_id"] == sid) & (df["date"] >= buy_ts_aligned) & (df["date"] <= latest_date)]
+            _max_close = float(_hist["close"].max()) if not _hist.empty else close_p
+            if _max_close >= actual_cost * (1.0 + _exit_ts_act / 100.0):
+                _ts_line = _max_close * (1.0 + _exit_ts_pull / 100.0)
+                if close_p <= _ts_line:
+                    reasons.append(f"移動止盈(高{_max_close:.2f}回撤{abs(_exit_ts_pull):g}%→{_ts_line:.2f})")
 
-            # 停損（不受持股天數限制，與 trading_sim 一致）
-            stored_stop = watchlist.get(sid, {}).get("stop_price")
-            pnl_pct = 0.0
+        # 停損（不受持股天數限制，與 trading_sim 一致），採此筆自己的鎖定停損價／成本
+        stored_stop = lot.get("stop_price")
+        pnl_pct = 0.0
+        if cost and cost > 0:
+            actual_cost = cost * (1 + FEE_RATE)
+            pnl_pct = (close_p - actual_cost) / actual_cost * 100
+        if stored_stop and stored_stop > 0:
+            # 優先：買入日鎖定的 ATR 停損價（此筆第 4 欄），最精確、不隨當日 ATR 漂移。
+            if close_p <= stored_stop:
+                reasons.append(f"停損(收 {close_p:.2f} <= 鎖定 {stored_stop:.2f})")
+        elif cost and cost > 0:
+            # 退回：未記錄停損價時，以當日 atr18_pct 近似（snapshot 無買入日 ATR），
+            # 夾 floor/ceiling，與 trading_sim.py 計算一致；ATR 無效時退回固定 STOP_LOSS_PCT。
+            _stop_pct = compute_stop_pct(row.get("atr18_pct"))
+            if pnl_pct <= _stop_pct:
+                reasons.append(f"停損({pnl_pct:.1f}% <= {_stop_pct:.1f}%)")
+        if reasons:
+            _lot_tag = []
             if cost and cost > 0:
-                actual_cost = cost * (1 + FEE_RATE)
-                pnl_pct = (close_p - actual_cost) / actual_cost * 100
-            if stored_stop and stored_stop > 0:
-                # 優先：買入日鎖定的 ATR 停損價（Stocks.txt 第 4 欄），最精確、不隨當日 ATR 漂移。
-                if close_p <= stored_stop:
-                    reasons.append(f"停損(收 {close_p:.2f} <= 鎖定 {stored_stop:.2f})")
-            elif cost and cost > 0:
-                # 退回：未記錄停損價時，以當日 atr18_pct 近似（snapshot 無買入日 ATR），
-                # 夾 floor/ceiling，與 trading_sim.py 計算一致；ATR 無效時退回固定 STOP_LOSS_PCT。
-                _stop_pct = compute_stop_pct(row.get("atr18_pct"))
-                if pnl_pct <= _stop_pct:
-                    reasons.append(f"停損({pnl_pct:.1f}% <= {_stop_pct:.1f}%)")
-            if reasons:
-                sells_list.append({
-                    "stock_id": sid,
-                    "name": stock_names.get(sid, ""),
-                    "close": close_p,
-                    "reason": "、".join(reasons)
-                })
+                _lot_tag.append(f"成本{cost:.2f}")
+            if _bd_raw:
+                _lot_tag.append(f"買入{_bd_raw}")
+            sells_list.append({
+                "stock_id": sid,
+                "name": stock_names.get(sid, ""),
+                "close": close_p,
+                "lot_desc": f"（{'/'.join(_lot_tag)}）" if _lot_tag else "",
+                "reason": "、".join(reasons)
+            })
+            sold_idx.add(_li)
 
-    sells_sids = {x["stock_id"] for x in sells_list}
-    remaining_holdings = set(actual_holdings.keys()) - sells_sids
-    current_hold_count = len(actual_holdings)
+    sold_sids = {x["stock_id"] for x in sells_list}
+    remaining_lots = [lot for i, lot in enumerate(holding_lots) if i not in sold_idx]
+    remaining_hold_sids = {lot["stock_id"] for lot in remaining_lots}
+    current_hold_count = len(holding_lots)
     sells_count = len(sells_list)
-    remaining_hold_count = len(remaining_holdings)
+    remaining_hold_count = len(remaining_lots)
     # 市況降檔：與 trading_sim.py 的 eff_max_positions 對齊（震盪/空頭時減少持倉上限以降曝險）
     if REGIME_ADAPTIVE_ENABLED and current_regime in REGIME_MAX_POSITIONS:
         eff_max_positions = REGIME_MAX_POSITIONS.get(current_regime, MAX_POSITIONS)
@@ -469,17 +494,17 @@ def main(target_date_str=None):
     output_lines.append("   明日建議賣出掛單 (開盤賣出釋出倉位):")
     if sells_list:
         for item in sells_list:
-            output_lines.append(f"     賣出 -> {item['stock_id']:<5} {item['name']:<5} (收盤 {item['close']:.2f} | 原因: {item['reason']})")
+            output_lines.append(f"     賣出 -> {item['stock_id']:<5} {item['name']:<5}{item['lot_desc']} (收盤 {item['close']:.2f} | 原因: {item['reason']})")
     else:
         output_lines.append("    [v] 目前無持倉股觸發賣出/停損訊號")
     output_lines.append("-" * 90)
 
-    output_lines.append(f"   明日建議買進掛單 (持倉:{current_hold_count} -> 開盤剩餘:{remaining_hold_count} | 需填補空位:{available_slots} 檔):")
-    
+    output_lines.append(f"   明日建議買進掛單 (持倉:{current_hold_count}筆 -> 開盤剩餘:{remaining_hold_count}筆 | 需填補空位:{available_slots} 檔):")
+
     buy_cond = (
         (results_market["Day1_net"] >= eff_buy_threshold) &
-        (~results_market["stock_id"].isin(remaining_holdings)) &
-        (~results_market["stock_id"].isin(sells_sids)) &
+        (~results_market["stock_id"].isin(remaining_hold_sids)) &
+        (~results_market["stock_id"].isin(sold_sids)) &
         (~results_market["stock_id"].astype(str).isin(etf_set))
     )
     # Hysteresis 動能混合：連續 Bull 確認後才用 RS_20d 重排序（與 trading_sim 邏輯一致）
@@ -532,9 +557,9 @@ def main(target_date_str=None):
         output_lines.append("     [停損記錄] 成交後請將「ATR停損」價填入 Stocks.txt 第 4 欄；可再加第 5 欄買入日期 (代號,成本,股數,停損價,買入日期)，系統即比照回測判定最少持有天數與移動止盈。")
     output_lines.append("-" * 90)
 
-    if has_real_watchlist and len(track_only) > 0:
+    if has_real_watchlist and len(track_only_sids) > 0:
         track_buys_df = results_watchlist[
-            (results_watchlist["stock_id"].isin(track_only.keys())) &
+            (results_watchlist["stock_id"].isin(track_only_sids)) &
             (results_watchlist["Day1_net"] >= eff_buy_threshold)
         ]
         if not track_buys_df.empty:
