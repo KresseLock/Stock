@@ -123,6 +123,15 @@ REGIME_MAX_POSITIONS = {
     "Sideways": 3,    # 震盪盤整：降曝險
     "Bear":     1,    # 空頭：極低曝險（實質近空手）
 }
+# 進場端 Bull 確認天數：Bull 需連續 N 天才在「進場端」生效（買入門檻／檔數上限／breadth 紅燈豁免），
+# 未確認前進場端視同 Sideways；出場端（EXIT_REGIME_LAG 遲滯）與動能混合（MOMENTUM_BULL_CONFIRM_DAYS）不受影響。
+# 動機：regime 閃爍時「Bull 第 1 天」門檻驟降湧入低分股是回撤主因（2025H2 回撤段 22/38 筆進場、−49 萬）。
+# 已通過多起點＋多窗口驗證（2026-07-04，30 條回測）：回撤段修復 5/5 路徑成立、全期報酬中位數 +44pp、
+# MDD 改善中位數 +17pp；唯一系統性成本＝健康期（2024 型）中位數 −15.5pp 保險費。N=2 為劑量最優
+# （事後歸因：Bull 第 1 天進場全期 −27.5 萬、第 2 天起 +89.3 萬，故 N≥3 會誤殺贏家）。
+# None 或 0 = 停用（回到舊行為）。trading_sim.py 與 inference.py 共用。
+ENTRY_BULL_CONFIRM_DAYS = 2
+
 # 市況分類以大盤 REGIME_TREND_WINDOW 日滾動均日報酬為主軸（不用 breadth 判 Bull，
 # 因 2026 為權值股窄牛市，breadth 低但趨勢強，用 breadth 會嚴重低估多頭環境）
 REGIME_BULL_TREND        = 0.0015  # 滾動均日報酬 > 此值 → Bull（趨勢多頭）

@@ -71,7 +71,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                    min_hold_days=None, markup_pct=None,
                    regime_buy_threshold=None, regime_bull_trend=None, regime_bear_trend=None,
                    regime_max_positions=None, regime_exit_params=None,
-                   exit_regime_lag=None):
+                   exit_regime_lag=None, entry_bull_confirm_days=None,
+                   downgrade_flash_trim=None):
     print("=" * 70)
     print(f"  啟動量化交易回測 (Out-of-Sample, T+1 限價搓合 + 雙風控防線版)")
     print(f"  期間: {start_date} 到 {end_date}")
@@ -219,6 +220,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
             MOMENTUM_BULL_CONFIRM_DAYS, LOT_SIZE, ODD_LOT_ENABLED,
             REGIME_EXIT_PARAMS as _CFG_REGIME_EXIT, EXIT_REGIME_LAG as _CFG_EXIT_LAG,
+            ENTRY_BULL_CONFIRM_DAYS as _CFG_ENTRY_CONFIRM,
         )
     except ImportError:
         BUY_THRESHOLD     = 10.0
@@ -244,6 +246,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         ODD_LOT_ENABLED = True
         _CFG_REGIME_EXIT = {}
         _CFG_EXIT_LAG = 1
+        _CFG_ENTRY_CONFIRM = None
 
     # 市況過濾器精度控管：僅在「未顯式指定 buy_threshold」時啟用動態門檻，
     # 避免破壞 CLI 覆寫與 param_sensitivity.py 的靜態掃描。
@@ -273,6 +276,12 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         MIN_HOLD_DAYS = min_hold_days
     if markup_pct is not None:
         ORDER_MARKUP_PCT = markup_pct
+    # 進場端 Bull 確認：None → 從 config 載入（部署預設）；0/False → 明確停用（跑舊行為對照）
+    if entry_bull_confirm_days is None:
+        entry_bull_confirm_days = _CFG_ENTRY_CONFIRM
+    if entry_bull_confirm_days:
+        print(f"  [進場確認] Bull 需連續 {entry_bull_confirm_days} 天才在進場端生效（防 regime 閃爍第 1 天滿倉）")
+
     # regime_exit_params=None → 從 config 載入（部署預設）
     # regime_exit_params={} → 明確停用（optimize_trading_params.py 優化時使用）
     if regime_exit_params is None:
@@ -351,6 +360,13 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         else:
             consecutive_bull_days = 0
 
+        # 進場端 Bull 確認（config.ENTRY_BULL_CONFIRM_DAYS，生產預設 2）：Bull 需連續 N 天才在進場端生效
+        # （防 regime 閃爍第 1 天門檻驟降滿倉），未確認前進場端視同 Sideways。0/None＝停用。
+        # 僅影響買入門檻／檔數／breadth 紅燈豁免；出場端（_exit_regime）與動能混合（MOMENTUM_BULL_CONFIRM_DAYS）不受影響。
+        entry_regime = signal_regime
+        if entry_bull_confirm_days and signal_regime == 'Bull' and consecutive_bull_days < entry_bull_confirm_days:
+            entry_regime = 'Sideways'
+
         # 出場 regime 遲滯：切入 Bull 立即生效；切出需連續 N 天非 Bull 才切換
         if signal_regime == 'Bull':
             _exit_non_bull_streak = 0
@@ -365,14 +381,14 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         if mkt_ma5 < MKT_PANIC_MA5:
             is_market_panic = True
             panic_reason = f"大盤 5 日滾動平均報酬率過低 ({mkt_ma5 * 100:+.2f}%)，低於風控門檻 {MKT_PANIC_MA5 * 100:+.2f}%"
-        elif mkt_breadth < MKT_PANIC_BREADTH and signal_regime != "Bull":
+        elif mkt_breadth < MKT_PANIC_BREADTH and entry_regime != "Bull":
             # 窄牛市 (breadth 低但趨勢強) 不應被 breadth 紅燈擋下，故 Bull regime 停用 breadth 紅燈，僅 Sideways/Bear 啟用。
             is_market_panic = True
             panic_reason = f"全市場上漲比例過低 ({mkt_breadth * 100:.1f}%)，低於風控門檻 {MKT_PANIC_BREADTH * 100:.1f}%"
 
         # 市況過濾器：依昨日 regime 動態決定買入門檻 (趨勢市進攻、震盪/空頭防守)。
-        if use_regime_filter and signal_regime is not None:
-            current_buy_threshold = _regime_buy_thr.get(signal_regime, BUY_THRESHOLD)
+        if use_regime_filter and entry_regime is not None:
+            current_buy_threshold = _regime_buy_thr.get(entry_regime, BUY_THRESHOLD)
         else:
             current_buy_threshold = BUY_THRESHOLD
         if is_market_panic:
@@ -381,8 +397,8 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
 
         # 市況選擇性曝險：依昨日 regime 調整最大持股檔數（與買入門檻同步生效，僅在未顯式指定 buy_threshold 時）。
         # 超過上限時不強制平倉，僅停止補倉，靠自然汰換（停損／Day3／止盈）降至上限，避免振盪洗價。
-        if use_regime_filter and signal_regime is not None:
-            eff_max_positions = _regime_max_pos.get(signal_regime, max_positions)
+        if use_regime_filter and entry_regime is not None:
+            eff_max_positions = _regime_max_pos.get(entry_regime, max_positions)
         else:
             eff_max_positions = max_positions
 
@@ -446,6 +462,23 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                         sells_today.append((sid, open_T1, f"Day3預測轉弱 ({day3_score:.1f}% < {eff_sell_thr}%)"))
                     elif triggered_trailing_stop:
                         sells_today.append((sid, open_T1, f"觸發移動止盈(高點 {pos['max_close_price']:.2f} 回撤{abs(eff_ts_pull)}%)"))
+
+        # 降級砍倉（實驗參數）：regime 非 Bull 且持倉超過檔數上限時，只砍「Bull 進場端買進、
+        # 買後 ≤N 個交易日即遇降級」的閃現部位（LIFO），以今日開盤價出場、不受最少持股天數限制。
+        # None＝停用，行為與原版完全相同。既有非閃現持股仍走自然汰換，維持吃肥尾能力。
+        if downgrade_flash_trim and entry_regime != 'Bull':
+            _selling = {s for s, _, _ in sells_today}
+            _remain = [s for s in positions if s not in _selling]
+            _excess = len(_remain) - eff_max_positions
+            if _excess > 0:
+                _flash = [s for s in _remain
+                          if positions[s].get('buy_entry_regime') == 'Bull'
+                          and (idx_today - positions[s].get('buy_idx', idx_today)) <= downgrade_flash_trim]
+                _flash.sort(key=lambda s: positions[s].get('buy_idx', 0), reverse=True)
+                for s in _flash[:_excess]:
+                    _o = today_data.loc[s, 'open'] if s in today_data.index else None
+                    _o = float(_o) if _o is not None and not pd.isna(_o) and _o > 0 else positions[s]['current_price']
+                    sells_today.append((s, _o, f"降級砍倉(持倉{len(_remain)} > 上限{eff_max_positions})"))
 
         today_sells_amount = 0
         for sid, sell_price, reason in sells_today:
@@ -599,6 +632,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                     'max_close_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else fill_price,
                     'buy_idx': idx_today,
                     'atr_stop_pct': _atr_stop_pct,
+                    'buy_entry_regime': entry_regime,
                 }
                 cname = stock_names.get(sid, "")
                 

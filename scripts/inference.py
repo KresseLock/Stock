@@ -33,7 +33,7 @@ try:
         REGIME_TREND_WINDOW, REGIME_TREND_MIN_PERIODS,
         ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
         REGIME_EXIT_PARAMS, TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS,
-        MKT_PANIC_MA5, MKT_PANIC_BREADTH,
+        MKT_PANIC_MA5, MKT_PANIC_BREADTH, ENTRY_BULL_CONFIRM_DAYS,
     )
 except ImportError:
     BUY_THRESHOLD   = 10.0
@@ -52,6 +52,7 @@ except ImportError:
     ATR_STOP_FLOOR_PCT = -15.0; ATR_STOP_CEILING_PCT = -5.0
     REGIME_EXIT_PARAMS = {}; TS_ACTIVATION_PCT = 10.0; TS_PULLBACK_PCT = -6.0; MIN_HOLD_DAYS = 1
     MKT_PANIC_MA5 = -0.010; MKT_PANIC_BREADTH = 0.30
+    ENTRY_BULL_CONFIRM_DAYS = None
 
 
 def compute_stop_pct(atr_pct) -> float:
@@ -181,6 +182,7 @@ def main(target_date_str=None):
     # ── 市況過濾器：依最新日(D) regime 動態決定隔日買入門檻 (與 trading_sim 同邏輯、無前視) ──
     eff_buy_threshold = BUY_THRESHOLD
     current_regime = "靜態"
+    entry_regime = current_regime
     consecutive_bull_days = 0
     momentum_active = False
     try:
@@ -195,7 +197,6 @@ def main(target_date_str=None):
         except ImportError:
             from utils import get_regime_label
         current_regime = get_regime_label(t20, REGIME_BULL_TREND, REGIME_BEAR_TREND)
-        eff_buy_threshold = REGIME_BUY_THRESHOLD.get(current_regime, BUY_THRESHOLD)
 
         # Hysteresis：往回數連續 Bull 天數（stateless，每日從資料重算，無需跨日持久化）
         _trend_clean = _trend.dropna()
@@ -206,6 +207,14 @@ def main(target_date_str=None):
                 break
         momentum_active = (current_regime == 'Bull' and consecutive_bull_days >= MOMENTUM_BULL_CONFIRM_DAYS)
 
+        # 進場端 Bull 確認（config.ENTRY_BULL_CONFIRM_DAYS，與 trading_sim.py 對齊）：
+        # Bull 未連續滿 N 天前，進場端（買入門檻／檔數上限／breadth 紅燈豁免）視同 Sideways；
+        # 出場端（REGIME_EXIT_PARAMS 仍用 current_regime）與動能混合不受影響。
+        entry_regime = current_regime
+        if ENTRY_BULL_CONFIRM_DAYS and current_regime == 'Bull' and consecutive_bull_days < ENTRY_BULL_CONFIRM_DAYS:
+            entry_regime = 'Sideways'
+        eff_buy_threshold = REGIME_BUY_THRESHOLD.get(entry_regime, BUY_THRESHOLD)
+
         # 大盤避險紅燈 (鏡像 trading_sim.py:355-369；無前視，用最新日 D 的 ma5/breadth 決定隔日進場)。
         # 修正前 inference 缺此邏輯，導致 panic 日仍推薦買入、與 trading_sim 回測脫節 (約 16.7% 交易日)。
         _mkt_ma5 = df.groupby("date")["market_mean_pct"].first().sort_index().rolling(5, min_periods=1).mean().get(latest_date, 0.0)
@@ -214,7 +223,7 @@ def main(target_date_str=None):
         _panic_reason = None
         if _mkt_ma5 < MKT_PANIC_MA5:
             _panic_reason = f"大盤5日均報酬 {_mkt_ma5*100:+.2f}% < 門檻 {MKT_PANIC_MA5*100:+.2f}%"
-        elif _mkt_breadth < MKT_PANIC_BREADTH and current_regime != "Bull":
+        elif _mkt_breadth < MKT_PANIC_BREADTH and entry_regime != "Bull":
             _panic_reason = f"上漲家數比 {_mkt_breadth*100:.1f}% < 門檻 {MKT_PANIC_BREADTH*100:.1f}% (非Bull)"
         if _panic_reason:
             eff_buy_threshold = 99.0
@@ -227,7 +236,9 @@ def main(target_date_str=None):
             if current_regime == 'Bull' else
             "❌ 關閉 (非 Bull，純模型排序)"
         )
-        print(f"  [市況過濾器] regime={current_regime} (t20={t20:+.4f}) | 買入門檻={eff_buy_threshold:.1f}% | 動能混合: {_momentum_status}")
+        _confirm_note = (f" | 進場端視同 Sideways (Bull 確認 {consecutive_bull_days}/{ENTRY_BULL_CONFIRM_DAYS} 天)"
+                         if entry_regime != current_regime else "")
+        print(f"  [市況過濾器] regime={current_regime} (t20={t20:+.4f}) | 買入門檻={eff_buy_threshold:.1f}%{_confirm_note} | 動能混合: {_momentum_status}")
 
     target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     ignore_cols = ["stock_id", "date"] + target_cols
@@ -477,8 +488,9 @@ def main(target_date_str=None):
     sells_count = len(sells_list)
     remaining_hold_count = len(remaining_lots)
     # 市況降檔：與 trading_sim.py 的 eff_max_positions 對齊（震盪/空頭時減少持倉上限以降曝險）
-    if REGIME_ADAPTIVE_ENABLED and current_regime in REGIME_MAX_POSITIONS:
-        eff_max_positions = REGIME_MAX_POSITIONS.get(current_regime, MAX_POSITIONS)
+    # 進場端 Bull 確認生效時用 entry_regime（未確認的 Bull 沿用 Sideways 檔數上限）
+    if REGIME_ADAPTIVE_ENABLED and entry_regime in REGIME_MAX_POSITIONS:
+        eff_max_positions = REGIME_MAX_POSITIONS.get(entry_regime, MAX_POSITIONS)
     else:
         eff_max_positions = MAX_POSITIONS
     available_slots = max(0, eff_max_positions - remaining_hold_count)

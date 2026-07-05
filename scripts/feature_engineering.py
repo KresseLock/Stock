@@ -725,6 +725,14 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     if label_cols:
         pass # 保留最新這幾天的資料，不能在這裡 dropna，否則 inference.py 會永遠落後 3 天
 
+    # 清理 pct_change 除以 0 產生的 ±inf（融券/借券/融資餘額變化率、EPS 季/年增率等），
+    # 統一轉為 NaN，避免下游 PSI/std 統計出現 "invalid value encountered" 警告。
+    num_cols = df.select_dtypes(include=[np.number]).columns
+    n_inf = int(np.isinf(df[num_cols].to_numpy()).sum())
+    if n_inf > 0:
+        df[num_cols] = df[num_cols].replace([np.inf, -np.inf], np.nan)
+        print(f"  已清理 {n_inf} 個 ±inf 值（pct_change 除零），轉為 NaN。")
+
     # 排序與存檔
     id_cols = ["stock_id", "date"]
     df = df[id_cols + [c for c in df.columns if c not in id_cols]]

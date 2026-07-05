@@ -247,9 +247,12 @@ def main():
         if df_is[f].std() > 0 and df_oos[f].std() > 0:
             # 計算特徵本身與 next_ret_1 的每日 RankIC
             for date, g in df.groupby("date"):
-                if len(g) < 10 or g[f].std() == 0 or g["next_ret_1"].std() == 0:
+                # 先配對後 dropna，再確認交集子集上兩欄皆非常數（nunique>=2），
+                # 否則 spearmanr 會對常數陣列拋 ConstantInputWarning 並回傳 NaN。
+                pair = g[[f, "next_ret_1"]].dropna()
+                if len(pair) < 10 or pair[f].nunique() < 2 or pair["next_ret_1"].nunique() < 2:
                     continue
-                ric, _ = spearmanr(g[f], g["next_ret_1"])
+                ric, _ = spearmanr(pair[f], pair["next_ret_1"])
                 if pd.notna(ric):
                     if date <= split_date:
                         is_ics.append(ric)
