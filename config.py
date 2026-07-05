@@ -101,7 +101,7 @@ ATR_STOP_CEILING_PCT = -5.0   # ATR 停損絕對上限（防牛市正常回撤�
 # *** trading_sim.py、inference.py 共用 ***
 # Bull regime 需連續達到此天數，才啟用 30/70 動能混合排序；
 # 任何一天非 Bull 立即重置。目的：過濾熊牛轉換振盪假突破。
-MOMENTUM_BULL_CONFIRM_DAYS = 3
+MOMENTUM_BULL_CONFIRM_DAYS = 4
 
 
 # ── 2.3 市況過濾器：Regime 動態買入門檻（趨勢市進攻、震盪/空頭防守）──
