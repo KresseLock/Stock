@@ -54,26 +54,29 @@ def main():
         print("  請先執行推理程式 (python scripts/inference.py) 以產生預測結果。")
         sys.exit(1)
 
-    # 3. 計算並列出本地要上傳的 txt 檔案
-    txt_files = [f for f in os.listdir(pred_dir) if f.endswith(".txt")]
+    # 3. 找出最新的預測 .txt 檔案（依檔名排序，日期越大越新）
+    txt_files = sorted(
+        [f for f in os.listdir(pred_dir) if f.endswith(".txt")]
+    )
     if not txt_files:
         print("[提示] predictions/ 資料夾下目前沒有任何預測 .txt 檔案。")
-    else:
-        print(f"發現 {len(txt_files)} 個預測檔案準備備份：")
-        for f in txt_files:
-            print(f"  - {f}")
-        print("-" * 60)
+        print("=" * 60)
+        return
 
-    # 4. 執行備份命令
-    # 使用 copy 而非 sync，可以避免當您刪除本地舊檔案時，雲端舊的歷史預測紀錄也被同步刪除
+    latest_file = txt_files[-1]
+    print(f"共 {len(txt_files)} 個預測檔案，僅上傳最新：{latest_file}")
+    print("-" * 60)
+
+    # 4. 執行備份命令 — 只上傳最新的單一檔案
     remote_dest = f"{RCLONE_REMOTE_NAME}:{RCLONE_DEST_PATH}"
+    local_path = os.path.join(pred_dir, latest_file)
     print(f"正在備份至雲端目標 -> {remote_dest} ...")
-    
-    cmd = ["rclone", "copy", pred_dir, remote_dest]
+
+    cmd = ["rclone", "copyto", local_path, f"{remote_dest}/{latest_file}"]
     try:
         subprocess.run(cmd, check=True)
         print("-" * 60)
-        print("  [成功] 預測結果檔案同步完成！")
+        print("  [成功] 最新預測結果檔案同步完成！")
         print("  您可以打開手機或電腦上的 Google Drive，確認資料夾內容。")
     except subprocess.CalledProcessError as e:
         print("-" * 60)
