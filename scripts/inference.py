@@ -410,6 +410,7 @@ def main(target_date_str=None):
     # 逐筆（lot）判定出場：同代號多筆時各以自己的成本／鎖定停損價／買入日獨立判斷
     sells_list = []
     sold_idx = set()
+    stop_corrections = []
     for _li, lot in enumerate(holding_lots):
         sid = lot["stock_id"]
         cost = lot.get("cost")
@@ -456,6 +457,18 @@ def main(target_date_str=None):
         if cost and cost > 0:
             actual_cost = cost * (1 + FEE_RATE)
             pnl_pct = (close_p - actual_cost) / actual_cost * 100
+        # 第 4 欄防呆：手動填的停損價若低於「買入日鎖定 ATR 停損價」重算值，自動上修後判定
+        # （重算＝成本×(1+手續費)×(1+訊號日 ATR 停損%)，與 trading_sim 鎖定邏輯一致；需填買入日）
+        if stored_stop and stored_stop > 0 and cost and cost > 0 and buy_ts_aligned is not None:
+            _sig_hist = df[(df["stock_id"] == sid) & (df["date"] < buy_ts_aligned)]
+            if not _sig_hist.empty and "atr18_pct" in _sig_hist.columns:
+                _lock_pct = compute_stop_pct(_sig_hist.sort_values("date").iloc[-1]["atr18_pct"])
+                _lock_stop = round_to_tick(cost * (1 + FEE_RATE) * (1 + _lock_pct / 100.0))
+                if _lock_stop > 0 and stored_stop < _lock_stop:
+                    stop_corrections.append(
+                        f"     [上修] {sid:<5} {stock_names.get(sid, ''):<5} 第4欄 {stored_stop:.2f} -> {_lock_stop:.2f} (買入日鎖定 ATR 停損 {_lock_pct:+.1f}%)"
+                    )
+                    stored_stop = _lock_stop
         if stored_stop and stored_stop > 0:
             # 優先：買入日鎖定的 ATR 停損價（此筆第 4 欄），最精確、不隨當日 ATR 漂移。
             if close_p <= stored_stop:
@@ -503,6 +516,10 @@ def main(target_date_str=None):
     output_lines.append(f"   [實戰下單指令] 買進D1 >= {eff_buy_threshold:.0f}% (市況:{current_regime}, 上限{eff_max_positions}檔) | 賣出D3 < {_disp_sell_thr:.0f}% | {_stop_label} | 最少持有{_exit_min_hold:g}天(僅填買入日者生效，停損不限)")
     output_lines.append("=" * 90)
 
+    if stop_corrections:
+        output_lines.append("   [停損價自動上修] Stocks.txt 第4欄低於系統鎖定停損價，已依買入日 ATR 重算判定 (請同步更新檔案):")
+        output_lines.extend(stop_corrections)
+        output_lines.append("-" * 90)
     output_lines.append("   明日建議賣出掛單 (開盤賣出釋出倉位):")
     if sells_list:
         for item in sells_list:
