@@ -48,6 +48,13 @@
   .\venv\Scripts\python.exe scripts/optimize_trading_params.py -t 400 -s 2023-01-01 -e 2026-06-01 -c 2000000 -wf
   ```
 
+### C. 實盤交易損益與永續持倉追蹤
+* **執行實盤損益分析與持倉報告**:
+  ```powershell
+  .\venv\Scripts\python.exe analyze_real_pnl.py
+  ```
+  *(註：此功能已整合進 `Auto_RUN.py` 的全流程尾端自動執行；歷史檔案儲存於 `trading_history/` 資料夾中)*
+
 ---
 
 ## 📌 3. AI 開發與修改規範 (Rules)
@@ -65,6 +72,8 @@
 6. **data 目錄唯讀保護 (嚴禁修改)**:
    * AI 擁有 [data](file:///D:/VScode_Stock/Stock/data) 目錄的**讀取權限**以進行結構與數據分析（已在 `.claudeignore` 豁免允許讀取），但**嚴禁任何修改、寫入、覆寫或刪除該目錄及其下任何檔案與子目錄的行為**。
    * 任何資料的增刪、清理或特徵產生，必須完全依賴現有系統腳本（例如 `scraper.py` 或 `feature_engineering.py`），AI 在修改或重構程式碼時，不得新增會對該目錄寫入的臨時檔案或變更其內容。
+7. **實盤交易資料隱私保護 (嚴禁上傳與分析)**:
+   * 實盤個人交易明細與歷史備份儲存於 `trading_history/` 目錄下。該目錄已在 `.gitignore` 與 `.claudeignore` 排除，防範機敏財務資料洩漏。AI 嚴禁讀取此目錄進行數據分析，亦不得主動變更或新增該目錄下的檔案。
 
 ---
 

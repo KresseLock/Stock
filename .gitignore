@@ -216,3 +216,7 @@ scratch/
 # 實驗用暫存資料與模型產出（含大型 parquet/模型檔，不適合進 Git；結論已整理進 EXPERIMENTS_PENDING.md）
 experiments/
 
+# 實盤個人交易紀錄與歷史備份資料夾 (防機敏資料洩漏)
+trading_history/
+
+

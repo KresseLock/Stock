@@ -76,3 +76,6 @@ rclone.conf.bak
 
 # 本地臨時/除錯腳本
 scratch/
+
+# 5. 忽略實盤個人交易紀錄與歷史備份資料夾 (防機敏資料洩漏)
+trading_history/

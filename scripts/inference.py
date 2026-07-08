@@ -508,13 +508,7 @@ def main(target_date_str=None):
         eff_max_positions = MAX_POSITIONS
     available_slots = max(0, eff_max_positions - remaining_hold_count)
 
-    output_lines.append("")
-    output_lines.append("=" * 90)
-    _stop_label = (f"停損 ATR動態({ATR_STOP_MULTIPLIER:g}×ATR, {ATR_STOP_CEILING_PCT:.0f}%~{ATR_STOP_FLOOR_PCT:.0f}%)"
-                   if ATR_STOP_ENABLED else f"停損 {STOP_LOSS_PCT:.0f}%")
-    _disp_sell_thr = REGIME_EXIT_PARAMS.get(current_regime, {}).get('sell_threshold', SELL_THRESHOLD)
-    output_lines.append(f"   [實戰下單指令] 買進D1 >= {eff_buy_threshold:.0f}% (市況:{current_regime}, 上限{eff_max_positions}檔) | 賣出D3 < {_disp_sell_thr:.0f}% | {_stop_label} | 最少持有{_exit_min_hold:g}天(僅填買入日者生效，停損不限)")
-    output_lines.append("=" * 90)
+
 
     if stop_corrections:
         output_lines.append("   [停損價自動上修] Stocks.txt 第4欄低於系統鎖定停損價，已依買入日 ATR 重算判定 (請同步更新檔案):")
@@ -578,12 +572,7 @@ def main(target_date_str=None):
             output_lines.append(
                 f"    {tag} 第 {idx} 檔 -> {sid:<5} {cname:<5} (收盤 {close_p:>6.2f} | D1 {d1:>+5.1f}% | D3 {d3:>+5.1f}% | 建議掛 {target_pct:+.1f}% -> {target_price:>6.2f} | ATR停損 {stop_price:>6.2f}[{_stop_pct:+.1f}%])"
             )
-        output_lines.append("")
-        _markup_hint = (f"固定 {ORDER_MARKUP_PCT:+.1f}%（{'折價逢低買進' if ORDER_MARKUP_PCT < 0 else '溢價搶進'}，對齊 trading_sim）"
-                        if ORDER_MARKUP_PCT is not None
-                        else "依 D1 信心動態加價 (D1>=30%加2.5%, >=20%加2.0%, 其他加1.5%)")
-        output_lines.append(f"     [掛單提醒] 建議掛單價{_markup_hint}並自動對齊台股 Tick 升降單位。")
-        output_lines.append("     [停損記錄] 成交後請將「ATR停損」價填入 Stocks.txt 第 4 欄；可再加第 5 欄買入日期 (代號,成本,股數,停損價,買入日期)，系統即比照回測判定最少持有天數與移動止盈。")
+
     output_lines.append("-" * 90)
 
     if has_real_watchlist and len(track_only_sids) > 0:

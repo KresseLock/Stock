@@ -150,6 +150,11 @@ def main():
         print(f"  雲端同步已完成，您可以前往 Google Drive 查看最新結果！")
         print("=" * 75)
 
+        # 增量安全執行實盤損益與持倉分析
+        analyze_script = "analyze_real_pnl.py"
+        if os.path.exists(os.path.join(BASE_DIR, analyze_script)):
+            run_script(analyze_script)
+
 
 if __name__ == "__main__":
     main()

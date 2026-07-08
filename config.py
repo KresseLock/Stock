@@ -66,7 +66,7 @@ TRAIN_INDUSTRIES = {
 BUY_THRESHOLD    = 12.0      # Day1 多空淨分數達此值才觸發買進 (%)
 SELL_THRESHOLD   = 0.0       # Day3 多空淨分數低於此值觸發賣出 (%)
 STOP_LOSS_PCT    = -8.0      # 固定個股停損 (%)；ATR_STOP_ENABLED=True 時被動態值覆蓋
-MAX_POSITIONS    = 5         # 最大持倉上限檔數
+MAX_POSITIONS    = 7         # 最大持倉上限檔數
 MIN_HOLD_DAYS    = 20        # 最少持股天數（防止頻繁交易）
 ORDER_MARKUP_PCT = -2.0      # 預設掛單溢價 (%)，負數 = 折價逢低買進；None = 改用 D1 信心動態加價
 
@@ -119,8 +119,8 @@ REGIME_BUY_THRESHOLD = {
 # 動機：門檻只控制「要不要開新倉」，此處控制「曝險量」。Bull 維持滿倉吃肥尾，
 #       Sideways/Bear 降檔數以化解「滿倉必爆」，不強制平倉（靠自然汰換降至上限，避免振盪洗價）。
 REGIME_MAX_POSITIONS = {
-    "Bull":     5,    # 趨勢多頭：滿倉集中吃肥尾（與 MAX_POSITIONS 一致）
-    "Sideways": 3,    # 震盪盤整：降曝險
+    "Bull":     7,    # 趨勢多頭：滿倉集中吃肥尾（與 MAX_POSITIONS 一致）
+    "Sideways": 4,    # 震盪盤整：降曝險
     "Bear":     1,    # 空頭：極低曝險（實質近空手）
 }
 # 進場端 Bull 確認天數：Bull 需連續 N 天才在「進場端」生效（買入門檻／檔數上限／breadth 紅燈豁免），

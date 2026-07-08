@@ -320,6 +320,10 @@ Stock/
 ├── run_workflow_experiment.py  # 一鍵全自動雙階段實驗主控腳本
 ├── run_workflow_experiment_guide.md # 實驗主控台使用說明與架構指南
 ├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
+├── analyze_real_pnl.py         # 實盤交易損益與永續持倉追蹤工具
+├── trading_history/            # 實盤個人交易紀錄與歷史備份資料夾 (已 Git 忽略)
+│   ├── 交易紀錄.xls            # 最新下載的券商交易紀錄
+│   └── real_trade_history.csv  # 系統增量合併產生的永續交易歷史
 ├── Stocks.txt                  # 自選股 / 實質持倉清單
 ├── FINMIND_TOKEN.txt           # FinMind API 金鑰存放檔 (可選)
 └── requirements.txt            # Python 依賴套件清單
@@ -383,6 +387,13 @@ python Auto_RUN.py -s d      # 僅增量下載今日資料
 python Auto_RUN.py -s p      # 僅重建特徵、訓練與推理
 python Auto_RUN.py -s b      # 僅執行雲端備份
 ```
+
+#### 方案丁：實盤交易損益與永續持倉追蹤
+
+```powershell
+python analyze_real_pnl.py   # 自動讀取並累計實盤交易，產出 reports/real_trading_report.md
+```
+*(註：此步驟已整合至 `Auto_RUN.py` 全流程尾端，全流程執行成功後會自動觸發並印出報告；歷史檔案統一儲存於 `trading_history/` 底下)*
 
 #### 方案乙：一鍵流水線執行（研發與最佳化流程）
 
