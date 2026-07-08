@@ -66,7 +66,7 @@ TRAIN_INDUSTRIES = {
 BUY_THRESHOLD    = 12.0      # Day1 多空淨分數達此值才觸發買進 (%)
 SELL_THRESHOLD   = 0.0       # Day3 多空淨分數低於此值觸發賣出 (%)
 STOP_LOSS_PCT    = -8.0      # 固定個股停損 (%)；ATR_STOP_ENABLED=True 時被動態值覆蓋
-MAX_POSITIONS    = 7         # 最大持倉上限檔數
+MAX_POSITIONS    = 5         # 最大持倉上限檔數
 MIN_HOLD_DAYS    = 20        # 最少持股天數（防止頻繁交易）
 ORDER_MARKUP_PCT = -2.0      # 預設掛單溢價 (%)，負數 = 折價逢低買進；None = 改用 D1 信心動態加價
 
@@ -119,8 +119,8 @@ REGIME_BUY_THRESHOLD = {
 # 動機：門檻只控制「要不要開新倉」，此處控制「曝險量」。Bull 維持滿倉吃肥尾，
 #       Sideways/Bear 降檔數以化解「滿倉必爆」，不強制平倉（靠自然汰換降至上限，避免振盪洗價）。
 REGIME_MAX_POSITIONS = {
-    "Bull":     7,    # 趨勢多頭：滿倉集中吃肥尾（與 MAX_POSITIONS 一致）
-    "Sideways": 4,    # 震盪盤整：降曝險
+    "Bull":     5,    # 趨勢多頭：滿倉集中吃肥尾（與 MAX_POSITIONS 一致）
+    "Sideways": 3,    # 震盪盤整：降曝險
     "Bear":     1,    # 空頭：極低曝險（實質近空手）
 }
 # 進場端 Bull 確認天數：Bull 需連續 N 天才在「進場端」生效（買入門檻／檔數上限／breadth 紅燈豁免），
@@ -295,6 +295,15 @@ OPTUNA_BOUNDS = {
 
 # ── 10.5 Optuna 交易風控搜尋邊界 ─────────────────────────────────
 # *** optimize_trading_params.py 使用 ***
+
+# 風控調參預設區間。起點統一（optimize_trading_params.py 預設與
+# run_workflow_experiment.py 三階段共用）；終點依用途分流：
+#   optimize_trading_params.py 預設 → TRADING_OPT_END_DATE（留其後區間當
+#     「候選 vs 現行參數」的公平裁判區，候選檔經對比勝出才部署）
+#   run_workflow_experiment.py     → mode A／潔淨 OOS 用 BACKTEST_DATE，mode B 用最新資料日
+TRADING_OPT_START_DATE = "2022-01-02"  # 含 2022 完整熊市（-32%），風控參數的核心壓力樣本
+TRADING_OPT_END_DATE   = "2025-12-31"  # 裁判區起點的前一日（2026-01 起保留為對比驗證用）
+
 # 格式：3-tuple = float 搜尋空間（最小, 最大, 步長）；2-tuple = int 搜尋空間（最小, 最大）
 TRADING_PARAM_BOUNDS = {
     "buy_threshold":        (5.0,    25.0,   0.5),
@@ -308,8 +317,11 @@ TRADING_PARAM_BOUNDS = {
     "markup_pct":           (-3.0,    2.0,   0.5),
     # 市況過濾器參數（--regime 模式下搜尋，取代靜態 buy_threshold）
     "regime_bull_buy":      (0.0,    15.0,   0.5),
-    "regime_sideways_buy":  (8.0,    25.0,   0.5),
-    "regime_bull_trend":    (0.0005,  0.004, 0.0005),
+    # sideways_buy 下界 8.0 曾為「高門檻防守」保底，2026-07 優化貼死下界(8.0)；
+    # 現由 regime_sideways_pos 控曝險，門檻可放行往下探索。
+    "regime_sideways_buy":  (5.0,    25.0,   0.5),
+    # 2026-07 優化 bull_trend=0.0035 距上界 0.004 僅一步，放寬供下輪探索。
+    "regime_bull_trend":    (0.0005,  0.006, 0.0005),
     "regime_bear_trend":    (-0.004, -0.0005, 0.0005),
     # 市況選擇性曝險：各 regime 持股檔數上限（int）。Bull 亦納入搜尋——實測基準滿倉(5)
     # 過度曝險，模型第 4~5 名部位為淨拖累，降 Bull 檔數可同時改善報酬與回撤。

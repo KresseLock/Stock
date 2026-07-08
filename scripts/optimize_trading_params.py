@@ -10,6 +10,11 @@ optimize_trading_params.py — 交易策略與避險風控參數貝葉斯自動�
   python scripts/optimize_trading_params.py -t 150 -s 2021-01-01 -e 2025-08-01 -c 2000000
   或使用長參數:
   python scripts/optimize_trading_params.py --trials 150 --start 2021-01-01 --end 2025-08-01 --capital 2000000
+
+輸出行為:
+  預設寫入 configs/best_trading_params_candidate.json（候選檔，不影響部署）。
+  config.py § 11 只自動載入 best_trading_params.json，故新參數須先以 OOS 回測驗證，
+  確認優於現行參數後，加 --deploy 重跑或手動將候選檔複製為 best_trading_params.json 才會生效。
 """
 
 import os
@@ -43,39 +48,27 @@ if BASE_DIR not in sys.path:
 # 載入中央控制面板與模擬交易器
 try:
     from config import (
-        BACKTEST_DATE, MAX_POSITIONS, OPTIMIZATION_TRIALS, EARLY_STOPPING_ROUNDS,
+        MAX_POSITIONS, OPTIMIZATION_TRIALS, EARLY_STOPPING_ROUNDS,
         MDD_TOLERANCE, MDD_PENALTY_WEIGHT,
         PORTFOLIO_ALPHA_WEIGHT, PORTFOLIO_SPREAD_WEIGHT, CALMAR_SCORE_WEIGHT,
-        TRADING_PARAM_BOUNDS,
+        TRADING_PARAM_BOUNDS, TRADING_OPT_START_DATE, TRADING_OPT_END_DATE,
+        SELL_THRESHOLD, STOP_LOSS_PCT, TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS,
     )
     from trading_sim import run_simulation
 except ImportError as e:
     print(f"[錯誤] 載入核心模組失敗: {e}")
     sys.exit(1)
 
-# 計算預設的訓練期（Optuna 最佳化區間）
-# 為了避免前視偏差與對樣本外數據（Test Set）進行過度擬合，
-# 最佳化區間預設截止於 BACKTEST_DATE（樣本外評估的分界點）
-dt_end = None
-if BACKTEST_DATE is not None:
-    try:
-        dt_end = datetime.datetime.strptime(str(BACKTEST_DATE), "%Y%m%d")
-    except ValueError:
-        try:
-            dt_end = datetime.datetime.strptime(str(BACKTEST_DATE), "%Y-%m-%d")
-        except ValueError:
-            pass
+# 預設調參區間（可被 -s / -e 覆寫，常數集中於 config.py § 10.5）：
+# 起點含 2022 完整熊市作壓力樣本；終點刻意停在裁判區之前，
+# 使候選參數可與現行參數在「候選未見過」的區間公平對比後再部署。
+default_start_date = TRADING_OPT_START_DATE
+default_end_date = TRADING_OPT_END_DATE
 
-if dt_end is None:
-    dt_end = datetime.datetime(2025, 8, 1)
-
-# 預設結束時間：BACKTEST_DATE
-default_end_date = dt_end.strftime("%Y-%m-%d")
-# 預設起始時間：結束日期的 2.5 年前，以保證有足夠長的歷史數據進行多牛熊周期驗證
-default_start_date = (dt_end - datetime.timedelta(days=365 * 2.5)).strftime("%Y-%m-%d")
-
-# 最佳化結果存檔路徑
+# 部署參數檔（config.py § 11 啟動時自動載入）與候選參數檔路徑。
+# 預設寫入候選檔，避免未經 OOS 驗證的優化結果直接覆蓋部署中的參數；--deploy 才寫部署檔。
 RESULT_PATH = os.path.join(BASE_DIR, "configs", "best_trading_params.json")
+CANDIDATE_PATH = os.path.join(BASE_DIR, "configs", "best_trading_params_candidate.json")
 
 
 def _suggest(trial, name):
@@ -88,6 +81,19 @@ def _suggest(trial, name):
     return trial.suggest_int(name, lo, hi)
 
 
+def search_space_names(regime_mode):
+    """搜尋空間參數名稱清單（暖啟動相容性檢查與 suggest 共用，避免兩處清單漂移）。"""
+    names = ["panic_ma5", "panic_breadth", "markup_pct"]
+    if regime_mode:
+        # 市況過濾器：趨勢市低門檻進攻、震盪市高門檻防守、空頭固定空倉(99)
+        names += ["regime_bull_buy", "regime_sideways_buy",
+                  "regime_bull_trend", "regime_bear_trend",
+                  "regime_bull_pos", "regime_sideways_pos", "regime_bear_pos"]
+    else:
+        names.append("buy_threshold")
+    return names
+
+
 def suggest_trial_params(trial, regime_mode):
     """集中定義 Optuna 搜尋空間。regime_mode 時搜尋 REGIME_* 動態門檻，否則搜尋靜態 buy_threshold。
     搜尋邊界統一由 config.TRADING_PARAM_BOUNDS 控制 (常數集中原則)。
@@ -97,19 +103,7 @@ def suggest_trial_params(trial, regime_mode):
     sell_threshold / ts_activation / ts_pullback / min_hold_days 在部署時由 config.REGIME_EXIT_PARAMS
     依市況覆蓋（trading_sim.py 載入 regime_exit_params=None 即套用），故全數移出搜尋空間，
     避免 Optuna 在「不會被部署」的維度空轉並污染 Walk-Forward 穩定度報表。"""
-    p = {
-        name: _suggest(trial, name)
-        for name in ("panic_ma5", "panic_breadth", "markup_pct")
-    }
-    if regime_mode:
-        # 市況過濾器：趨勢市低門檻進攻、震盪市高門檻防守、空頭固定空倉(99)
-        for name in ("regime_bull_buy", "regime_sideways_buy",
-                     "regime_bull_trend", "regime_bear_trend",
-                     "regime_bull_pos", "regime_sideways_pos", "regime_bear_pos"):
-            p[name] = _suggest(trial, name)
-    else:
-        p["buy_threshold"] = _suggest(trial, "buy_threshold")
-    return p
+    return {name: _suggest(trial, name) for name in search_space_names(regime_mode)}
 
 
 def run_simulation_scoring(start_date, end_date, trial_params, capital, max_pos):
@@ -130,6 +124,7 @@ def run_simulation_scoring(start_date, end_date, trial_params, capital, max_pos)
         # 依市況切換出場 (sell_threshold/ts_*/min_hold_days)；stop_loss 不傳 → 由 ATR 動態停損接管。
         # 這三類參數不在此搜尋 (見 suggest_trial_params)，確保「優化評分 == 部署行為」。
         regime_exit_params=None,
+        export_report=False,
     )
     if "regime_bull_buy" in trial_params:
         # 市況過濾器模式：搜尋 regime 動態門檻，buy_threshold 留空 (None) 以啟用過濾器
@@ -231,18 +226,26 @@ def main():
                         help="市況過濾器模式：搜尋 REGIME_* 動態門檻 (Bull/Sideways 門檻與趨勢分界)，而非靜態 buy_threshold")
     parser.add_argument("--recency_weight", type=float, default=1.0,
                         help="WFO 近期加權係數：>1 時讓最新窗口擁有更高權重（例: 2 = 每窗口權重是前一個的 2 倍），預設 1.0 為普通中位數")
+    parser.add_argument("--deploy", action="store_true",
+                        help="直接寫入 best_trading_params.json（立即部署生效）；"
+                             "預設寫入 best_trading_params_candidate.json，經 OOS 驗證後再手動部署")
 
     args = parser.parse_args()
-    
+
     import numpy as np
-    
+
+    # 結果輸出路徑：預設候選檔（不影響部署），--deploy 才覆寫部署檔
+    out_path = RESULT_PATH if args.deploy else CANDIDATE_PATH
+
     print("=" * 70)
     print("  交易與避險風控參數貝葉斯自動調參 (Optuna TPE)")
     print("=" * 70)
     print(f"  調參資料區間 : {args.start} 至 {args.end}")
     print(f"  模擬資金規模 : {args.capital:,} | 最大持股 slots: {args.max_pos}")
     print(f"  預期搜尋輪數 : {args.trials} 輪")
-    print(f"  結果輸出存檔 : {RESULT_PATH}")
+    print(f"  結果輸出存檔 : {out_path}")
+    if not args.deploy:
+        print("  部署模式     : 否（候選檔；驗證後手動複製為 best_trading_params.json，或加 --deploy 重跑）")
     print(f"  Walk-Forward : {'是' if args.walk_forward else '否'}")
     print("=" * 70)
     
@@ -281,7 +284,8 @@ def main():
                 return score
                 
             study = optuna.create_study(direction="maximize")
-            study.optimize(wf_objective, n_trials=wf_trials, n_jobs=args.jobs)
+            with open(os.devnull, "w", encoding="utf-8") as _devnull, contextlib.redirect_stdout(_devnull):
+                study.optimize(wf_objective, n_trials=wf_trials, n_jobs=args.jobs)
             print(f"  [窗口 {idx+1} 完成] 最佳得分: {study.best_value:.4f} | 參數: {study.best_params}")
             all_best_params.append(study.best_params)
             
@@ -353,10 +357,14 @@ def main():
             "overall_metrics": {"return_pct": 0.0, "mdd_pct": 0.0},
             "walk_forward_metrics": wf_results
         }
-        with open(RESULT_PATH, "w", encoding="utf-8") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             json.dump(output_data, f, indent=4, ensure_ascii=False)
-            
-        print(f"\n[成功] Walk-Forward 最佳中位數參數已匯出至: {RESULT_PATH}\n")
+
+        print(f"\n[成功] Walk-Forward 最佳中位數參數已匯出至: {out_path}")
+        if not args.deploy:
+            print("[提示] 此為候選參數，尚未部署。請先以 OOS 區間回測驗證，"
+                  "確認優於現行參數後再複製為 best_trading_params.json。")
+        print()
         
     else:
         # ── 標準單區間優化模式 ──
@@ -385,27 +393,21 @@ def main():
 
         # 暖啟動：若存在上一輪結果，將最佳參數 enqueue 為 trial #0，
         # 讓 TPE 從已知好解附近展開搜尋，避免浪費前幾輪在純隨機探索。
-        if os.path.exists(RESULT_PATH):
+        # 來源優先序：候選檔（最新一次搜尋結果）→ 部署檔。
+        _warm_src = CANDIDATE_PATH if os.path.exists(CANDIDATE_PATH) else RESULT_PATH
+        if os.path.exists(_warm_src):
             try:
-                with open(RESULT_PATH, encoding="utf-8") as _f:
+                with open(_warm_src, encoding="utf-8") as _f:
                     _prev = json.load(_f)
                 _prev_params = _prev.get("best_params", {})
                 if _prev_params:
                     # 確認與目前搜尋模式相容（regime / 非 regime）
-                    if args.regime:
-                        _expected = {"sell_threshold", "stop_loss", "panic_ma5", "panic_breadth",
-                                     "ts_activation", "ts_pullback", "min_hold_days", "markup_pct",
-                                     "regime_bull_buy", "regime_sideways_buy",
-                                     "regime_bull_trend", "regime_bear_trend",
-                                     "regime_bull_pos", "regime_sideways_pos", "regime_bear_pos"}
-                    else:
-                        _expected = {"sell_threshold", "stop_loss", "panic_ma5", "panic_breadth",
-                                     "ts_activation", "ts_pullback", "min_hold_days", "markup_pct",
-                                     "buy_threshold"}
+                    _expected = set(search_space_names(args.regime))
                     _filtered = {k: v for k, v in _prev_params.items() if k in _expected}
                     if len(_filtered) == len(_expected):
                         study.enqueue_trial(_filtered)
-                        print(f"  [暖啟動] 已從上輪結果載入最佳參數作為起點（得分: {_prev.get('best_score', '?')}）")
+                        print(f"  [暖啟動] 已從 {os.path.basename(_warm_src)} 載入上輪最佳參數作為起點"
+                              f"（得分: {_prev.get('best_score', '?')}）")
                     else:
                         print("  [暖啟動] 上輪使用不同模式（regime/非regime），跳過暖啟動")
             except Exception as _e:
@@ -413,6 +415,11 @@ def main():
 
         import threading
         _print_lock = threading.Lock()
+
+        # -j 多執行緒時 run_simulation_scoring 內的 redirect_stdout 會全域替換 sys.stdout
+        # （非執行緒安全），callback 若用預設 stdout 列印，進度會被別的 trial 緩衝吃掉。
+        # 故先鎖住真正的 console 供進度列印，optimize 期間全域 stdout 導向 devnull 吸收漏出的模擬輸出。
+        _real_stdout = sys.stdout
 
         def _save_checkpoint(study, trial):
             """發現新最佳解時立即寫入 JSON，防止中途中斷遺失進度。"""
@@ -439,7 +446,7 @@ def main():
                         for r in ["Bull", "Bear", "Sideways"]
                     }
                 }
-                with open(RESULT_PATH, "w", encoding="utf-8") as _f_chk:
+                with open(out_path, "w", encoding="utf-8") as _f_chk:
                     json.dump(_chk, _f_chk, indent=4, ensure_ascii=False)
             except Exception:
                 pass  # 不因存檔失敗而中斷優化
@@ -470,14 +477,14 @@ def main():
                             f"  [{n:>4}/{args.trials:>4}] "
                             f"綜合得分={val:.2f} ({sub_str})  最佳={best:.2f} | "
                             f"{buy_str} | "
-                            f"Sell門檻: {tp['sell_threshold']}% | "
-                            f"停損: {tp['stop_loss']}% | "
+                            f"Sell門檻: {tp.get('sell_threshold', SELL_THRESHOLD)}% | "
+                            f"停損: {tp.get('stop_loss', STOP_LOSS_PCT)}% | "
                             f"大盤MA5: {tp['panic_ma5']*100:.1f}% | "
                             f"上漲比例: {tp['panic_breadth']*100:.0f}% | "
-                            f"移動止盈: 達 {tp['ts_activation']}% 回撤 {tp['ts_pullback']}% | "
-                            f"持股天數: {tp['min_hold_days']}天 | 折溢價: {tp['markup_pct']}%"
+                            f"移動止盈: 達 {tp.get('ts_activation', TS_ACTIVATION_PCT)}% 回撤 {tp.get('ts_pullback', TS_PULLBACK_PCT)}% | "
+                            f"持股天數: {tp.get('min_hold_days', MIN_HOLD_DAYS)}天 | 折溢價: {tp['markup_pct']}%"
                             f"{tag}",
-                            flush=True
+                            file=_real_stdout, flush=True
                         )
             except Exception:
                 pass
@@ -503,13 +510,15 @@ def main():
                     current_trial_number = trial.number
                     rounds_without_improvement = current_trial_number - best_trial_number
                     if rounds_without_improvement >= EARLY_STOPPING_ROUNDS:
-                        print(f"\n  [提早結束] 連續 {EARLY_STOPPING_ROUNDS} 次未找到更好的參數，觸發 Early Stopping！", flush=True)
+                        print(f"\n  [提早結束] 連續 {EARLY_STOPPING_ROUNDS} 次未找到更好的參數，觸發 Early Stopping！",
+                              file=_real_stdout, flush=True)
                         study.stop()
                 except Exception:
                     pass
 
         print("\n[開始調參] 正在執行貝葉斯搜尋最佳配置...")
-        study.optimize(objective, n_trials=args.trials, n_jobs=args.jobs, callbacks=[callback])
+        with open(os.devnull, "w", encoding="utf-8") as _devnull, contextlib.redirect_stdout(_devnull):
+            study.optimize(objective, n_trials=args.trials, n_jobs=args.jobs, callbacks=[callback])
         
         best_params = study.best_params
         best_value = study.best_value
@@ -538,13 +547,13 @@ def main():
                       f"Sideways {int(best_params['regime_sideways_pos'])} | Bear {int(best_params['regime_bear_pos'])} 檔")
         else:
             print(f"  1. 買進分數門檻 (buy_threshold)  : {best_params['buy_threshold']:.1f}%")
-        print(f"  1.5 賣出分數門檻 (sell_threshold): {best_params['sell_threshold']:.1f}%")
-        print(f"  2. 個股固定停損 (stop_loss)      : {best_params['stop_loss']:.1f}%")
+        print(f"  1.5 賣出分數門檻 (sell_threshold): {best_params.get('sell_threshold', SELL_THRESHOLD):.1f}%")
+        print(f"  2. 個股固定停損 (stop_loss)      : {best_params.get('stop_loss', STOP_LOSS_PCT):.1f}%")
         print(f"  3. 大盤5日報酬門檻 (panic_ma5)   : {best_params['panic_ma5']*100:.2f}% (實數: {best_params['panic_ma5']:.4f})")
         print(f"  4. 全市場上漲比例 (panic_breadth): {best_params['panic_breadth']*100:.1f}% (實數: {best_params['panic_breadth']:.2f})")
-        print(f"  5. 移動止盈啟動線 (ts_activation): {best_params['ts_activation']:.1f}%")
-        print(f"  6. 移動止盈回撤線 (ts_pullback)  : {best_params['ts_pullback']:.1f}%")
-        print(f"  7. 最少持股天數 (min_hold_days)  : {best_params['min_hold_days']}天")
+        print(f"  5. 移動止盈啟動線 (ts_activation): {best_params.get('ts_activation', TS_ACTIVATION_PCT):.1f}%")
+        print(f"  6. 移動止盈回撤線 (ts_pullback)  : {best_params.get('ts_pullback', TS_PULLBACK_PCT):.1f}%")
+        print(f"  7. 最少持股天數 (min_hold_days)  : {best_params.get('min_hold_days', MIN_HOLD_DAYS)}天")
         print(f"  8. 掛單溢價幅度 (markup_pct)     : {best_params['markup_pct']:.1f}%")
         print("=" * 70)
         
@@ -569,10 +578,15 @@ def main():
                 for r in ["Bull", "Bear", "Sideways"]
             }
         }
-        with open(RESULT_PATH, "w", encoding="utf-8") as f:
+        with open(out_path, "w", encoding="utf-8") as f:
             json.dump(output_data, f, indent=4, ensure_ascii=False)
-            
-        print(f"\n[成功] 最佳參數已匯出至: {RESULT_PATH}\n")
+
+        print(f"\n[成功] 最佳參數已匯出至: {out_path}")
+        if not args.deploy:
+            print("[提示] 此為候選參數，尚未部署（config.py 只自動載入 best_trading_params.json）。")
+            print("       建議先用現行參數未見過的 OOS 區間跑 trading_sim.py 對比，"
+                  "確認更優後再複製為 best_trading_params.json。")
+        print()
 
 
 if __name__ == "__main__":

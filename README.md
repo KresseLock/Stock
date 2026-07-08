@@ -240,8 +240,10 @@ flowchart LR
 <details>
 <summary><b>🎛️ 交易策略與避險參數自動調參器 (scripts/optimize_trading_params.py)</b></summary>
 
-- 使用 Optuna 調校模擬交易風控參數 (`buy_threshold`, `stop_loss`, `panic_ma5`, `panic_breadth`, `ts_activation`, `ts_pullback`)。
-- **多市況魯棒性交叉驗證 (Regime-Robust CV)**：將訓練區間依時間順序切分為 3 個子區間（如：2021多頭、2022空頭、2023-2025多空震盪），若所有區間回報皆為正，採用調和平均值（Harmonic Mean）打分以懲罰單一表現差勁的區間；若有任何區間回報為負，則採用最小值（Minimin）強行避開在空頭市場崩盤或震盪市中爆倉的配置。
+- 使用 Optuna TPE 貝葉斯演算法搜尋模擬交易風控參數（大盤避險門檻 `panic_ma5`／`panic_breadth`、掛單溢價 `markup_pct`；加 `--regime` 則搜尋市況動態買入門檻與各市況持股檔數上限，取代靜態 `buy_threshold`）。
+- **Regime-Robust 加權評分**：把回測期間依大盤實際走勢自動切成 Bull／Sideways／Bear 三段，各段分別計算 Alpha、多空 Spread、Calmar 比率並依權重加總（權重見 `config.py § 2.4`），再依 √天數正規化平均——避免樣本數過少的市況段主導分數。全期最大回撤超過 `MDD_TOLERANCE` 時另扣分，防止「段內漂亮、跨段爆倉」的角落解。
+- **調參區間**：起訖日預設讀取 `config.py § 10.5` 的 `TRADING_OPT_START_DATE`／`TRADING_OPT_END_DATE`（預設 `2022-01-02 ~ 2025-12-31`，含 2022 完整熊市壓力樣本，終點刻意留白供裁判驗證），可用 `-s`/`-e` 覆寫。
+- **候選檔機制**：預設結果寫入 `configs/best_trading_params_candidate.json`（不影響部署），須先用候選未見過的區間跑 `trading_sim.py` 驗證優於現行參數，才手動複製為 `best_trading_params.json`，或加 `--deploy` 直接覆寫部署檔。
 
 </details>
 
@@ -316,7 +318,7 @@ Stock/
 │   ├── best_factors_mode_a.json # 實驗模式 A 因子參數
 │   ├── best_trading_params_mode_a.json # 實驗模式 A 風控參數
 │   ├── best_trading_params_mode_b.json # 實驗模式 B 風控參數
-│   └── best_trading_params_mode_b_oos.json # Stage C 潔淨 OOS 驗證凍結風控參數 (2023~2025-08)
+│   └── best_trading_params_mode_b_oos.json # Stage C 潔淨 OOS 驗證凍結風控參數 (沿用模式 A 參數存檔，非獨立優化)
 ├── run_workflow_experiment.py  # 一鍵全自動雙階段實驗主控腳本
 ├── run_workflow_experiment_guide.md # 實驗主控台使用說明與架構指南
 ├── trading_sim.py              # 實戰級量化模擬交易器 (回測引擎)
@@ -464,47 +466,63 @@ python scripts/backtest.py 2025-08-01
 
 #### 方案己：交易策略與避險參數自動調參器 (scripts/optimize_trading_params.py)
 
-用 Optuna 的 TPE 貝葉斯演算法，在歷史資料上自動幫你找出最好的一組避險與交易參數。重點是它採用**多市況交叉驗證（Regime-Robust CV）**：把回測期間照時間順序切成 3 段不同性格的市場（例如 2021 多頭、2022 空頭、2023-2025 多空震盪），各算各的 Calmar 比率，然後這樣打分：
-* **三段都賺**：用**調和平均值（Harmonic Mean）**打分——只要有一段表現特別差，整體分數就被狠狠拉低。
-* **任一段虧錢**：直接拿**最差那一段（Minimin）**當分數，強迫它避開「會在空頭或震盪市爆倉」的配置。
+用 Optuna 的 TPE 貝葉斯演算法，在歷史資料上自動幫你找出最好的一組避險與交易參數。評分機制採**市況加權（Regime-Robust）**：把回測期間依大盤實際走勢自動切成 Bull（多頭）／Sideways（震盪）／Bear（空頭）三段，各段分別算 Alpha、多空 Spread、Calmar 比率，依 `config.py § 2.4` 的權重加總後用 √天數正規化平均——天數太少的市況段不會過度主導分數。全期最大回撤超過容忍線時再額外扣分，逼優化器避開「單一市況內好看、跨市況交界爆倉」的角落解。
 
 這樣做是為了不讓調參器只看到某一次「超級大牛市」的甜頭，就調出一套過度激進的策略，而是找出一套不管什麼行情都還撐得住的「全天候黃金風控配置」。
 
-##### 1. 執行方式與參數說明
+##### 1. 輸出行為：候選檔 vs 部署檔
+
+搜尋結果**預設不會直接覆寫**正在使用的 `configs/best_trading_params.json`，而是寫入 `configs/best_trading_params_candidate.json`：
+
+| 情境 | 行為 |
+| :--- | :--- |
+| 不加 `--deploy`（預設） | 寫入候選檔，部署檔不受影響，供你先用「候選未見過」的區間跑 `trading_sim.py` 對比驗證 |
+| 加 `--deploy` | 直接覆寫 `best_trading_params.json`，`config.py` 啟動時立即自動套用 |
+
+驗證後確認候選優於現行參數，手動複製即可部署：
+```powershell
+Copy-Item configs\best_trading_params_candidate.json configs\best_trading_params.json
+```
+
+##### 2. 執行方式與參數說明
 
 本指令支援**簡寫（Short options）**與**完整長參數（Long options）**，且所有參數均有基於 `config.py` 的預設值：
 
-*   **預設執行**（讀取 `config.py` 中的 `OPTIMIZATION_TRIALS` 作為搜尋輪數，預設為 600 輪；結束時間為 `BACKTEST_DATE`，起始時間為截止日往回推 2.5 年，初始資金 1,000,000 元）：
+*   **預設執行**（讀取 `config.py` 中的 `OPTIMIZATION_TRIALS` 作為搜尋輪數，預設為 600 輪；區間讀取 `TRADING_OPT_START_DATE`／`TRADING_OPT_END_DATE`，預設 `2022-01-02 ~ 2025-12-31`，初始資金 1,000,000 元，結果寫入候選檔）：
     ```powershell
-    python scripts/optimize_trading_params.py
+    python scripts/optimize_trading_params.py --regime
     ```
 
-*   **指定簡短參數執行**（搜尋 150 輪，從 2021-01-01 開始，2025-08-01 結束，初始資金 200 萬）：
+*   **指定簡短參數執行**（搜尋 150 輪，從 2022-01-02 開始，2025-12-31 結束，初始資金 200 萬）：
     ```powershell
-    python scripts/optimize_trading_params.py -t 150 -s 2021-01-01 -e 2025-08-01 -c 2000000
+    python scripts/optimize_trading_params.py -t 150 -s 2022-01-02 -e 2025-12-31 -c 2000000 --regime
     ```
 
-*   **指定長參數執行**（效果與上方簡短參數完全相同）：
+*   **驗證後直接部署**（加 `--deploy`，跳過候選檔，直接覆寫 `best_trading_params.json`）：
     ```powershell
-    python scripts/optimize_trading_params.py --trials 150 --start 2021-01-01 --end 2025-08-01 --capital 2000000
+    python scripts/optimize_trading_params.py --regime --deploy
     ```
 
-##### 2. 命令列參數清單
+##### 3. 命令列參數清單
 
 | 短參數 | 長參數 | 類型 | 預設值 | 說明 |
 | :--- | :--- | :--- | :--- | :--- |
-| `-t` | `--trials` | `int` | `config.py` 中的 `OPTIMIZATION_TRIALS` (目前為 600) | 最佳化搜尋的總迭代輪數。 |
-| `-s` | `--start` | `str` | `BACKTEST_DATE` 往回推 2.5 年 | 模擬交易起始日期 (`YYYY-MM-DD`)。 |
-| `-e` | `--end` | `str` | `config.py` 中的 `BACKTEST_DATE` (目前為 `2025-08-01`) | 模擬交易結束日期 (`YYYY-MM-DD`)。 |
+| `-t` | `--trials` | `int` | `config.py` 中的 `OPTIMIZATION_TRIALS`（目前為 600） | 最佳化搜尋的總迭代輪數。 |
+| `-s` | `--start` | `str` | `config.py` 中的 `TRADING_OPT_START_DATE`（目前為 `2022-01-02`） | 模擬交易起始日期 (`YYYY-MM-DD`)。 |
+| `-e` | `--end` | `str` | `config.py` 中的 `TRADING_OPT_END_DATE`（目前為 `2025-12-31`） | 模擬交易結束日期 (`YYYY-MM-DD`)。 |
 | `-c` | `--capital`| `int` | `1000000` | 模擬交易的起始資金。 |
-| `-m` | `--max_pos`| `int` | `config.py` 中的 `MAX_POSITIONS` (目前為 5) | 同時持股的最大檔數限制。 |
-| `-j` | `--jobs` | `int` | `1` | 並行線程數 (交易模擬包含I/O與複雜邏輯，建議設為 `1`)。 |
+| `-m` | `--max_pos`| `int` | `config.py` 中的 `MAX_POSITIONS`（目前為 5） | 同時持股的最大檔數限制。 |
+| `-j` | `--jobs` | `int` | `1` | 並行線程數。 |
+| `-wf` | `--walk_forward` | flag | `False` | 啟用 Walk-Forward 參數穩定性檢驗（切 4 個滾動窗口分別優化，取中位數）。 |
+| ✕ | `--regime` | flag | `False` | 市況過濾器模式：搜尋 Bull/Sideways 動態買入門檻與各市況持股檔數上限，取代靜態 `buy_threshold`。 |
+| ✕ | `--recency_weight` | `float` | `1.0` | `-wf` 模式下的近期加權係數，`>1` 讓最新窗口主導中位數（例：`2` = 每窗口權重是前一窗的 2 倍）。 |
+| ✕ | `--deploy` | flag | `False` | 直接寫入 `best_trading_params.json`（立即部署生效）；不加則寫入候選檔。 |
 
-##### 3. 輸出結果與自動套用
+##### 4. 輸出結果與自動套用
 
-搜尋完成後，最佳參數與回測指標會自動輸出並覆蓋存檔於 `configs/best_trading_params.json`。該檔案除了包含最佳的參數配置外，還會記錄**全區間整體績效**與**三個子區間個別的報酬率、最大回撤與得分**，供後續分析。
+`--deploy` 模式下，搜尋完成後最佳參數與回測指標會自動輸出並覆蓋存檔於 `configs/best_trading_params.json`；未加 `--deploy` 則寫入 `configs/best_trading_params_candidate.json`。兩者都會記錄**全區間整體績效**與**各市況（Bull/Sideways/Bear）個別的報酬率、最大回撤與得分**，供後續分析。
 
-`config.py` 在被任何模組（回測、模擬、推理）載入時，會自動偵測並讀取此 JSON 檔，動態覆寫內部的風控參數，使新參數立刻全系統生效。
+`config.py` 在被任何模組（回測、模擬、推理）載入時，會自動偵測並讀取 `best_trading_params.json`，動態覆寫內部的風控參數，使新參數立刻全系統生效——這也是為什麼未經驗證的候選參數不該直接寫入這個檔案。
 
 ---
 
@@ -571,10 +589,10 @@ python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold 
    - **⚠️ 注意**：`Auto_RUN.py`（模式 B）的因子優化評估窗口含近期牛市，分數天然偏高，**沒有乾淨 OOS 可以驗**，不能與模式 A 的分數直接比較，也不能作為因子好壞的決策依據。
 
 2. **第二階段：交易策略與避險風控最佳化 (Optimize Trading Params)**
-   - **目的**：在模型預測力固定下，搜尋最佳的實戰交易風控參數（如個股停損線、大盤避險紅燈、移動止盈啟動線），以最大化獲利率並抑制最大回撤 (MDD)。
-   - **執行指令**：`python scripts/optimize_trading_params.py`
-   - **產出**：儲存最佳風控與策略參數至 `configs/best_trading_params.json`。
-   - **後續步驟**：此結果會由 `config.py` 在初始化時自動動態加載並覆寫預設常數，**全系統（回測、模擬、推理）將立即自動套用新風控值**，無須任何手動操作。
+   - **目的**：在模型預測力固定下，搜尋最佳的實戰交易風控參數（大盤避險紅燈、市況動態買入門檻、各市況持股檔數上限），以最大化獲利率並抑制最大回撤 (MDD)。
+   - **執行指令**：`python scripts/optimize_trading_params.py --regime`
+   - **產出**：預設寫入候選檔 `configs/best_trading_params_candidate.json`，**不影響現行部署參數**。
+   - **後續步驟**：拿候選參數在「候選未見過」的區間（預設調參區間終點為 `2025-12-31`，故 2026-01 起可當裁判區）跑 `trading_sim.py` 與現行參數對比，確認更優後再手動複製為 `best_trading_params.json`（或加 `--deploy` 重跑直接部署）。`config.py` 會在初始化時自動偵測並動態覆寫預設常數，**全系統（回測、模擬、推理）立即套用新風控值**。
 
 ### Step 6 — 量化研發與實盤生產工作流 (模式 A 與 模式 B)
 
@@ -595,10 +613,11 @@ python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold 
 
 ##### 🎛️ 策略優化器：`scripts/optimize_trading_params.py`
 *   **為什麼需要它（Why）**：
-    風控參數（個股停損、大盤避險紅燈、移動止盈這些）如果只在一種市況下測，很容易調出「只適合那一種行情」的極端值。例如：熊市裡停損設太緊，一點正常波動就被洗出場；大牛市裡避險太敏感，動不動就空手，結果少賺一大段。這支工具用 **Regime-Robust CV（多市況交叉驗證）**，把不同市場週期都納進來，以 `Score = Return - 2.0 × MDD` 的調和平均或最小值當分數，靠 Optuna 找出一套「各種行情都還能撐」的黃金風控配置。
+    風控參數（大盤避險紅燈、市況買入門檻、各市況持股檔數）如果只在一種市況下測，很容易調出「只適合那一種行情」的極端值。例如：熊市裡曝險設太高，一點正常波動就大幅回撤；大牛市裡避險太敏感，動不動就空手，結果少賺一大段。這支工具用 **Regime-Robust 加權評分**，把回測期間依大盤實際走勢切成 Bull／Sideways／Bear 三段分別打分再加權平均，外加全期 MDD 懲罰，靠 Optuna 找出一套「各種行情都還能撐」的黃金風控配置。
 *   **什麼時候跑、想看什麼（When & Goal）**：
-    *   **研究期（模式 A）**：先用 `analyze_regime_stability.py` 確認模型訊號健康後再跑。**優化區間的結束日一定要鎖在 2025-08-01 以前**（例如 `-s 2021-01-02 -e 2025-08-01`），絕對不能讓 Optuna 偷看到 2025-08-01 之後那段超級牛市。先在歷史行情裡找出最好的風控，再拿去那段沒看過的牛市回測，看它「換個沒見過的環境還撐不撐得住」。
-    *   **實盤期（模式 B）**：正式上線前，或市場剛走過一大段全新行情（像 2025-08 ~ 2026-06 這波牛市）時，跑一次**涵蓋這段牛市的全週期優化**（例如 `-s 2023-01-01 -e 2026-06-01`）。把這段又猛又抖的新行情也餵給 Optuna，免得它因為沒見過牛市的大波動，調出一套過度保守的參數（太早避險空倉、停損太緊），害策略在實盤牛市裡頻頻被洗出場或空手少賺。
+    *   **研究期（模式 A）**：先用 `analyze_regime_stability.py` 確認模型訊號健康後再跑。**優化區間的結束日一定要鎖在 `BACKTEST_DATE`（2025-08-01）以前**（`run_workflow_experiment.py` 會自動代入；手動跑則加 `-e 2025-08-01`），絕對不能讓 Optuna 偷看到 2025-08-01 之後那段超級牛市。先在歷史行情裡找出最好的風控，再拿去那段沒看過的牛市回測，看它「換個沒見過的環境還撐不撐得住」。
+    *   **實盤期（模式 B）**：正式上線前，或市場剛走過一大段全新行情時，跑一次**涵蓋最新行情的全週期優化**（`-s config.TRADING_OPT_START_DATE -e <最新資料日>`，`run_workflow_experiment.py` 會自動代入）。把最新這段又猛又抖的行情也餵給 Optuna，免得它因為沒見過牛市的大波動，調出一套過度保守的參數（太早避險空倉、曝險太低），害策略在實盤牛市裡頻頻空手少賺。
+    *   **手動單獨執行時**：預設不帶 `-s`/`-e` 即讀取 `config.py` 的 `TRADING_OPT_START_DATE`／`TRADING_OPT_END_DATE`（`2022-01-02 ~ 2025-12-31`，含 2022 完整熊市壓力樣本，終點刻意留白供裁判驗證），結果預設寫入候選檔不影響部署，詳見上方「方案己」。
 
 ---
 
@@ -630,9 +649,9 @@ python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold 
         *   *為什麼*：評估模型在 2025-08-01 之後 OOS 超級牛市中的 RankIC 與 Alpha。如果 RankIC > 0.02 且 Top 1% Alpha 依然顯著，代表模型選股排序能力極佳，可以進入策略調參；否則需重新設計特徵。
     5.  **交易風控參數優化**（`optimize_trading_params.py`）：
         ```powershell
-        python scripts/optimize_trading_params.py -s 2021-01-02 -e 2025-08-01 -c 2000000
+        python scripts/optimize_trading_params.py -s 2022-01-02 -e 2025-08-01 -j 12 -wf --regime --deploy
         ```
-        *   *為什麼*：搜尋結束日期必須鎖在 2025-08-01。讓 Optuna 在歷史多空震盪環境中優化出風控參數（如 `stop_loss = -8.0%`），不讓它偷看未來的超級牛市。
+        *   *為什麼*：搜尋結束日期必須鎖在 2025-08-01（`BACKTEST_DATE`）。起點含 2022 完整熊市壓力樣本。讓 Optuna 在歷史多空循環中優化出風控參數（大盤避險門檻、市況買入門檻、各市況持股檔數），不讓它偷看未來的超級牛市。這裡加 `--deploy` 是因為它是研究流程的一環，直接寫回部署檔供下一步 OOS 回測驗證；手動單獨調參時預設不加 `--deploy`，結果先落到候選檔驗證過再部署（見「方案己」）。
     6.  **樣本外（OOS）模擬交易回測**（`trading_sim.py`）：
         ```powershell
         python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000
@@ -652,9 +671,9 @@ python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold 
 *   **日常運作與工作流**：
     1.  **實盤上線前/定期執行風控優化**：
         ```powershell
-        python scripts/optimize_trading_params.py -s 2023-01-01 -e 2026-06-01 -c 2000000
+        python scripts/optimize_trading_params.py -s 2022-01-02 -e <今日或最新資料日> -j 12 -wf --regime --recency_weight 2 --deploy
         ```
-        *   *為什麼*：在進入實盤前，必須把 2025-08 ~ 2026-06 這段大牛市納入 Optuna 的優化區間。這樣優化器才能見識到牛市的真實波動度，優化出一套適合當下高點行情的「黃金風控配置」，避免因為避險過度敏感而在實盤中被震盪洗出場或錯失行情。
+        *   *為什麼*：在進入實盤前，必須把最新這段行情（含最新牛熊循環）納入 Optuna 的優化區間，終點設到最新資料日（不像模式 A 得留白給乾淨 OOS）。`--recency_weight 2` 讓 Walk-Forward 最新窗口的權重是最舊窗口的數倍，避免中位數被過時窗口稀釋。這樣優化器才能見識到牛市的真實波動度，優化出一套適合當下高點行情的「黃金風控配置」，避免因為避險過度敏感而在實盤中被震盪洗出場或錯失行情。
     2.  **每日收盤後執行一鍵主控**（通常在 15:30 三大法人資料更新後）：
         ```powershell
         python Auto_RUN.py
@@ -705,7 +724,8 @@ python run_workflow_experiment.py --fresh
     *   模式 A 訊號診斷報告存檔於 [reports/mode_a_regime_stability_report.txt](reports/mode_a_regime_stability_report.txt)。
     *   模式 A 風控參數存檔於 `configs/best_trading_params_mode_a.json`。
     *   模式 B 風控參數存檔於 `configs/best_trading_params_mode_b.json`。
-    *   Stage C 潔淨 OOS 驗證凍結風控參數存檔於 `configs/best_trading_params_mode_b_oos.json`（優化窗 2023~2025-08）。
+    *   Stage C 潔淨 OOS 驗證使用的凍結風控參數與模式 A 相同，另存一份於 `configs/best_trading_params_mode_b_oos.json` 供對照。
+
 ##### ④ Checkpoint 斷點續傳機制
 
 實驗支援自動續傳，**中途崩潰或手動 Ctrl+C 後，重新執行同一指令即可從斷點續跑**。主要 Checkpoint 檔案如下：
@@ -716,7 +736,7 @@ python run_workflow_experiment.py --fresh
 | `reports/mode_a_regime_stability_report.txt` | 模式 A 特徵重建 + 模型訓練 + 訊號診斷 | 20~40 分鐘 |
 | `configs/best_trading_params_mode_a.json` | 模式 A 風控調參（Optuna 400 輪）| 2~4 小時 |
 | `configs/best_trading_params_mode_b.json` | 模式 B 全部步驟（特徵重建 + 模型重訓 + 風控調參）| 3~6 小時 |
-| `configs/best_trading_params_mode_b_oos.json` | Stage C 潔淨 OOS 風控調參（Optuna，凍結窗 2023~2025-08）| 2~4 小時 |
+| `reports/workflow_experiment_results.json`（Stage C 回測欄位） | Stage C 下界（Model A）／上界（Model B）OOS 回測 | 數分鐘 |
 
 報告判讀詳解請參閱 [run_workflow_experiment_guide.md](run_workflow_experiment_guide.md)。
 

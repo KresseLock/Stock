@@ -72,7 +72,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                    regime_buy_threshold=None, regime_bull_trend=None, regime_bear_trend=None,
                    regime_max_positions=None, regime_exit_params=None,
                    exit_regime_lag=None, entry_bull_confirm_days=None,
-                   downgrade_flash_trim=None):
+                   downgrade_flash_trim=None, export_report=True):
     print("=" * 70)
     print(f"  啟動量化交易回測 (Out-of-Sample, T+1 限價搓合 + 雙風控防線版)")
     print(f"  期間: {start_date} 到 {end_date}")
@@ -851,33 +851,34 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         'Market_Value': '市值', 'Unrealized_Profit(%)': '未實現利潤(%)'
     }, inplace=True)
 
-    # 輸出報表
-    try:
-        report_dir = os.path.join(BASE_DIR, "reports")
-        os.makedirs(report_dir, exist_ok=True)
-        safe_start = start_date.replace("/", "-")
-        safe_end = end_date.replace("/", "-")
-        
+    # 輸出報表 (最佳化調參時傳 export_report=False 跳過，避免每輪 trial 重複寫檔互搶)
+    if export_report:
         try:
-            excel_path = os.path.join(report_dir, f"backtest_report_{safe_start}_{safe_end}.xlsx")
-            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-                df_history.to_excel(writer, sheet_name='Equity_Curve', index=False)
-                df_trades.to_excel(writer, sheet_name='Trade_History', index=False)
-                df_holdings.to_excel(writer, sheet_name='Final_Holdings', index=False)
-            print(f"\n[成功] 完整回測報表已匯出 (Excel格式): {excel_path}")
-        except ImportError:
-            p1 = os.path.join(report_dir, f"backtest_equity_{safe_start}_{safe_end}.csv")
-            p2 = os.path.join(report_dir, f"backtest_trades_{safe_start}_{safe_end}.csv")
-            p3 = os.path.join(report_dir, f"backtest_holdings_{safe_start}_{safe_end}.csv")
-            df_history.to_csv(p1, index=False, encoding="utf-8-sig")
-            df_trades.to_csv(p2, index=False, encoding="utf-8-sig")
-            df_holdings.to_csv(p3, index=False, encoding="utf-8-sig")
-            print(f"\n[警告] 未安裝 openpyxl，報表已分拆匯出至 CSV:")
-            print(f"  - 淨值曲線: {p1}")
-            print(f"  - 交易明細: {p2}")
-            print(f"  - 最終持股: {p3}")
-    except Exception as e:
-        print(f"匯出報表失敗: {e}")
+            report_dir = os.path.join(BASE_DIR, "reports")
+            os.makedirs(report_dir, exist_ok=True)
+            safe_start = start_date.replace("/", "-")
+            safe_end = end_date.replace("/", "-")
+
+            try:
+                excel_path = os.path.join(report_dir, f"backtest_report_{safe_start}_{safe_end}.xlsx")
+                with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                    df_history.to_excel(writer, sheet_name='Equity_Curve', index=False)
+                    df_trades.to_excel(writer, sheet_name='Trade_History', index=False)
+                    df_holdings.to_excel(writer, sheet_name='Final_Holdings', index=False)
+                print(f"\n[成功] 完整回測報表已匯出 (Excel格式): {excel_path}")
+            except ImportError:
+                p1 = os.path.join(report_dir, f"backtest_equity_{safe_start}_{safe_end}.csv")
+                p2 = os.path.join(report_dir, f"backtest_trades_{safe_start}_{safe_end}.csv")
+                p3 = os.path.join(report_dir, f"backtest_holdings_{safe_start}_{safe_end}.csv")
+                df_history.to_csv(p1, index=False, encoding="utf-8-sig")
+                df_trades.to_csv(p2, index=False, encoding="utf-8-sig")
+                df_holdings.to_csv(p3, index=False, encoding="utf-8-sig")
+                print(f"\n[警告] 未安裝 openpyxl，報表已分拆匯出至 CSV:")
+                print(f"  - 淨值曲線: {p1}")
+                print(f"  - 交易明細: {p2}")
+                print(f"  - 最終持股: {p3}")
+        except Exception as e:
+            print(f"匯出報表失敗: {e}")
         
     print("=" * 70)
     return total_return, max_dd, history
