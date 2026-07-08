@@ -197,6 +197,8 @@ marimo/_lsp/
 __marimo__/
 .streamlit/secrets.toml
 /site
+.agents/
+.claude/
 
 # 密鑰檔案 (防外洩)
 FINMIND_TOKEN.txt
