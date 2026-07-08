@@ -391,7 +391,7 @@ python Auto_RUN.py -s b      # 僅執行雲端備份
 #### 方案丁：實盤交易損益與永續持倉追蹤
 
 ```powershell
-python analyze_real_pnl.py   # 自動讀取並累計實盤交易，產出 reports/real_trading_report.md
+python analyze_real_pnl.py   # 自動讀取並累計實盤交易，產出 trading_history/real_trading_report.md
 ```
 *(註：此步驟已整合至 `Auto_RUN.py` 全流程尾端，全流程執行成功後會自動觸發並印出報告；歷史檔案統一儲存於 `trading_history/` 底下)*
 

@@ -214,9 +214,8 @@ def main():
         save_df.to_csv(history_csv_path, index=False, encoding="utf-8-sig")
         print(f"合併完成！本次新增 {new_record_count} 筆，共計 {len(save_df)} 筆永續交易紀錄，已更新至 real_trade_history.csv。")
     elif has_xls and new_df is not None:
-        # 有讀到 Excel 但無新增交易：每日自動執行情境下完全略過後續損益計算與報告重寫
-        print("本次交易紀錄.xls 無新增交易，歷史紀錄維持不變，已略過備份、寫入與損益報告更新。")
-        return
+        # 有讀到 Excel 但無新增交易，略過備份與 CSV 寫入，但照常重新計算最新持倉損益並更新報告
+        print("本次交易紀錄.xls 無新增交易，歷史紀錄維持不變，將照常更新最新持倉損益報告。")
 
     # 載入最新收盤價
     latest_prices, price_date = get_latest_prices()
@@ -416,9 +415,7 @@ def main():
         print("  目前無任何庫存持倉。")
 
     # 輸出 Markdown 報告
-    reports_dir = os.path.join(BASE_DIR, "reports")
-    os.makedirs(reports_dir, exist_ok=True)
-    report_md_path = os.path.join(reports_dir, "real_trading_report.md")
+    report_md_path = os.path.join(history_dir, "real_trading_report.md")
     
     with open(report_md_path, "w", encoding="utf-8") as f:
         f.write(f"# 📊 台灣股市量化交易系統 — 實盤交易績效報告\n\n")
@@ -507,7 +504,7 @@ def main():
         f.write("> **💡 交易提示**：本報告由 `analyze_real_pnl.py` 自動根據 `交易紀錄.xls` 配對生成。  \n")
         f.write("> 台股交易成本說明：買入成本為實際支出（含手續費）；持倉未實現損益已預先扣除中央常數設定的手續費率及證交稅率，此為保守預估值。  \n")
 
-    print(f"\n[成功] 詳細的 Markdown 績效報告已輸出至: reports/real_trading_report.md")
+    print(f"\n[成功] 詳細的 Markdown 績效報告已輸出至: trading_history/real_trading_report.md")
 
 if __name__ == "__main__":
     main()
