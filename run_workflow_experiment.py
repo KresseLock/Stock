@@ -5,24 +5,31 @@ run_workflow_experiment.py — 模式 A 與 模式 B 雙階段量化研發與風
 本臨時腳本用於一鍵全自動執行模式 A (研究驗證期) 與模式 B (實盤生產期) 的全流程實驗。
 您可以放著電腦讓它自動執行，執行完畢後會自動生成對比報告，並百分之百還原您的設定檔。
 
+所有回測日期均為動態推算：模式 A 截斷日讀自 config.BACKTEST_DATE，OOS 起始日 = 截斷日 +1，
+所有結束日 = data/raw_price/ 掃描到的最新資料日。以下步驟中的日期僅為示意，實際以執行時推算為準。
+
 執行步驟包括：
 1. 備份 config.py, best_factors.json, best_trading_params.json
-2. 【模式 A 流程】：
-   - 切換 BACKTEST_DATE = "20250801", RUN_OPTIMIZATION = True, OPTIMIZATION_TRIALS = FACTOR_TRIALS
-   - 執行因子調參 (auto_pipeline.py -s o)
+2. 【模式 A 流程】(研究驗證期，截斷於 BACKTEST_DATE)：
+   - 切換 BACKTEST_DATE = 截斷日, RUN_OPTIMIZATION = True, OPTIMIZATION_TRIALS = FACTOR_TRIALS
+   - 因子調參 (auto_pipeline.py -s o)
    - 重建特徵 (auto_pipeline.py -s f)
-   - 訓練模型 A (auto_pipeline.py -s t)
-   - 執行 OOS 訊號診斷 (scripts/analyze_regime_stability.py) 并保存報告
-   - 執行歷史風控參數調參 (scripts/optimize_trading_params.py)，限制在 2025-08-01 以前
-   - 在 OOS 超級牛市 (2025-08-02 ~ 2026-06-05) 跑模擬交易 (trading_sim.py)，評估歷史風控之泛化力
-3. 【模式 B 流程】：
+   - Time-Decay Lambda 網格搜尋：逐一訓練並以 OOS RankIC 選最佳 lambda，再以最佳 lambda 重訓模型 A
+   - OOS 訊號診斷 + SHAP 漂移 (scripts/analyze_regime_stability.py) 並保存報告
+   - 歷史風控參數調參 (scripts/optimize_trading_params.py --regime --deploy，限於截斷日以前)
+   - 在 OOS 未見區間跑模擬交易 (trading_sim.py)，評估歷史風控之泛化力
+3. 【模式 B 流程】(實盤生產期，含最新牛市)：
    - 切換 BACKTEST_DATE = None, RUN_OPTIMIZATION = False (沿用模式 A 的最佳因子以節省時間)
-   - 重建特徵 (auto_pipeline.py -s f)
-   - 重訓模型 B (auto_pipeline.py -s t)，包含最新的牛市數據
-   - 執行全週期風控參數調參 (scripts/optimize_trading_params.py)，時間覆蓋牛市 (config.TRADING_OPT_START_DATE ~ 最新資料日)
-   - 執行推理預測 (auto_pipeline.py -s i)，產生明日掛單建議
-   - 執行全週期模擬回測 (trading_sim.py)，評估完整策略表現
-4. 還原所有設定與備份，並生成對比報告 reports/workflow_experiment_report.md
+   - 重建特徵 (auto_pipeline.py -s f) + 重訓模型 B (auto_pipeline.py -s t)，含最新牛市數據
+   - 全週期風控參數調參 (config.TRADING_OPT_START_DATE ~ 最新資料日，recency_weight=2)
+   - 全週期模擬回測 (trading_sim.py)，評估候選 (mode_b) 完整策略表現
+   - 候選 vs 現行比較 (B7.5)：僅在 Model B 的潔淨 OOS 視窗 (排除 lookahead 汙染的樣本內前段) 上，
+     以同模型同區間分別回測候選 (mode_b) 與「執行前已部署」的現行參數，直接判定本輪候選是否打得贏
+     現行部署參數，並在報告產出建議部署 / 不建議部署結論
+   - 推理預測 (auto_pipeline.py -s i)，產生明日掛單建議
+4. 【C 段：潔淨 OOS 風控泛化驗證】：以凍結於模式 A 的風控參數回測未見區間，
+   分別搭 Model A (下界，無 lookahead 但退化) 與 Model B (上界，含最新訓練但有 lookahead) 夾收真實泛化力
+5. 還原所有設定與備份，並生成對比報告 reports/workflow_experiment_report.md
 """
 import os
 import sys
@@ -401,6 +408,39 @@ def write_experiment_report(res):
 *判讀：若**下界 (Model A)** 報酬仍為正且 MDD 受控，代表凍結風控參數本身具泛化力，mode B 樣本內高報酬非純粹過擬合；若下界顯著轉負，代表風控參數對 OOS 牛市無泛化力，實盤須打折看待。若上界反而差於下界，屬正常現象：Model B 的訊號針對牛市校準，套上保守型凍結風控參數易在正常波動中被洗出，並非模型較差，而是模型與參數的市況錯配。本驗證僅檢驗風控參數泛化，模型 lookahead 屬另一獨立議題。*
 """
 
+    cand_ret = res["mode_b"].get("cmp_candidate_oos_return")
+    cand_mdd = res["mode_b"].get("cmp_candidate_oos_mdd")
+    inc_ret = res["mode_b"].get("cmp_incumbent_oos_return")
+    inc_mdd = res["mode_b"].get("cmp_incumbent_oos_mdd")
+    incumbent_section_md = ""
+    if inc_ret is not None or inc_mdd is not None:
+        if cand_ret is not None and inc_ret is not None:
+            if cand_ret > inc_ret:
+                verdict = (f"潔淨 OOS 區間候選 (mode_b) 報酬 `{fmt_pct(cand_ret)}` 優於現行 `{fmt_pct(inc_ret)}`，"
+                           f"**建議部署**：將 `best_trading_params_mode_b.json` 複製覆蓋為 `best_trading_params.json`。")
+            else:
+                verdict = (f"潔淨 OOS 區間候選 (mode_b) 報酬 `{fmt_pct(cand_ret)}` 未優於現行 `{fmt_pct(inc_ret)}`，"
+                           f"**不建議部署**，維持現行 `best_trading_params.json` 不變。")
+        else:
+            verdict = "資料不完整，無法判定。"
+        incumbent_section_md = f"""
+---
+
+## ⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較
+
+> **為何用潔淨 OOS 而非全週期**：`trading_sim.py` 以單一靜態模型全區間預測（無 walk-forward 重訓），而 Model B 的訓練集涵蓋回測期前約 70%，全週期回測前段屬樣本內、報酬受 lookahead 灌水，且會**系統性偏袒「越激進越撈假錢」的寬鬆參數**，使部署比較失真。故本比較僅在 Model B 的保留 OOS 視窗 **{_oos_start} ~ {_latest}** 上跑，兩邊同用 Model B、同區間，唯一差異是風控參數：**候選**＝本輪剛優化的 `best_trading_params_mode_b.json`；**現行**＝執行前已部署的 `best_trading_params.json`。
+>
+> ⚠️ Model B 對此 OOS 段仍屬「上界」（含最新訓練），絕對數字偏樂觀；但兩邊共用同一模型，**相對排名可信**，足以作為部署決策依據。
+
+| 指標 (潔淨 OOS {_oos_start} ~ {_latest}) | 🆕 候選 (mode_b) | 🔵 現行 (incumbent，執行前已部署) |
+| :--- | :--- | :--- |
+| **累計報酬率 (%)** | `{fmt_pct(cand_ret)}` | `{fmt_pct(inc_ret)}` |
+| **最大回撤 MDD (%)** | `{fmt_mdd(cand_mdd)}` | `{fmt_mdd(inc_mdd)}` |
+| **Calmar 比率** | `{fmt_calmar(cand_ret, cand_mdd)}` | `{fmt_calmar(inc_ret, inc_mdd)}` |
+
+**結論：** {verdict}
+"""
+
     shap_table = res["mode_a"].get("shap_drift_table", "")
     shap_section_md = ""
     if shap_table:
@@ -447,7 +487,7 @@ def write_experiment_report(res):
 | **Calmar 比率 (報酬/MDD)** | `{fmt_calmar(res["mode_a"].get("oos_return"), res["mode_a"].get("oos_mdd"))}` | `{fmt_calmar(res["mode_b"].get("full_return"), res["mode_b"].get("full_mdd"))}` |
 
 *註：模式 A 的回測區間屬於完全未見過的樣本外 (OOS) 測試集，代表策略在全新超級牛市下的防禦與獲利能力。模式 B 的回測區間為包含牛市與熊市的全週期回測，展現策略的長線穩健性。*
-{oos_section_md}{shap_section_md}
+{oos_section_md}{incumbent_section_md}{shap_section_md}
 ---
 
 ## ⚙️ 最佳化風控策略參數對比 (Optimized Trading Params)
@@ -825,7 +865,7 @@ def main():
         results["mode_a"]["opt_signature"] = expected_sig_a
         save_progress(results)
         
-        # A9. 在樣本外超級牛市進行模擬交易 (2025-08-02 ~ 2026-06-05)
+        # A9. 在樣本外超級牛市進行模擬交易 (mode_a_oos_start ~ latest_date，動態推算)
         has_checkpoint_sim_a = ("oos_return" in results["mode_a"]) and ("oos_mdd" in results["mode_a"]) and not args.fresh
         # 修正：若模擬結果為 None (先前解析錯誤導致)，則強制重新執行以獲取正確數據
         if has_checkpoint_sim_a and (results["mode_a"].get("oos_return") is None or results["mode_a"].get("oos_mdd") is None):
@@ -928,6 +968,11 @@ def main():
             # 參數已重新優化，舊的回測結果必須作廢，否則報告數字仍是舊參數的
             results["mode_b"].pop("full_return", None)
             results["mode_b"].pop("full_mdd", None)
+            # 候選參數變了，「候選 vs 現行」潔淨 OOS 比較也必須重跑，否則會拿舊候選的比較結果冒充新的
+            results["mode_b"].pop("cmp_candidate_oos_return", None)
+            results["mode_b"].pop("cmp_candidate_oos_mdd", None)
+            results["mode_b"].pop("cmp_incumbent_oos_return", None)
+            results["mode_b"].pop("cmp_incumbent_oos_mdd", None)
         save_progress(results)
         
         # B7. 執行全週期模擬交易回測（優化窗 = 回測窗，起點同 TRADING_OPT_START_DATE）
@@ -956,7 +1001,68 @@ def main():
             results["mode_b"]["full_return"] = ret_b
             results["mode_b"]["full_mdd"] = mdd_b
             save_progress(results)
-            
+
+        # B7.5 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較 ─────────────────
+        # 部署決策必須排除 lookahead。trading_sim.py 以單一靜態模型「全區間預測」(無 walk-forward
+        # 重訓，見 trading_sim.py:176)，而 Model B 的訓練集 (train.py 70/10/20 日期切割，BACKTEST_DATE
+        # =None 不截斷) 涵蓋回測期前約 70%，故全週期回測前段屬樣本內、報酬受 lookahead 灌水，並會
+        # 系統性偏袒「越激進越撈假錢」的寬鬆參數，使「候選 vs 現行」淪為誤導性訊號。因此本比較只在
+        # Model B 的保留 OOS 視窗 (mode_a_oos_start ~ latest) 上跑，兩邊同用 Model B、同區間，唯一差異
+        # 是風控參數：
+        #   • 候選 = 本輪 optimize 產出的 best_trading_params_mode_b.json (此刻已在 best_trading_params.json)
+        #   • 現行 = 本次執行前已部署的參數 (best_trading_params.json.workflow.bak)
+        has_checkpoint_cmp = ("cmp_candidate_oos_return" in results["mode_b"]) \
+                             and ("cmp_incumbent_oos_return" in results["mode_b"]) and not args.fresh
+        # 現行結果為 None 有兩種情況：首次執行無現行參數可比 (維持跳過) vs 先前解析失敗 (需重跑)。
+        # 前者 backup_trading_exists=False，後者為 True，以此區分。
+        if has_checkpoint_cmp and backup_trading_exists \
+           and (results["mode_b"].get("cmp_candidate_oos_return") is None
+                or results["mode_b"].get("cmp_incumbent_oos_return") is None):
+            print("  [提示] 偵測到候選 vs 現行比較結果為 None (可能為先前解析錯誤的無效數據)，將重新執行模擬...")
+            has_checkpoint_cmp = False
+
+        if not backup_trading_exists:
+            print("\n[候選 vs 現行] 找不到執行前的 best_trading_params.json（首次執行、無現行部署參數可比較），跳過此驗證。")
+            results["mode_b"]["cmp_candidate_oos_return"] = None
+            results["mode_b"]["cmp_candidate_oos_mdd"] = None
+            results["mode_b"]["cmp_incumbent_oos_return"] = None
+            results["mode_b"]["cmp_incumbent_oos_mdd"] = None
+        elif has_checkpoint_cmp:
+            print(f"\n[續傳/復原] 偵測到已存在的候選 vs 現行潔淨 OOS 比較結果，跳過重跑...")
+        else:
+            update_config_var("BACKTEST_DATE", "None")
+
+            # (1) 候選 (mode_b)：best_trading_params.json 此刻已是 mode_b，直接回測潔淨 OOS 視窗
+            sim_cand, _ = run_cmd([
+                sys.executable, "trading_sim.py",
+                "-s", mode_a_oos_start,
+                "-e", latest_date,
+                "-c", str(args.capital)
+            ], f"候選 vs 現行 (1/2)：候選 mode_b 參數 + Model B 潔淨 OOS 回測 ({mode_a_oos_start} ~ {latest_date})")
+            ret_cand, mdd_cand = parse_sim_output(sim_cand)
+            if ret_cand is None or mdd_cand is None:
+                print("⚠️ [警告] 無法解析候選 (mode_b) OOS 回測結果！請檢查 trading_sim.py 輸出是否正常。")
+            results["mode_b"]["cmp_candidate_oos_return"] = ret_cand
+            results["mode_b"]["cmp_candidate_oos_mdd"] = mdd_cand
+
+            # (2) 現行 (incumbent)：換上執行前已部署的參數，同模型同 OOS 視窗再跑一次
+            shutil.copy2(BEST_TRADING_PARAMS_BAK, BEST_TRADING_PARAMS_PATH)
+            sim_inc, _ = run_cmd([
+                sys.executable, "trading_sim.py",
+                "-s", mode_a_oos_start,
+                "-e", latest_date,
+                "-c", str(args.capital)
+            ], f"候選 vs 現行 (2/2)：現行部署參數 + Model B 潔淨 OOS 回測 ({mode_a_oos_start} ~ {latest_date})")
+            ret_inc, mdd_inc = parse_sim_output(sim_inc)
+            if ret_inc is None or mdd_inc is None:
+                print("⚠️ [警告] 無法解析現行參數 OOS 回測結果！請檢查 trading_sim.py 輸出是否正常。")
+            results["mode_b"]["cmp_incumbent_oos_return"] = ret_inc
+            results["mode_b"]["cmp_incumbent_oos_mdd"] = mdd_inc
+
+            # 換回本次候選 (mode_b) 參數，供後續 B8 推理與正式報告使用
+            shutil.copy2(trading_mode_b_saved, BEST_TRADING_PARAMS_PATH)
+            save_progress(results)
+
         # B8. 執行推理預測，產生明天的買賣建議
         has_checkpoint_infer_b = results["mode_b"].get("inference_completed") and not args.fresh
         

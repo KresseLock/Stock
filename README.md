@@ -91,8 +91,10 @@ python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000  # OOS 驗�
 
 ### 🔁 重訓完後必做兩件事
 
+> ⚠️ **不要無腦部署 mode_b**——`run_workflow_experiment.py` 打開報告 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，先看「⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較」章節結尾的結論句。這是同模型、同（乾淨 OOS）區間下，本輪候選參數與目前部署參數的直接對決，**唯一目的就是防止把一組更差的參數部署上去**（已有實際案例：某輪候選在潔淨 OOS 明顯輸給現行參數，若無腦部署等於自砍報酬）。
+
 ```powershell
-# 1. 套用最新風控參數
+# 1. 只有報告結論寫「建議部署」才執行；寫「不建議部署」就跳過，維持現行 best_trading_params.json 不動
 Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.json -Force
 
 # 2. 驗證 Stage C 下界仍 > 0%（跑不到正報酬就別投真錢，先 paper trading）
@@ -684,7 +686,7 @@ python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold 
 
 #### 4. 🎛️ 一鍵全自動雙階段實驗腳本 ([run_workflow_experiment.py](run_workflow_experiment.py))
 
-如果您希望一鍵自動執行模式 A 與模式 B 的所有研發步驟（包括因子調參、特徵工程、模型重訓、訊號診斷、策略調參和模擬交易），而不需要手動干預或等待，我們提供了一個一鍵式實驗控制腳本 [run_workflow_experiment.py](run_workflow_experiment.py)。
+如果您希望一鍵自動執行模式 A 與模式 B 的所有研發步驟（包括因子調參、Time-Decay 網格搜尋、特徵工程、模型重訓、訊號診斷、策略調參、模擬交易，以及**候選參數是否優於現行部署參數的把關驗證**），而不需要手動干預或等待，我們提供了一個一鍵式實驗控制腳本 [run_workflow_experiment.py](run_workflow_experiment.py)。
 
 本腳本會在運行前自動備份您的中央配置 [config.py](config.py) 與歷史參數，並在執行結束後（不論成功或失敗）**百分之百 safe 還原**，不影響您的實盤日常生產環境。
 
@@ -717,8 +719,9 @@ python run_workflow_experiment.py --fresh
 
 ##### ③ 實驗產出報告與備份存檔
 執行完畢後，系統會自動在 `reports/` 目錄生成一份詳細的 Markdown 對比報告 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，其中包含：
-*   **關鍵績效指標對比**：模式 A（樣本外超級牛市）與模式 B（全週期含牛市）的區間報酬、最大回撤 (MDD) 與 Calmar 比率對比。
-*   **潔淨 OOS 風控泛化驗證 (Stage C)**：凍結風控參數於雙模型（Model A 下界／Model B 上界）回測未見區間，夾收真實前瞻泛化力，獨立章節呈現。
+*   **關鍵績效指標對比**：模式 A（樣本外超級牛市）與模式 B（全週期含牛市）的區間報酬、最大回撤 (MDD) 與 Calmar 比率對比。**注意：模式 B 這欄是樣本內（優化窗 = 回測窗）績效，且 `trading_sim.py` 用單一靜態模型全區間預測（無 walk-forward 重訓），訓練集又涵蓋回測期前約 70%，故封面數字含 lookahead 灌水，不能當實盤預期，也不能直接拿來判斷該不該部署——真正該看的是下面兩個獨立驗證章節。**
+*   **潔淨 OOS 風控泛化驗證 (Stage C)**：凍結風控參數於雙模型（Model A 下界／Model B 上界）回測未見區間，夾收真實前瞻泛化力，獨立章節呈現。回答的問題是：**「風控參數本身有沒有過擬合於優化窗？」**
+*   **⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較**：同一模型（本輪最新訓練的 Model B）、同一回測區間（Model B 的保留 OOS 視窗 `mode_a_oos_start ~ 最新資料日`，刻意避開樣本內前段以排除 lookahead 對「越激進越撈假錢」參數的系統性偏袒），唯一切換風控參數：**候選** = 本輪剛優化的 `best_trading_params_mode_b.json`；**現行** = 本次執行前已部署的 `best_trading_params.json`。回答的問題是：**「這輪優化出來的參數，實際上打不打得贏現在正在跑的參數？」**並自動產出「建議部署 / 不建議部署」結論句。**這是決定要不要覆蓋部署檔的唯一依據**——上面的 Stage C 驗證的是「過不過擬合」，這裡驗證的是「贏不贏現行」，兩者目的不同，缺一不可。
 *   **最佳化風控參數對比**：展示 Optuna 在兩模式下搜尋出的黃金參數差異（如大盤避險紅燈、個股停損線的漂移）。
 *   **獨立存檔參數與診斷**：
     *   模式 A 訊號診斷報告存檔於 [reports/mode_a_regime_stability_report.txt](reports/mode_a_regime_stability_report.txt)。
@@ -730,13 +733,16 @@ python run_workflow_experiment.py --fresh
 
 實驗支援自動續傳，**中途崩潰或手動 Ctrl+C 後，重新執行同一指令即可從斷點續跑**。主要 Checkpoint 檔案如下：
 
-| Checkpoint 檔案 | 命中時跳過的歕時步驟 | 估計節省 |
+| Checkpoint 檔案 | 命中時跳過的暫時步驟 | 估計節省 |
 | :--- | :--- | :--- |
 | `configs/best_factors_mode_a.json` | 模式 A 因子調參（Optuna 400 輪）| 1~3 小時 |
 | `reports/mode_a_regime_stability_report.txt` | 模式 A 特徵重建 + 模型訓練 + 訊號診斷 | 20~40 分鐘 |
 | `configs/best_trading_params_mode_a.json` | 模式 A 風控調參（Optuna 400 輪）| 2~4 小時 |
 | `configs/best_trading_params_mode_b.json` | 模式 B 全部步驟（特徵重建 + 模型重訓 + 風控調參）| 3~6 小時 |
+| `reports/workflow_experiment_results.json`（`cmp_candidate_oos_*`／`cmp_incumbent_oos_*` 欄位） | 候選 vs 現行潔淨 OOS 回測（B7.5） | 數分鐘 |
 | `reports/workflow_experiment_results.json`（Stage C 回測欄位） | Stage C 下界（Model A）／上界（Model B）OOS 回測 | 數分鐘 |
+
+> 💡 候選 vs 現行的比較結果會跟著模式 B 風控參數一起作廢重算：只要 `best_trading_params_mode_b.json` 因優化器程式碼/旗標變動而重新優化，checkpoint 會自動判定 `cmp_*` 過時並在下次執行時重新回測，不需手動介入或加 `--fresh`。
 
 報告判讀詳解請參閱 [run_workflow_experiment_guide.md](run_workflow_experiment_guide.md)。
 
@@ -749,15 +755,21 @@ python run_workflow_experiment.py --fresh
 ##### ① 正確判讀報告（別被封面數字騙了）
 > 這裡一樣不放具體數字（原因見上方「系統績效」），只談**怎麼看報告**。
 
-報告封面那個 mode B 全週期績效是**樣本內（in-sample）的**，也就是模型「看過」這段資料才跑出來的成績，不能當成實盤會有的表現。真正接近實盤的前瞻預期，要看「🧪 潔淨 OOS 驗證」那張**雙模型 bracket**：下界是 Model A（沒偷看未來、參數凍結），上界是 Model B（有看過那段行情）。
+報告封面那個 mode B 全週期績效是**樣本內（in-sample）的**，也就是模型「看過」這段資料才跑出來的成績，不能當成實盤會有的表現，**也不能拿來判斷該不該部署**——`trading_sim.py` 全區間用單一靜態模型預測，訓練集又蓋過回測期前約 70%，全週期比較還會系統性偏袒「越激進越能撈假利潤」的寬鬆參數，曾實測出候選與現行在全週期上的排名，換到潔淨 OOS 後完全反轉。判斷該不該部署，只看下面這兩個獨立驗證章節，兩者目的不同、缺一不可：
 
-**怎麼判讀**：下界是「完全不偷看未來」的最保守底線，最值得信。**上界有時會是負的，這是方法本身的特性，不代表 Model B 變差了**——Stage C 的門檻是拿 Model A 的訊號校準出來的，可是 Model B 看過後來的牛市後，分數的高低標準已經整個位移，硬套舊門檻自然會挑錯股票。換個角度看，這其實說明本系統的超額報酬 **很大一部分來自「風控參數會跟著市況調整」**，而 Mode B 每天滾動重訓、定期重新優化參數，正是在維持這個能力。
+*   **🧪 潔淨 OOS 風控泛化驗證 (Stage C)**：雙模型 bracket——下界是 Model A（沒偷看未來、參數凍結），上界是 Model B（有看過那段行情）。回答「**風控參數本身有沒有過擬合**」。
+    **怎麼判讀**：下界是「完全不偷看未來」的最保守底線，最值得信。**上界有時會是負的，這是方法本身的特性，不代表 Model B 變差了**——Stage C 的門檻是拿 Model A 的訊號校準出來的，可是 Model B 看過後來的牛市後，分數的高低標準已經整個位移，硬套舊門檻自然會挑錯股票。換個角度看，這其實說明本系統的超額報酬 **很大一部分來自「風控參數會跟著市況調整」**，而 Mode B 每天滾動重訓、定期重新優化參數，正是在維持這個能力。
 
-##### ② 部署 mode_b 風控（一次性）
+*   **⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較**：同模型、同（乾淨 OOS）區間，只換風控參數，直接對決「本輪候選」與「現在正在跑的參數」。回答「**這輪候選打不打得贏現行**」。報告結尾會直接寫出「建議部署 / 不建議部署」的結論句——**這是唯一該用來決定要不要覆蓋 `best_trading_params.json` 的依據**，不是報告封面數字，也不是 Stage C bracket（bracket 沒過擬合不代表贏得了現行參數，兩者是獨立問題）。
+
+##### ② 部署 mode_b 風控（僅在報告結論寫「建議部署」時才做）
+> ⚠️ 候選不一定比現行好——已有實測案例是候選在潔淨 OOS 明顯輸給現行，若看到報告就無腦部署等於主動把報酬砍掉一大截。**先看上面「⚖️ 候選 vs 現行」章節的結論句，寫「不建議部署」就到此為止，維持現行 `best_trading_params.json` 不動即可。**
+
+只有結論寫「建議部署」時才執行：
 ```powershell
 Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.json -Force
 ```
-`config.py` 啟動時自動讀取覆寫。部署後門檻會從舊值變為 mode_b（買進 ~15%→~20%、賣出 -8%→-14%、停損 -5%→-6%，即「牛市配置：買得嚴、抱得鬆」）。
+`config.py` 啟動時自動讀取覆寫。
 
 ##### ③ 每日一鍵（已自動化，無腦使用）
 收盤後（約 15:40 三大法人更新完）：
@@ -833,12 +845,13 @@ Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.js
 
 ```powershell
 # 1. 確認 Lambda 設定已更新到 config.py（workflow 會還原，需手動改回）
-# 2. 複製最新 Mode B 參數
+# 2. 看報告「⚖️ 候選 vs 現行 潔淨 OOS 回測比較」結論句——寫「不建議部署」就跳過第 3 步，維持現行參數
+# 3. 只有結論寫「建議部署」才複製最新 Mode B 參數：
 Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.json -Force
 
-# 3. 驗證 Stage C 下界仍 > 0%（如果變負，只能用 paper trading 驗證不能投真錢）
-# 4. 看 Mode A OOS 回測 MDD 是否 < -35%（超過代表風控參數需更寬鬆）
-# 5. 比較新舊 Lambda 網格贏家是否一致（0.0 → 0.002 代表市場記憶縮短）
+# 4. 驗證 Stage C 下界仍 > 0%（如果變負，只能用 paper trading 驗證不能投真錢）
+# 5. 看 Mode A OOS 回測 MDD 是否 < -35%（超過代表風控參數需更寬鬆）
+# 6. 比較新舊 Lambda 網格贏家是否一致（0.0 → 0.002 代表市場記憶縮短）
 ```
 
 ##### ⚠️ 重訓不能解決的問題
