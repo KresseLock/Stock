@@ -194,6 +194,7 @@ FINMIND_FETCH_MODE = "limited"          # "limited" = 僅下載 TRAIN_INDUSTRIES
 START_DATE         = datetime.date(2020, 1, 1)  # 數據回溯起點（建議至少 5 年）
 FINMIND_CACHE_DAYS = 15                  # FinMind 基本面資料快取更新間隔天數
 GHOST_DATA_PCT_THRESHOLD = 0.15          # 幽靈資料/極端價格跳空判定門檻 (15%)
+FINMIND_MAX_LIMIT_WAITS = 6              # 單次呼叫遇 429/402 限速時，最多等待重置幾次（每次約 1 小時）；超過視為額度耗盡放棄，避免無人值守時無限卡住
 
 
 

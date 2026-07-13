@@ -119,6 +119,19 @@ def _is_weekend(date_obj: datetime.date) -> bool:
     return date_obj.weekday() >= 5
 
 
+def _add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
+    """日曆效應特徵（僅依 date，0 前視）。台指期/選擇權結算日 = 每月第三個週三。"""
+    d = pd.to_datetime(df["date"])
+    df["cal_dow"] = d.dt.dayofweek.astype("float32")       # 0=週一 … 4=週五
+    df["cal_month"] = d.dt.month.astype("float32")         # 1-12 季節性
+    # 該月第一天 → 第一個週三 (週三=2) → +14 天 = 第三個週三 (結算日)
+    firsts = d.dt.to_period("M").dt.to_timestamp()
+    days_to_first_wed = (2 - firsts.dt.dayofweek) % 7
+    third_wed = firsts + pd.to_timedelta(days_to_first_wed + 14, unit="D")
+    df["cal_days_to_settle"] = ((third_wed - d).dt.days).clip(-15, 15).astype("float32")
+    return df
+
+
 # ══════════════════════════════════════════════════════
 # A. 技術面特徵
 # ══════════════════════════════════════════════════════
@@ -182,6 +195,14 @@ def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
     # 52 週高點距離（近高點 = 強動能訊號；-0.05 表示距高點 5%）
     _high_52w = c.rolling(252, min_periods=60).max()
     g["pct_from_52w_high"] = c / (_high_52w + 1e-9) - 1
+
+    # 均值回歸 Z-Score（收盤價偏離 N 日均值、以波動標準化；越負越超賣）
+    # 移植自 fortune-main §1.5 異常檢測「抄底」思想。台股回測顯示二元抄底規則不成立，
+    # 但 -z 連續值對次日報酬有穩健正 RankIC，故作為「連續特徵」而非二元進場訊號。
+    for w in (20, 60):
+        _zmean = c.rolling(w, min_periods=w).mean()
+        _zstd  = c.rolling(w, min_periods=w).std()
+        g[f"close_z{w}"] = (c - _zmean) / (_zstd + 1e-9)
 
     # 標籤 (預測未來 N 天收益率)
     for d in FORECAST_DAYS:
@@ -732,6 +753,12 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     if n_inf > 0:
         df[num_cols] = df[num_cols].replace([np.inf, -np.inf], np.nan)
         print(f"  已清理 {n_inf} 個 ±inf 值（pct_change 除零），轉為 NaN。")
+
+    # 日曆效應特徵（移植自 fortune-main §1.3；僅依日期、0 前視、與量價正交）
+    #   cal_dow            星期 (0=一 … 4=五)，台股回測顯示週二偏強、週一/週四偏弱
+    #   cal_month          月份 (1-12)，捕捉季節性 (2/5/11 月偏強、3/9 月偏弱)
+    #   cal_days_to_settle 距台指期/選擇權結算日 (每月第三個週三) 的日數，夾 [-15, 15]
+    df = _add_calendar_features(df)
 
     # 排序與存檔
     id_cols = ["stock_id", "date"]

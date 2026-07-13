@@ -161,6 +161,21 @@ def main(target_date_str=None):
         
     date_str = latest_date.strftime("%Y%m%d")
 
+    # ── 產出品質提醒（供輸出檔標註，避免無人值守時誤讀）──────────────
+    #  #4 資料不完整：上游 scraper 觸發 FinMind 額度限制被跳過時，Auto_RUN 會設此環境變數
+    data_incomplete = os.environ.get("RUN_DATA_INCOMPLETE") == "1"
+    #  #3 前視偏差：以 -d 補跑過去日期時，模型仍是用「全量資料（含該日之後）」訓練，
+    #     故此推薦帶有 lookahead，不能當作「當天系統實際會給的建議」
+    is_backfill = (target_date_str is not None) and (latest_date.normalize() < pd.Timestamp.today().normalize())
+    quality_notices = []
+    if data_incomplete:
+        quality_notices.append("   [⚠ 資料不完整] 本次上游下載觸發 FinMind 額度限制被跳過，籌碼/基本面可能為舊值，訊號僅供參考。")
+    if is_backfill:
+        quality_notices.append("   [⚠ 前視偏差] 此為 -d 補跑之歷史日期，模型以全量資料訓練（含該日之後），"
+                               "帶有 lookahead，不等於當日系統實際會給的建議，請勿用於績效驗證。")
+    for _n in quality_notices:
+        print(_n)
+
     # 逐筆載入自選／持倉（支援同代號多筆：不同時期／價位買進，各自成本/停損價/買入日）
     lots = load_watchlist_lots()
     if lots:
@@ -312,7 +327,13 @@ def main(target_date_str=None):
             pass
 
     output_lines = []
-    
+
+    # 產出品質提醒置於檔案最前，確保雲端/手機端讀取時第一眼可見
+    if quality_notices:
+        output_lines.append("=" * 90)
+        output_lines.extend(quality_notices)
+        output_lines.append("=" * 90)
+
     stocks_file = os.path.join(BASE_DIR, "Stocks.txt")
     has_real_watchlist = os.path.exists(stocks_file) and os.path.getsize(stocks_file) > 0
     

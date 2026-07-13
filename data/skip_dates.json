@@ -22614,5 +22614,61 @@
   "credit_limit_20260709": {
     "reason": "no_data",
     "confirmed_at": "2026-07-09"
+  },
+  "price_20260710": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-07-13"
+  },
+  "chips_20260710": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-07-13"
+  },
+  "twse_per_20260710": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-07-13"
+  },
+  "taifex_inst_20260710": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-07-13"
+  },
+  "margin_20260710": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-07-13"
+  },
+  "sbl_20260710": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-07-13"
+  },
+  "daytrading_20260710": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-07-13"
+  },
+  "fini_holding_20260710": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-07-13"
+  },
+  "credit_limit_20260710": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-07-13"
+  },
+  "margin_20260713": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-13"
+  },
+  "sbl_20260713": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-13"
+  },
+  "daytrading_20260713": {
+    "reason": "unexpected_format",
+    "confirmed_at": "2026-07-13"
+  },
+  "fini_holding_20260713": {
+    "reason": "empty_response",
+    "confirmed_at": "2026-07-13"
+  },
+  "credit_limit_20260713": {
+    "reason": "no_data",
+    "confirmed_at": "2026-07-13"
   }
 }

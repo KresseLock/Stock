@@ -32,6 +32,9 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 # ── 載入中央控制面板 config 設定 ──────────────────────────────
+#  刻意不提供靜默 fallback：config.py 若缺少任一常數（改名/刪除），代表設定已損壞，
+#  此時若無聲改用寫死預設值，會讓訓練股票池、最佳化開關等悄悄偏離真實設定而無感。
+#  依 config 集中原則，設定壞了就該明確中止，而非分散寫死。
 try:
     from config import (
         RUN_OPTIMIZATION,
@@ -44,16 +47,11 @@ try:
         TRAIN_N_JOBS,
         OPTUNA_N_JOBS
     )
-except ImportError:
-    RUN_OPTIMIZATION      = False
-    OPTIMIZATION_TRIALS   = 600
-    EARLY_STOPPING_ROUNDS = 200
-    BACKTEST_DATE         = None
-    START_DATE            = datetime.date(2020, 1, 1)
-    FEAT_N_JOBS           = -1
-    TRAIN_N_JOBS          = -1
-    OPTUNA_N_JOBS         = 6
-    TRAIN_INDUSTRIES      = {}
+except ImportError as e:
+    print("[致命錯誤] 無法自 config.py 載入必要常數，設定檔可能損壞或常數被改名/刪除。")
+    print(f"  詳細原因: {e}")
+    print("  請修復 config.py 後再執行（本流程刻意不使用預設值代跑，以免用錯設定產生誤導性結果）。")
+    sys.exit(1)
 
 END_DATE = datetime.date.today()
 BEST_FACTORS_PATH = os.path.join(BASE_DIR, "configs", "best_factors.json")
@@ -320,6 +318,8 @@ def main():
             print(f"  [耗時] {time.time()-t0:.1f} 秒")
 
         _banner("4", "訓練 LightGBM 模型 (Day 1 ~ Day 3)")
+        print("  [提醒] 本流程每次都會全量重訓，故每日模型不同、預測分數不可跨日 (day-over-day) 直接比較；")
+        print("         best_trading_params.json 亦是針對特定模型版本調出，換模型後風控參數僅為近似。")
         t0 = time.time()
         step4_train()
         print(f"  [耗時] {time.time()-t0:.1f} 秒")

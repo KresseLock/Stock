@@ -18,8 +18,41 @@ import subprocess
 import sys
 import time
 import argparse
+import atexit
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOCK_PATH = os.path.join(BASE_DIR, "data", "auto_run.lock")
+LOCK_STALE_SECONDS = 6 * 3600  # 逾此時間視為前次崩潰殘留的死鎖，可安全接管
+
+
+def acquire_lock() -> bool:
+    """取得單例執行鎖，避免排程與手動同時執行而互相覆寫特徵/模型/預測檔。"""
+    os.makedirs(os.path.dirname(LOCK_PATH), exist_ok=True)
+    if os.path.exists(LOCK_PATH):
+        age = time.time() - os.path.getmtime(LOCK_PATH)
+        if age < LOCK_STALE_SECONDS:
+            print("\n" + "!" * 75)
+            print(f"  [已在執行中] 偵測到鎖檔 {LOCK_PATH}")
+            print(f"  另一個 Auto_RUN 可能正在執行 (鎖檔建立於 {age/60:.0f} 分鐘前)。")
+            print(f"  若確定無其他行程執行，請手動刪除該鎖檔後重試。")
+            print("!" * 75)
+            return False
+        print(f"[提示] 偵測到逾時鎖檔 (已 {age/3600:.1f} 小時)，視為前次殘留並接管。")
+    try:
+        with open(LOCK_PATH, "w", encoding="utf-8") as f:
+            f.write(f"pid={os.getpid()} started={time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        return True
+    except OSError as e:
+        print(f"[錯誤] 無法建立鎖檔: {e}")
+        return False
+
+
+def release_lock():
+    try:
+        if os.path.exists(LOCK_PATH):
+            os.remove(LOCK_PATH)
+    except OSError:
+        pass
 
 
 def run_script(script_path: str, is_scraper: bool = False, skip_on_limit: str = None, extra_args: list = None) -> bool:
@@ -55,6 +88,8 @@ def run_script(script_path: str, is_scraper: bool = False, skip_on_limit: str = 
         if is_scraper and e.returncode == 99:
             t_elapsed = time.time() - t_start
             print(f"\n[注意] {script_path} 觸發 FinMind API 額度限制 (已自動跳過，不中斷全流程)，流程繼續！耗時: {t_elapsed:.1f} 秒")
+            # 標記本次資料不完整：供下游 inference 在預測輸出標註、供最終 banner 警示
+            os.environ["RUN_DATA_INCOMPLETE"] = "1"
             return True
         print(f"\n[失敗] {script_path} 執行中斷，錯誤代碼: {e.returncode}")
         return False
@@ -97,6 +132,11 @@ def main():
     }
     target_step = step_map[args.step]
 
+    # 單例執行鎖：防止排程與手動同時執行造成 features/models/predictions 併發覆寫
+    if not acquire_lock():
+        sys.exit(1)
+    atexit.register(release_lock)  # 涵蓋正常結束、sys.exit 與 KeyboardInterrupt 各出口
+
     t_total_start = time.time()
     
     print("=" * 75)
@@ -122,7 +162,7 @@ def main():
             sys.exit(1)
 
     elif target_step == "backup":
-        success = run_script(os.path.join("scripts", "StockSync.py"))
+        success = run_script(os.path.join("scripts", "StockSync.py"), extra_args=extra_args)
         if not success:
             sys.exit(1)
 
@@ -131,7 +171,7 @@ def main():
         steps = [
             (os.path.join("scripts", "scraper.py"), True, None),
             ("auto_pipeline.py", False, extra_args),
-            (os.path.join("scripts", "StockSync.py"), False, None)
+            (os.path.join("scripts", "StockSync.py"), False, extra_args)
         ]
         
         for idx, (script, is_scr, e_args) in enumerate(steps, 1):
@@ -144,16 +184,26 @@ def main():
                 print("!" * 75)
                 sys.exit(1)
                 
-        total_time = time.time() - t_total_start
-        print("\n" + "=" * 75)
-        print(f"  [全流程執行成功] 總耗時: {total_time/60:.1f} 分鐘")
-        print(f"  雲端同步已完成，您可以前往 Google Drive 查看最新結果！")
-        print("=" * 75)
-
-        # 增量安全執行實盤損益與持倉分析
+        # 先執行實盤損益與持倉分析，再宣告成功——避免「成功」banner 之後又冒出分析輸出/錯誤而誤導 log 判讀
         analyze_script = "analyze_real_pnl.py"
         if os.path.exists(os.path.join(BASE_DIR, analyze_script)):
-            run_script(analyze_script)
+            analyze_ok = run_script(analyze_script)
+        else:
+            analyze_ok = None  # 無此腳本，非成功也非失敗
+
+        total_time = time.time() - t_total_start
+        data_incomplete = os.environ.get("RUN_DATA_INCOMPLETE") == "1"
+        print("\n" + "=" * 75)
+        if data_incomplete:
+            print(f"  [全流程完成（資料不完整）] 總耗時: {total_time/60:.1f} 分鐘")
+            print(f"  ⚠ 本次上游下載曾觸發 FinMind 額度限制被跳過，籌碼/基本面可能為舊值；")
+            print(f"    預測輸出已標註此情形，判讀訊號時請留意。")
+        else:
+            print(f"  [全流程執行成功] 總耗時: {total_time/60:.1f} 分鐘")
+        if analyze_ok is False:
+            print(f"  ⚠ 實盤損益分析 (analyze_real_pnl.py) 執行失敗，請檢視上方輸出。")
+        print(f"  雲端同步已完成，您可以前往 Google Drive 查看最新結果！")
+        print("=" * 75)
 
 
 if __name__ == "__main__":

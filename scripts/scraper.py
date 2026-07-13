@@ -727,7 +727,13 @@ def _fm_get(
     if FINMIND_TOKEN:
         params["token"] = FINMIND_TOKEN
 
+    try:
+        from config import FINMIND_MAX_LIMIT_WAITS as _MAX_LIMIT_WAITS
+    except Exception:
+        _MAX_LIMIT_WAITS = 6
+
     attempt = 0
+    limit_waits = 0
     while attempt < max_retry:
         try:
             r = requests.get(FM_BASE_URL, params=params, timeout=30)
@@ -736,10 +742,16 @@ def _fm_get(
                 if os.environ.get("SKIP_ON_FINMIND_LIMIT") == "1":
                     print(f"\n    [FinMind] 觸發限速 (狀態碼 {r.status_code})，因設定 SKIP_ON_FINMIND_LIMIT，直接中斷下載以利後續執行。")
                     raise FinMindLimitExceeded("FinMind API quota limit reached.")
-                
+
+                # 等待重置有上限，避免無人值守時無限卡住（每次約 1 小時）
+                if limit_waits >= _MAX_LIMIT_WAITS:
+                    print(f"\n    [FinMind] 已連續等待 {limit_waits} 次額度重置仍受限，超過上限 {_MAX_LIMIT_WAITS} 次，放棄本次下載。")
+                    raise FinMindLimitExceeded("FinMind API quota limit reached (max waits exceeded).")
+                limit_waits += 1
+
                 # 免費帳號每小時 600 次；429/402 = 額度耗盡，等待 1 小時重置
                 resume_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
-                print(f"\n    [FinMind] 觸發限速 (狀態碼 {r.status_code})，每小時額度已用盡。")
+                print(f"\n    [FinMind] 觸發限速 (狀態碼 {r.status_code})，每小時額度已用盡。(第 {limit_waits}/{_MAX_LIMIT_WAITS} 次等待)")
                 print(f"    [FinMind] 預計於 {resume_time.strftime('%H:%M:%S')} 額度重置，自動繼續...")
                 for _ in range(60):
                     time.sleep(60)
