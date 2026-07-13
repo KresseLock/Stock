@@ -103,6 +103,9 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+# 未驗證的候選功能實驗腳本（結論未採用，不進版控）
+tests/test_feature_candidate_gate.py
+tests/test_fortune_ported_signals.py
 
 # Translations
 *.mo
