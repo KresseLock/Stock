@@ -329,9 +329,7 @@ def test_parquet_integrity():
         warnings.append("taifex_txf_fini_net_oi")
     if "fini_holding_pct" not in df.columns:
         warnings.append("fini_holding_pct")
-    if "margin_quota" not in df.columns:
-        warnings.append("margin_quota")
-        
+
     msg = f"parquet 正常，{len(df):,} 筆，{len(df.columns)} 欄 (含總體市場與板塊特徵)"
     if warnings:
         msg += f" ( 警告: 缺少 {warnings}，可能爬蟲跳過歷史下載)"

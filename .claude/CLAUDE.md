@@ -61,6 +61,11 @@
 1. **進場訊號弱、獲利靠出場**：進場分數 IC 低、十分位勝率近乎平坦（最高分組勝率僅約 52%）。獲利來自出場吃肥尾（Day3 持有／移動止盈）與 regime 曝險，不是靠進場命中率。**嚴禁用「拉高 `buy_threshold`／收緊進場」來減少停損次數**——已驗證會把肥尾贏家一起砍掉而崩潰（+59%→-9%）。要降回撤只能動出場／停損／regime 曝險，不能動進場嚴格度。
 2. **回撤與報酬不可分割**：均勻降風險（縮 ATR 部位、無差別分散）會等比例砍報酬。唯有**選擇性**降曝險能破對稱——即 regime 導向（震盪／空頭降門檻、降檔數 `REGIME_MAX_POSITIONS`）與個股波動導向（ATR 停損）。已驗證 `REGIME_MAX_POSITIONS` 完整 OOS 同時 +13pp 報酬、−0.5pp 回撤（非取捨）。
 3. **停損採 ATR 動態（生產預設）且兩端已對齊**：`trading_sim.py` 與 `inference.py` 共用同一套 ATR 停損（`-ATR_STOP_MULTIPLIER × atr18_pct`，夾 `[ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT]`）。停損掃描已驗證 ATR 動態全面勝固定 -6/-8/-10%。`inference.py` 是日快照、用當日 ATR 近似買入日；`Stocks.txt` 第 4 欄填了買入日鎖定停損價才完全等價 `trading_sim`。改停損務必跑掃描（設 `config.ATR_STOP_ENABLED` 再呼叫 `run_simulation`），不要改進場門檻。
+4. **進場端特徵改造屢試屢敗，別再盲試——先過潔淨 OOS 把關**：呼應 #1（進場訊號本就弱），多輪特徵候選在隔離潔淨 OOS（train 截 `BACKTEST_DATE`、複用生產 train/sim）皆被否決。**已驗證否決、勿重做**：
+   - **法人淨額成交量正規化＝有害**（`tests/test_chip_flow_normalization.py`，2026-07-16）：把 fini/sitc/dealer/inst 淨額與滾動合計除以成交量，全 OOS 報酬 +224%→+97% 且回撤變大。教訓：**法人淨額的「絕對量級」本身帶訊號**（大額買超≠小額買超），正規化把量級丟掉即毀訊號。「絕對值＝Level Bias 雜訊、該正規化」的直覺**只對財報/估值 level 成立，對法人流量不成立**。
+   - **自營商改用「自行買賣」淨額（剔除避險造市）＝平手**（同檔測試）：+238% vs baseline +224%、Calmar 11.9 vs 11.6，在單次回測噪音內，不值得為它多維護原始 chips.csv 重讀與新欄相依。
+   - **fortune 移植 z-score／日曆特徵＝否決**（`tests/test_feature_candidate_gate.py`）：僅 1/4 子窗勝出、疑過擬合。
+   - **方法論**：任何特徵候選必先寫進上述其一的把關框架跑贏才可移植；**判準是「全 OOS 報酬與回撤雙贏 且 多數子窗穩健」**，單看全窗改善不算數（易由少數窗驅動）。想再從籌碼榨訊號，別走正規化淨額（死路）；未試、且不需新資料的方向：法人分歧度（`sign(fini)×sign(sitc)` 同向/對作）。
 
 ---
 

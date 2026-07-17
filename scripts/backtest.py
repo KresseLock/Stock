@@ -5,8 +5,11 @@ backtest.py — 時光機回測工具 (極簡流線對齊版)
 """
 import os
 import sys
+import json
+import shutil
 import datetime
 import argparse
+import tempfile
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -64,6 +67,29 @@ def get_stock_name(sid, date_str):
     return ""
 
 
+def _emit_inference_log(backtest_date_str, recon_dir, df_trunc):
+    """把 backtest 的 point-in-time 模型交給 inference.py，產生與每日 log 完全相同格式的
+    predictions/prediction_YYYYMMDD.txt（補齊漏執行日）。
+    parquet 截斷至基準日(含)以前，確保 inference 內的 regime／動能／持股天數等全部 point-in-time、無前視。"""
+    trunc_path = os.path.join(recon_dir, "features_trunc.parquet")
+    df_trunc.to_parquet(trunc_path, index=False)
+
+    import inference as INF
+    _orig_model_dir, _orig_data_path = INF.MODEL_DIR, INF.DATA_PATH
+    INF.MODEL_DIR = recon_dir
+    INF.DATA_PATH = trunc_path
+    os.environ["INFERENCE_RECON_MODE"] = "1"
+    try:
+        print("\n" + "=" * 70)
+        print("  產生 inference 格式預測 log (時光機 point-in-time 重建)...")
+        print("=" * 70)
+        INF.main(backtest_date_str)
+    finally:
+        INF.MODEL_DIR, INF.DATA_PATH = _orig_model_dir, _orig_data_path
+        os.environ.pop("INFERENCE_RECON_MODE", None)
+        shutil.rmtree(recon_dir, ignore_errors=True)  # 清掉暫存模型與截斷 parquet，避免累積佔碟
+
+
 def run_backtest(backtest_date_str):
     print("=" * 70)
     print(f"  啟動時光機回測模式 (指定日期: {backtest_date_str})")
@@ -117,6 +143,12 @@ def run_backtest(backtest_date_str):
     ignore_cols = ["stock_id", "date"] + label_cols + ret_cols
     numeric_cols = df.select_dtypes(include=[np.number, bool]).columns
     feature_cols = [c for c in numeric_cols if c not in ignore_cols]
+
+    # ── 時光機 log 重建：暫存 point-in-time 模型與特徵清單，稍後交給 inference 產生同格式 log ──
+    recon_dir = tempfile.mkdtemp(prefix="backtest_recon_")
+    with open(os.path.join(recon_dir, "feature_cols.json"), "w", encoding="utf-8") as _f:
+        json.dump(feature_cols, _f, ensure_ascii=False, indent=2)
+    saved_days = set()
 
     print(f"  基準日: {backtest_date.date()} (共 {len(df_eval)} 檔股票) | 訓練樣本: {len(df_train_all)} 筆")
     print("-" * 70)
@@ -181,6 +213,10 @@ def run_backtest(backtest_date_str):
             callbacks=[lgb.early_stopping(stopping_rounds=LGBM_BT_EARLY_STOPPING, verbose=False)]
         )
         print("完成")
+
+        # 存下此天期的 point-in-time booster（格式同 train.py，供 inference 原樣載入）
+        model.booster_.save_model(os.path.join(recon_dir, f"lgbm_model_{days_ahead}.txt"))
+        saved_days.add(days_ahead)
 
         eval_clean = df_eval.dropna(subset=[label_col]).copy()
         if eval_clean.empty:
@@ -378,6 +414,12 @@ def run_backtest(backtest_date_str):
                 f"{p3_s:>6} | {r3_s:>6} | {win_rate_s:>4}"
             )
         print("=" * 108)
+
+    # ── 產生與 inference.py 同格式的預測 log（point-in-time，補齊漏執行日）──
+    if len(saved_days) == 3:
+        _emit_inference_log(backtest_date_str, recon_dir, df[df["date"] <= backtest_date].copy())
+    else:
+        print(f"\n  [提示] 僅完成天期 {sorted(saved_days)} 的模型（未滿 3 天期），略過 inference 格式 log 產生。")
 
 
 if __name__ == "__main__":

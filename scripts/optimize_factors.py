@@ -228,7 +228,7 @@ _STABLE_NON_TA_COLS = [
     "CashFlowsFromOperatingActivities", "CashProvidedByInvestingActivities", "CashFlowsProvidedFromFinancingActivities",
     "cash_dividend",
     "PER", "PBR", "dividend_yield", 
-    "daytrading_pct", "fini_holding_pct", "margin_quota", "short_quota",
+    "daytrading_pct", "fini_holding_pct",
     "taifex_txf_fini_net_oi"
 ]
 

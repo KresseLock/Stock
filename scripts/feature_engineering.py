@@ -487,25 +487,11 @@ def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
             else:
                 print(f"  [警告] fini_holding_pct 欄位找不到，現有欄位: {df_fh.columns.tolist()}")
 
-    # C. 信用交易 (以及信用管制)
+    # C. 信用交易
     if ENABLE_MARGIN:
         df_m = _load_margin_one_day(date_str, target_stocks)
         if not df_m.empty:
             merged = pd.merge(merged, df_m.drop(columns=["date"], errors="ignore"), on="stock_id", how="left")
-            
-        # 讀取信用限額
-        df_cl = _read_csv(os.path.join(DATA_DIR, "raw_margin", f"{date_str}_credit_limit.csv"))
-        if not df_cl.empty:
-            df_cl["證券代號"] = df_cl["證券代號"].astype(str).str.strip()
-            required_cols = ["融資限額", "融券限額"]
-            if not all(c in df_cl.columns for c in required_cols):
-                df_cl = pd.DataFrame()
-            else:
-                df_cl = df_cl[df_cl["證券代號"].isin(target_stocks)][["證券代號"] + required_cols]
-                df_cl = df_cl.rename(columns={"證券代號": "stock_id", "融資限額": "margin_quota", "融券限額": "short_quota"})
-                df_cl["margin_quota"] = _to_float(df_cl["margin_quota"])
-                df_cl["short_quota"]  = _to_float(df_cl["short_quota"])
-                merged = pd.merge(merged, df_cl, on="stock_id", how="left")
 
     # TWSE 官方版 PER/PBR
     df_per = _read_csv(os.path.join(DATA_DIR, "raw_twse_per", f"{date_str}_twse_per.csv"))
@@ -711,12 +697,11 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
     df = apply_parallel(df.groupby("stock_id"), _transform_levels)
     df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
     
-    # 丟棄其餘的絕對數值財報欄位與額度欄位
-    level_cols = ["Revenue", "EPS", "TotalAssets", "Liabilities", "Equity", 
-                  "GrossProfit", "OperatingIncome", "IncomeAfterTaxes", 
-                  "CashFlowsFromOperatingActivities", "CashProvidedByInvestingActivities", 
-                  "CashFlowsProvidedFromFinancingActivities", "cash_dividend",
-                  "margin_quota", "short_quota"]
+    # 丟棄其餘的絕對數值財報欄位
+    level_cols = ["Revenue", "EPS", "TotalAssets", "Liabilities", "Equity",
+                  "GrossProfit", "OperatingIncome", "IncomeAfterTaxes",
+                  "CashFlowsFromOperatingActivities", "CashProvidedByInvestingActivities",
+                  "CashFlowsProvidedFromFinancingActivities", "cash_dividend"]
     df = df.drop(columns=[c for c in level_cols if c in df.columns], errors="ignore")
 
     # Step 6: 產生每日橫截面排序標籤 (Quantile Ranking Label) - 方案 C: 混合絕對與相對標籤

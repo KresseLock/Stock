@@ -43,8 +43,7 @@ def test_scrape():
         f"data/raw_margin/{date_str}_margin.csv",
         f"data/raw_margin/{date_str}_sbl.csv",
         f"data/raw_chips/{date_str}_daytrading.csv",
-        f"data/raw_chips/{date_str}_fini_holding.csv",
-        f"data/raw_margin/{date_str}_credit_limit.csv"
+        f"data/raw_chips/{date_str}_fini_holding.csv"
     ]
     
     all_pass = True

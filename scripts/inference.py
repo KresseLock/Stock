@@ -165,12 +165,19 @@ def main(target_date_str=None):
     #  #4 資料不完整：上游 scraper 觸發 FinMind 額度限制被跳過時，Auto_RUN 會設此環境變數
     data_incomplete = os.environ.get("RUN_DATA_INCOMPLETE") == "1"
     #  #3 前視偏差：以 -d 補跑過去日期時，模型仍是用「全量資料（含該日之後）」訓練，
-    #     故此推薦帶有 lookahead，不能當作「當天系統實際會給的建議」
+    #     故此推薦帶有 lookahead，不能當作「當天系統實際會給的建議」。
+    #     例外：backtest.py 時光機以「基準日前資料」重訓的 point-in-time 模型呼叫時會設
+    #     INFERENCE_RECON_MODE=1，此情境改標「時光機重建」而非前視偏差。
+    recon_mode = os.environ.get("INFERENCE_RECON_MODE") == "1"
     is_backfill = (target_date_str is not None) and (latest_date.normalize() < pd.Timestamp.today().normalize())
     quality_notices = []
     if data_incomplete:
         quality_notices.append("   [⚠ 資料不完整] 本次上游下載觸發 FinMind 額度限制被跳過，籌碼/基本面可能為舊值，訊號僅供參考。")
-    if is_backfill:
+    if is_backfill and recon_mode:
+        quality_notices.append("   [時光機重建] 此 log 由 backtest.py 以基準日之前資料重訓的 point-in-time 模型產生"
+                               "（非 -d 全量 lookahead 模型），用於補齊漏執行日的紙上驗證紀錄；"
+                               "近截斷日標籤仍有極小 lookahead，係近似當日訊號。")
+    elif is_backfill:
         quality_notices.append("   [⚠ 前視偏差] 此為 -d 補跑之歷史日期，模型以全量資料訓練（含該日之後），"
                                "帶有 lookahead，不等於當日系統實際會給的建議，請勿用於績效驗證。")
     for _n in quality_notices:

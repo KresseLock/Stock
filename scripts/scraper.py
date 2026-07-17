@@ -2,7 +2,7 @@
 scraper.py — 台灣股市多源資料爬蟲 (整合 TWSE + TAIFEX + FinMind)
 ====================================================
 資料來源分流 (T+1/T+2 量化藍圖):
-  1. 台灣證券交易所 (TWSE) [免費每日]：價量、籌碼、資券、借券、本益比、當沖、外資持股、信用管制
+  1. 台灣證券交易所 (TWSE) [免費每日]：價量、籌碼、資券、借券、本益比、當沖、外資持股
   2. 台灣期貨交易所 (TAIFEX) [免費每日]：外資台指期未平倉 (大盤多空指標)
   3. 集保中心 (TDCC) [免費每週]：大戶持股分級
   4. FinMind [需 Token 每月/季]：月營收、綜合損益表、資產負債表、現金流量表、股利
@@ -10,7 +10,7 @@ scraper.py — 台灣股市多源資料爬蟲 (整合 TWSE + TAIFEX + FinMind)
 儲存路徑:
   data/raw_price/        - 股價行情 (TWSE)
   data/raw_chips/        - 法人買賣超、當沖、外資持股 (TWSE)
-  data/raw_margin/       - 融資券、借券、信用管制 (TWSE)
+  data/raw_margin/       - 融資券、借券 (TWSE)
   data/raw_twse_per/     - 官方版個股本益比/PBR (TWSE)
   data/raw_taifex/       - 期貨三大法人未平倉 (TAIFEX)
   data/raw_shareholding/ - 持股分級 (TDCC)
@@ -107,9 +107,9 @@ for folder in DIRS:
 # ── 所有每日 dataset 名稱清單 (price 排第一，其餘為子資料) ──
 _ALL_DATASETS = [
     "price", "chips", "twse_per", "taifex_inst",
-    "margin", "sbl", "daytrading", "fini_holding", "credit_limit",
+    "margin", "sbl", "daytrading", "fini_holding",
 ]
-_SUB_DATASETS = _ALL_DATASETS[1:]  # price 以外的 8 個
+_SUB_DATASETS = _ALL_DATASETS[1:]  # price 以外的 7 個
 
 # ── ETF 清單 ──────────────────────────────────────────
 _CATEGORIES_PATH = os.path.join(BASE_DIR, "stock_categories.json")
@@ -428,11 +428,15 @@ def crawl_daily_chips(date_str: str, skip: dict) -> bool:
     if data is None:
         return False
     if data == "NO_DATA":
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "chips", date_str, reason="no_data")
         return True
 
     df = _create_df_safely(data.get("data", []), data.get("fields", []))
     if df.empty:
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "chips", date_str, reason="empty_response")
         return True
     _save_csv(df, path)
@@ -452,6 +456,8 @@ def crawl_daily_margin(date_str: str, skip: dict) -> bool:
     if data is None:
         return False
     if data == "NO_DATA":
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "margin", date_str, reason="no_data")
         return True
 
@@ -466,6 +472,8 @@ def crawl_daily_margin(date_str: str, skip: dict) -> bool:
         df = _create_df_safely(data["data"], data.get("fields", []))
 
     if df.empty:
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "margin", date_str, reason="unexpected_format")
         return True
     _save_csv(df, path)
@@ -485,11 +493,15 @@ def crawl_daily_sbl(date_str: str, skip: dict) -> bool:
     if data is None:
         return False
     if data == "NO_DATA":
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "sbl", date_str, reason="no_data")
         return True
 
     df = _create_df_safely(data.get("data", []), data.get("fields", []))
     if df.empty:
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "sbl", date_str, reason="empty_response")
         return True
     _save_csv(df, path)
@@ -509,6 +521,8 @@ def crawl_daily_twse_per(date_str: str, skip: dict) -> bool:
     if data is None:
         return False
     if data == "NO_DATA":
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "twse_per", date_str, reason="no_data")
         return True
 
@@ -522,6 +536,8 @@ def crawl_daily_twse_per(date_str: str, skip: dict) -> bool:
         )
 
     if df.empty:
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "twse_per", date_str, reason="unexpected_format")
         return True
     _save_csv(df, path)
@@ -535,12 +551,14 @@ def crawl_daily_daytrading(date_str: str, skip: dict) -> bool:
 
     url = (
         f"https://www.twse.com.tw/exchangeReport/TWTB4U"
-        f"?response=json&date={date_str}&selectType=ALL"
+        f"?response=json&date={date_str}"
     )
     data = _fetch_twse_json(url)
     if data is None:
         return False
     if data == "NO_DATA":
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "daytrading", date_str, reason="no_data")
         return True
 
@@ -548,12 +566,15 @@ def crawl_daily_daytrading(date_str: str, skip: dict) -> bool:
     if data.get("data"):
         df = _create_df_safely(data["data"], data.get("fields", []))
     elif data.get("tables"):
+        # tables[0] 為市場統計總表(僅1列)，個股表以「證券代號」欄位辨識
         for tbl in data["tables"]:
-            if tbl.get("data"):
+            if tbl.get("data") and "證券代號" in tbl.get("fields", []):
                 df = _create_df_safely(tbl["data"], tbl.get("fields", []))
                 break
 
     if df.empty:
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "daytrading", date_str, reason="unexpected_format")
         return True
     _save_csv(df, path)
@@ -567,42 +588,22 @@ def crawl_daily_fini_holding(date_str: str, skip: dict) -> bool:
 
     url = (
         f"https://www.twse.com.tw/fund/MI_QFIIS"
-        f"?response=json&date={date_str}&selectType=ALL"
+        f"?response=json&date={date_str}&selectType=ALLBUT0999"
     )
     data = _fetch_twse_json(url)
     if data is None:
         return False
     if data == "NO_DATA":
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "fini_holding", date_str, reason="no_data")
         return True
 
     df = _create_df_safely(data.get("data", []), data.get("fields", []))
     if df.empty:
+        if date_str >= datetime.date.today().strftime("%Y%m%d"):
+            return False
         _mark_skip_date(skip, "fini_holding", date_str, reason="empty_response")
-        return True
-    _save_csv(df, path)
-    return True
-
-
-def crawl_daily_credit_limit(date_str: str, skip: dict) -> bool:
-    path = os.path.join(DATA_DIR, "raw_margin", f"{date_str}_credit_limit.csv")
-    if _already_exists(path): return True
-    if _is_skip_date(skip, "credit_limit", date_str): return True
-
-    url = (
-        f"https://www.twse.com.tw/exchangeReport/TWT38U"
-        f"?response=json&date={date_str}&selectType=ALL"
-    )
-    data = _fetch_twse_json(url)
-    if data is None:
-        return False
-    if data == "NO_DATA":
-        _mark_skip_date(skip, "credit_limit", date_str, reason="no_data")
-        return True
-
-    df = _create_df_safely(data.get("data", []), data.get("fields", []))
-    if df.empty:
-        _mark_skip_date(skip, "credit_limit", date_str, reason="empty_response")
         return True
     _save_csv(df, path)
     return True
@@ -642,11 +643,15 @@ def crawl_daily_taifex_inst(date_str: str, skip: dict) -> bool:
             or "<html" in text.lower()
             or "<!doctype" in text.lower()
         ):
+            if date_str >= datetime.date.today().strftime("%Y%m%d"):
+                return False
             _mark_skip_date(skip, "taifex_inst", date_str, reason="no_data")
             return True
 
         df = pd.read_csv(io.StringIO(text))
         if df.empty:
+            if date_str >= datetime.date.today().strftime("%Y%m%d"):
+                return False
             _mark_skip_date(skip, "taifex_inst", date_str, reason="empty_response")
             return True
         _save_csv(df, path)
@@ -923,7 +928,6 @@ def download_history_data(
             ("sbl",          os.path.join(DATA_DIR, "raw_margin",   f"{d_str}_sbl.csv")),
             ("daytrading",   os.path.join(DATA_DIR, "raw_chips",    f"{d_str}_daytrading.csv")),
             ("fini_holding", os.path.join(DATA_DIR, "raw_chips",    f"{d_str}_fini_holding.csv")),
-            ("credit_limit", os.path.join(DATA_DIR, "raw_margin",   f"{d_str}_credit_limit.csv")),
         ]
 
         def _done(ds, p):
@@ -952,7 +956,6 @@ def download_history_data(
                     crawl_daily_taifex_inst(d_str, skip_dates),
                     crawl_daily_daytrading(d_str, skip_dates),
                     crawl_daily_fini_holding(d_str, skip_dates),
-                    crawl_daily_credit_limit(d_str, skip_dates),
                 ]
                 if all(results):
                     downloaded_days += 1
@@ -1019,7 +1022,6 @@ def download_history_data(
             crawl_daily_taifex_inst(d_str, skip_dates),
             crawl_daily_daytrading(d_str, skip_dates),
             crawl_daily_fini_holding(d_str, skip_dates),
-            crawl_daily_credit_limit(d_str, skip_dates),
         ]
         if all(results):
             downloaded_days += 1
