@@ -1,18 +1,18 @@
 {
     "best_score": 0.0,
-    "optimized_at": "2026-07-10 10:01:53",
-    "date_range": "2022-01-02 to 2026-07-09",
+    "optimized_at": "2026-07-24 00:57:20",
+    "date_range": "2022-01-02 to 2026-07-23",
     "best_params": {
-        "panic_ma5": -0.012,
-        "panic_breadth": 0.26,
-        "markup_pct": 1.5,
-        "regime_bull_buy": 3.5,
-        "regime_sideways_buy": 6.0,
-        "regime_bull_trend": 0.002,
-        "regime_bear_trend": -0.003,
-        "regime_bull_pos": 1.0,
-        "regime_sideways_pos": 1.0,
-        "regime_bear_pos": 1.0
+        "panic_ma5": -0.011000000000000001,
+        "panic_breadth": 0.22999999999999998,
+        "markup_pct": -1.0,
+        "regime_bull_buy": 5.5,
+        "regime_sideways_buy": 11.5,
+        "regime_bull_trend": 0.0005,
+        "regime_bear_trend": -0.001,
+        "regime_bull_pos": 5.0,
+        "regime_sideways_pos": 5.0,
+        "regime_bear_pos": 2.0
     },
     "overall_metrics": {
         "return_pct": 0.0,
@@ -21,132 +21,132 @@
     "walk_forward_metrics": {
         "panic_ma5": {
             "values": [
-                0.0,
-                -0.021,
-                0.0,
-                -0.012
+                -0.016,
+                -0.004,
+                -0.017,
+                -0.011000000000000001
             ],
-            "median": -0.006,
-            "deployed": -0.012,
-            "iqr": 0.01425,
-            "cv": 1.071802374777418,
+            "median": -0.013500000000000002,
+            "deployed": -0.011000000000000001,
+            "iqr": 0.006999999999999999,
+            "cv": 0.4289845892077916,
             "stability": "不穩定"
         },
         "panic_breadth": {
             "values": [
+                0.21,
+                0.38,
                 0.24,
-                0.44999999999999996,
-                0.2,
-                0.26
+                0.22999999999999998
             ],
-            "median": 0.25,
-            "deployed": 0.26,
-            "iqr": 0.07750000000000001,
-            "cv": 0.33486729589512526,
-            "stability": "不穩定"
+            "median": 0.235,
+            "deployed": 0.22999999999999998,
+            "iqr": 0.050000000000000044,
+            "cv": 0.25384196315233415,
+            "stability": "需注意"
         },
         "markup_pct": {
             "values": [
+                -1.0,
                 -0.5,
-                -1.5,
-                -0.5,
-                1.5
+                -1.0,
+                -1.0
             ],
-            "median": -0.5,
-            "deployed": 1.5,
-            "iqr": 0.75,
-            "cv": 4.358898943540674,
-            "stability": "不穩定"
+            "median": -1.0,
+            "deployed": -1.0,
+            "iqr": 0.125,
+            "cv": 0.24743582965269675,
+            "stability": "需注意"
         },
         "regime_bull_buy": {
             "values": [
-                12.0,
-                13.0,
-                2.5,
-                3.5
+                7.5,
+                8.0,
+                12.5,
+                5.5
             ],
             "median": 7.75,
-            "deployed": 3.5,
-            "iqr": 9.0,
-            "cv": 0.6162894572433161,
+            "deployed": 5.5,
+            "iqr": 2.125,
+            "cv": 0.30551476851430925,
             "stability": "不穩定"
         },
         "regime_sideways_buy": {
             "values": [
-                7.0,
-                5.0,
-                6.0,
-                6.0
+                6.5,
+                9.0,
+                8.0,
+                11.5
             ],
-            "median": 6.0,
-            "deployed": 6.0,
-            "iqr": 0.5,
-            "cv": 0.11785113019775793,
-            "stability": "穩定"
+            "median": 8.5,
+            "deployed": 11.5,
+            "iqr": 2.0,
+            "cv": 0.20800313969372908,
+            "stability": "需注意"
         },
         "regime_bull_trend": {
             "values": [
-                0.003,
-                0.0005,
-                0.006,
-                0.002
+                0.004,
+                0.0045000000000000005,
+                0.004,
+                0.0005
             ],
-            "median": 0.0025,
-            "deployed": 0.002,
-            "iqr": 0.0021249999999999997,
-            "cv": 0.6997163886709166,
+            "median": 0.004,
+            "deployed": 0.0005,
+            "iqr": 0.001,
+            "cv": 0.49254801826406525,
             "stability": "不穩定"
         },
         "regime_bear_trend": {
             "values": [
-                -0.0015,
-                -0.004,
-                -0.003,
-                -0.003
+                -0.0025,
+                -0.0025,
+                -0.0025,
+                -0.001
             ],
-            "median": -0.003,
-            "deployed": -0.003,
-            "iqr": 0.0006250000000000001,
-            "cv": 0.3104968881975152,
+            "median": -0.0025,
+            "deployed": -0.001,
+            "iqr": 0.0003749999999999999,
+            "cv": 0.30565602486509597,
             "stability": "不穩定"
         },
         "regime_bull_pos": {
             "values": [
-                4.0,
-                2.0,
-                4.0,
-                1.0
+                3.0,
+                5.0,
+                1.0,
+                5.0
             ],
-            "median": 3.0,
-            "deployed": 1.0,
-            "iqr": 2.25,
-            "cv": 0.4723774929733302,
+            "median": 4.0,
+            "deployed": 5.0,
+            "iqr": 2.5,
+            "cv": 0.47380354147934284,
             "stability": "不穩定"
         },
         "regime_sideways_pos": {
             "values": [
-                4.0,
-                2.0,
                 5.0,
-                1.0
+                5.0,
+                5.0,
+                5.0
             ],
-            "median": 3.0,
-            "deployed": 1.0,
-            "iqr": 2.5,
-            "cv": 0.5270462766947299,
-            "stability": "不穩定"
+            "median": 5.0,
+            "deployed": 5.0,
+            "iqr": 0.0,
+            "cv": 0.0,
+            "stability": "穩定"
         },
         "regime_bear_pos": {
             "values": [
                 1.0,
+                4.0,
                 1.0,
-                3.0,
-                1.0
+                2.0
             ],
-            "median": 1.0,
-            "deployed": 1.0,
-            "iqr": 0.5,
-            "cv": 0.5773502691896257,
+            "median": 1.5,
+            "deployed": 2.0,
+            "iqr": 1.5,
+            "cv": 0.6123724356957945,
             "stability": "不穩定"
         }
     }

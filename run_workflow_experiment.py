@@ -377,6 +377,34 @@ def write_experiment_report(res):
         sa = _map.get(stab_a.get(key, ""), stab_a.get(key, "—"))
         sb = _map.get(stab_b.get(key, ""), stab_b.get(key, "—"))
         return f"A:{sa} / B:{sb}"
+
+    # 風控參數對比表：只列「實際落在搜尋空間內」的參數（見 scripts/optimize_trading_params.py:
+    # suggest_trial_params）。sell_threshold / stop_loss / ts_activation / ts_pullback / min_hold_days
+    # 已移出搜尋（部署時由 config.REGIME_EXIT_PARAMS 依市況覆蓋、停損由 ATR 動態接管），故不再列出。
+    # 表格改由參數檔實際鍵值驅動：未收錄的新參數會自動追加至表尾，避免表格與搜尋空間再度脫節。
+    PARAM_DESC = {
+        "buy_threshold":       ("靜態買入門檻",   "%",   "非 regime 模式下，D1 多空預測分數觸發買進的百分比。"),
+        "regime_bull_buy":     ("牛市買入門檻",   "%",   "牛市趨勢下，D1 多空預測分數觸發買進的百分比（市況動態門檻）。"),
+        "regime_sideways_buy": ("橫盤買入門檻",   "%",   "橫盤趨勢下，D1 多空預測分數觸發買進的百分比（Bear 固定 99% 實質空手）。"),
+        "regime_bull_trend":   ("牛市判定門檻",   "",    "大盤滾動均日報酬高於此值判定為 Bull；值越小越容易進入牛市模式。"),
+        "regime_bear_trend":   ("空頭判定門檻",   "",    "大盤滾動均日報酬低於此值判定為 Bear；其餘區間為 Sideways。"),
+        "regime_bull_pos":     ("牛市持股上限",   " 檔", "Bull 市況下的最大持股檔數（選擇性曝險，非強制平倉）。"),
+        "regime_sideways_pos": ("橫盤持股上限",   " 檔", "Sideways 市況下的最大持股檔數（降曝險化解「滿倉必爆」）。"),
+        "regime_bear_pos":     ("空頭持股上限",   " 檔", "Bear 市況下的最大持股檔數（極低曝險）。"),
+        "panic_ma5":           ("避險門檻",       "",    "大盤 5 日平均回報低於此值觸發避險紅燈（全市況生效）。"),
+        "panic_breadth":       ("避險門檻",       "",    "全市場上漲比例低於此值觸發避險紅燈（僅 Sideways/Bear 生效，窄牛市豁免）。"),
+        "markup_pct":          ("掛單折溢價幅",   "%",   "掛單折溢價比例，負數代表折價掛低等拉回買進（成交率較低）。"),
+    }
+    _param_keys = [k for k in PARAM_DESC if k in mode_a_p or k in mode_b_p]
+    _param_keys += [k for k in list(mode_a_p) + list(mode_b_p)
+                    if k not in PARAM_DESC and k not in _param_keys]
+    _rows = []
+    for _k in _param_keys:
+        _label, _suffix, _desc = PARAM_DESC.get(_k, (_k, "", "—"))
+        _rows.append(f"| **{_label} (`{_k}`)** | `{fmt_param_val(mode_a_p.get(_k), _suffix)}` | "
+                     f"`{fmt_param_val(mode_b_p.get(_k), _suffix)}` | {fmt_stab(_k)} | {_desc} |")
+    param_rows_md = "\n".join(_rows) if _rows else "| — | — | — | — | 尚無參數資料 |"
+
     date_info = res.get("date_info", {})
     _cutoff      = date_info.get("mode_a_cutoff",   "2025-08-01")
     _oos_start   = date_info.get("mode_a_oos_start", "2025-08-02")
@@ -496,24 +524,21 @@ def write_experiment_report(res):
 
 | 風控參數 | 🟢 模式 A (未見過牛市的最佳化) | 🔵 模式 B (包含牛市的最佳化) | Walk-Forward 穩定性 (A / B) | 參數說明 |
 | :--- | :--- | :--- | :--- | :--- |
-| **牛市買入門檻 (`regime_bull_buy`)** | `{fmt_param_val(mode_a_p.get("regime_bull_buy"), "%")}` | `{fmt_param_val(mode_b_p.get("regime_bull_buy"), "%")}` | {fmt_stab("regime_bull_buy")} | 牛市趨勢下，D1 多空預測分數觸發買進的百分比（市況動態門檻）。 |
-| **橫盤買入門檻 (`regime_sideways_buy`)** | `{fmt_param_val(mode_a_p.get("regime_sideways_buy"), "%")}` | `{fmt_param_val(mode_b_p.get("regime_sideways_buy"), "%")}` | {fmt_stab("regime_sideways_buy")} | 橫盤趨勢下，D1 多空預測分數觸發買進的百分比（市況動態門檻）。 |
-| **賣出門檻 (`sell_threshold`)** | `{fmt_param_val(mode_a_p.get("sell_threshold"), "%")}` | `{fmt_param_val(mode_b_p.get("sell_threshold"), "%")}` | {fmt_stab("sell_threshold")} | Day 3 多空預測分數低於此值觸發賣出的百分比。 |
-| **個股停損 (`stop_loss`)** | `{fmt_param_val(mode_a_p.get("stop_loss"), "%")}` | `{fmt_param_val(mode_b_p.get("stop_loss"), "%")}` | {fmt_stab("stop_loss")} | 買入後的個股固定停損線。 |
-| **避險門檻 (`panic_ma5`)** | `{fmt_param_val(mode_a_p.get("panic_ma5"))}` | `{fmt_param_val(mode_b_p.get("panic_ma5"))}` | {fmt_stab("panic_ma5")} | 大盤 5 日平均回報低於此值觸發避險紅燈。 |
-| **避險門檻 (`panic_breadth`)** | `{fmt_param_val(mode_a_p.get("panic_breadth"))}` | `{fmt_param_val(mode_b_p.get("panic_breadth"))}` | {fmt_stab("panic_breadth")} | 全市場上漲比例低於此值觸發避險紅燈。 |
-| **移動止盈啟動 (`ts_activation`)** | `{fmt_param_val(mode_a_p.get("ts_activation"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_activation"), "%")}` | {fmt_stab("ts_activation")} | 個股利潤達到此值開啟移動追蹤止盈。 |
-| **移動止盈回撤 (`ts_pullback`)** | `{fmt_param_val(mode_a_p.get("ts_pullback"), "%")}` | `{fmt_param_val(mode_b_p.get("ts_pullback"), "%")}` | {fmt_stab("ts_pullback")} | 移動止盈開啟後自高點拉回多少執行停利。 |
-| **最少持股天數 (`min_hold_days`)** | `{fmt_param_val(mode_a_p.get("min_hold_days"), " 天")}` | `{fmt_param_val(mode_b_p.get("min_hold_days"), " 天")}` | {fmt_stab("min_hold_days")} | 防止頻繁交易所限制的最短持倉天數。 |
-| **掛單折溢價幅 (`markup_pct`)** | `{fmt_param_val(mode_a_p.get("markup_pct"), "%")}` | `{fmt_param_val(mode_b_p.get("markup_pct"), "%")}` | {fmt_stab("markup_pct")} | 掛單折溢價比例，負數代表折價拉回買進。 |
+{param_rows_md}
+
+*本表僅列 Optuna 實際搜尋的參數。`sell_threshold` / `ts_activation` / `ts_pullback` / `min_hold_days` 已移出搜尋空間，部署時由 `config.REGIME_EXIT_PARAMS` 依市況覆蓋；`stop_loss` 亦已移出，由 ATR 動態停損（`ATR_STOP_MULTIPLIER × atr18_pct`）接管。這些參數不隨本實驗變動，故不列入對比。*
 
 ### 💡 研究員核心分析與結論：
 1. **為什麼模式 A 與模式 B 的最優風控參數存在差異？**
-   * 模式 A 優化時，Optuna 看不到 2025-08-01 之後的兩萬點到四萬點大牛市，因此其優化出的風控引數更加傾向於**「防守阻礙與熊市」**。
-   * 模式 B 將 2025-08 ~ 2026-06 的超級牛市納源優化眼界。在強多頭市場中，大盤避險紅燈門檻（`panic_breadth` 和 `panic_ma5`）通常會被優化得更加寬容，個股停損（`stop_loss`）與移動止盈回撤（`ts_pullback`）也會更寬，以適應牛市個股的劇烈波動，防止被輕易洗出場，最大化捕捉趨勢利潤。
-2. **策略健康度判斷：**
-   * 若模式 A 在 OOS 區間的 `oos_return` 表現良好且 `oos_mdd` 受控，證明策略具備極強的**樣本外泛化能力**，非過擬合。
-   * 正式實盤上線時，推薦**以模式 B 訓練出的最新模型**作為預測大腦（擁有最新特徵），並套用**模式 B 產出的 `best_trading_params_mode_b.json` 風控參數**進行每日交易，以在當下大牛市中獲得最契合市場波動的收益。
+   * 模式 A 優化時，Optuna 看不到 {_cutoff} 之後的大牛市，因此優化出的風控參數更傾向**「防守震盪與熊市」**：買入門檻偏保守、regime 判定門檻偏嚴、各市況持股檔數偏低。
+   * 模式 B 將 OOS 牛市納入優化視野，且採 recency 加權，故參數普遍偏多頭校準：`panic_breadth` 紅燈更寬容、`regime_bull_trend` 更容易判定為 Bull、`regime_*_pos` 曝險上調，以在趨勢行情中維持部位、捕捉肥尾。**代價是市況一旦反轉，這組參數會比模式 A 更痛**。
+2. **穩定性怎麼讀：**
+   * 「❌ 不穩定」代表該參數在 4 個 Walk-Forward 窗口間跳動劇烈（CV 高），部署值多半只反映最新窗口的市況，**不是穩健均值**；搭配各參數檔內的 `values` / `median` / `deployed` 一起看。
+   * 若某參數的 `deployed` 貼死 `config.TRADING_PARAM_BOUNDS` 的邊界，代表搜尋空間可能限縮了最優解，應考慮放寬邊界後重跑。
+3. **部署決策：**
+   * 一律以上方「候選 vs 現行潔淨 OOS 回測比較」的結論為準，**不要因為模式 B 全週期報酬亮眼就直接部署**——全週期前段屬樣本內、受 lookahead 灌水，會系統性偏袒寬鬆參數。
+   * 實盤預測大腦固定用**模式 B 訓練的最新模型**（擁有最新特徵）；風控參數則視上述把關結論決定是否更新。
+   * 本腳本收尾會將 `best_trading_params.json` **還原成執行前的現行參數**，故判定「建議部署」時仍需手動複製 `best_trading_params_mode_b.json` 覆蓋之，方才生效。
 
 ---
 """

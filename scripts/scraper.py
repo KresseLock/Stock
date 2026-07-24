@@ -320,13 +320,22 @@ def _polite_sleep(lo: float = 1.5, hi: float = 3.0):
 # 模組 1: TWSE & TAIFEX 每日全市場資料 (免費無限制)
 # =====================================================================
 
+# TWSE 對過於頻繁的查詢會回「查詢過於頻繁」限流訊息 (HTTP 200 但 data 為空)，
+# 若不攔截會被下方「data 為空」判斷誤標為 NO_DATA。這正是先前整批歷史被寫成
+# 假 no_data / unexpected_format 的成因，故偵測到限流一律退避重試，不當成無資料。
+TWSE_THROTTLE_KEYWORDS  = ("查詢過於頻繁", "過於頻繁")
+TWSE_THROTTLE_MAX_WAITS = 8    # 連續限流退避上限，超過視為本次失敗 (回 None，下次再試)
+TWSE_THROTTLE_WAIT_SEC  = 30   # 每次退避基礎秒數 (線性遞增，單次上限 300 秒)
+
+
 def _fetch_twse_json(url: str):
     """
     回傳:
       dict      = API 正常且有內容
       "NO_DATA" = API 正常但明確無資料 (含 404 網頁、很抱歉、data=[] 等)
-      None      = 網路/解析錯誤或被 Ban
+      None      = 網路/解析錯誤、被 Ban 或連續限流放棄
     """
+    throttle_waits = 0
     while True:
         try:
             r = requests.get(url, headers=HEADERS, timeout=15)
@@ -343,7 +352,18 @@ def _fetch_twse_json(url: str):
             data = r.json()
 
             stat = data.get("stat", "")
-            
+
+            # 攔截限流「查詢過於頻繁」：須早於下方空 data 的 NO_DATA 判斷，退避後重試。
+            if any(k in stat for k in TWSE_THROTTLE_KEYWORDS):
+                throttle_waits += 1
+                if throttle_waits > TWSE_THROTTLE_MAX_WAITS:
+                    print(f"\n    [系統提示] 連續 {throttle_waits} 次仍被證交所限流 (原因: {stat})，放棄本次查詢，待下次重試。", flush=True)
+                    return None
+                wait = min(TWSE_THROTTLE_WAIT_SEC * throttle_waits, 300)
+                print(f"\n    [系統提示] 證交所限流 (原因: {stat})，第 {throttle_waits}/{TWSE_THROTTLE_MAX_WAITS} 次退避 {wait} 秒後重試...", flush=True)
+                time.sleep(wait)
+                continue
+
             # 攔截維護時間 (1:30 PM - 1:45 PM) 或其他伺服器維護 智慧等待
             if any(k in stat for k in ["暫停查詢", "結算時間", "維護"]):
                 print(f"\n    [系統提示] 證交所伺服器結算或維護中 (原因: {stat})，暫停 30 分鐘後自動重試...", end="", flush=True)

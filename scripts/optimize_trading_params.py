@@ -333,6 +333,13 @@ def main():
             stability = "穩定" if cv_val < 0.15 else "需注意" if cv_val < 0.30 else "不穩定"
             deploy_val = _weighted_median(list(vals), rw)
 
+            # 整數型參數 (TRADING_PARAM_BOUNDS 2-tuple，如 regime_*_pos)：窗口數為偶數時中位數會落在
+            # x.5，而 config.py § 11 載入時以 int() 截斷 (3.5 → 3)，導致參數檔記錄值與實際部署值不一致。
+            # 此處以相同的截斷規則先取整，使 JSON 記錄 == 實際部署（不改變既有部署行為）。
+            # 型別判定沿用 _suggest 的規則，以 TRADING_PARAM_BOUNDS 為單一來源。
+            if len(TRADING_PARAM_BOUNDS.get(p, ())) == 2:
+                deploy_val = int(deploy_val)
+
             if p in ["panic_ma5", "panic_breadth"]:
                 print(f"{p:<15} | {deploy_val*100:13.2f}% | {iqr_val*100:13.2f}% | {cv_val:12.3f} | {stability}")
             else:
