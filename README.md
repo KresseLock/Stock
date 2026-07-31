@@ -22,8 +22,8 @@
 | 頻率 | 做什麼 | 指令 |
 | :--- | :--- | :--- |
 | **每天** 收盤後（約 15:40） | 下載資料 → 重訓模型 → 產生明日掛單建議 → 備份 | `python Auto_RUN.py` |
-| **每週** | 檢查模型訊號是否仍健康（RankIC / PSI） | `python scripts/analyze_regime_stability.py` |
-| **每季**（3 個月） | 輕量重訓（跳過因子調參，直接重建特徵與模型） | `python run_workflow_experiment.py --skip_factor_opt --fresh` |
+| **每週** | 全流程更新（跳過 Optuna 重新調參，僅重算特徵/模型/模擬） | `python run_workflow_experiment.py --skip_optuna` |
+| **每季**（3 個月） | 跳過因子調參，重跑含風控調參的全流程 | `python run_workflow_experiment.py --skip_factor_opt --fresh` |
 | **每年 / 重大事件後** | 完整重訓（含重新搜尋最佳技術指標） | `python run_workflow_experiment.py --fresh` |
 
 ---
@@ -84,7 +84,7 @@ python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000  # OOS 驗�
 | OOS RankIC | < 0.015 | 🟡 加強監控 |
 | PSI（特徵漂移） | > 0.25 | 🟡 加強監控 |
 | OOS RankIC | < 0（連續兩週） | 🔴 本週內跑 `run_workflow_experiment.py --skip_factor_opt --fresh` |
-| Mode A OOS 回測報酬 | < 0% | 🔴 本週內跑完整重訓 |
+| Mode A OOS 回測報酬 | < 0% | 🔴 本週內跑完整重訓 `run_workflow_experiment.py --fresh` |
 | Stage C 下界報酬 | < -5% | ⛔ 立即暫停實倉，等重訓完再說 |
 
 ---
@@ -698,10 +698,14 @@ python run_workflow_experiment.py
 # 2. 自訂調參輪數與資金 (模式 A 因子調參 50 輪，風控調參 150 輪，初始資金 300 萬)
 python run_workflow_experiment.py -f 50 -t 150 -c 3000000
 
-# 3. 沿用現有 best_factors.json (跳過因子優化，僅重新訓練模型與優化交易風控，速度最快)
-python run_workflow_experiment.py --skip_factor_opt
+# 3. 每週例行更新（跳過所有 Optuna 貝葉斯最佳化，沿用既有因子與風控參數，僅重算特徵/模型/模擬/推理）
+#    ▶ 每週推薦指令：一週新資料對 Optuna 搜尋影響極小，沿用既有參數可大幅縮短執行時間
+python run_workflow_experiment.py --skip_optuna
 
-# 4. 忽略所有斷點續傳，強制全部重跑
+# 4. 沿用現有 best_factors.json（跳過因子優化），但仍執行 Optuna 風控調參（每季適用）
+python run_workflow_experiment.py --skip_factor_opt --fresh
+
+# 5. 忽略所有斷點續傳，強制全部重跑（含所有 Optuna 步驟，每年或大事件後適用）
 python run_workflow_experiment.py --fresh
 ```
 
@@ -715,7 +719,8 @@ python run_workflow_experiment.py --fresh
 | `-te` | `--trading_early_stopping` | `str` | `"150"` | 風控調參早停輪數 |
 | `-c` | `--capital` | `int` | `2000000` | 回測與優化的初始資金 |
 | ✕ | `--skip_factor_opt` | flag | `False` | 跳過模式 A 因子調參，沿用現有 `best_factors.json` |
-| ✕ | `--fresh` | flag | `False` | 忽略所有 Checkpoint，強制全部重跑 |
+| ✕ | `--skip_optuna` | flag | `False` | **跳過所有 Optuna 最佳化**（因子調參 + 模式 A/B 風控調參），但強制重算特徵、模型、Time Decay、診斷、模擬、推理。**每週例行更新推薦**：一週新資料對 Optuna 搜尋影響極小，沿用既有參數即可大幅縮短執行時間。首次執行需先有完整結果（`best_factors_mode_a.json`、`best_trading_params_mode_a/b.json` 必須存在）。|
+| ✕ | `--fresh` | flag | `False` | 忽略所有 Checkpoint，強制全部重跑（含所有 Optuna 步驟）|
 
 ##### ③ 實驗產出報告與備份存檔
 執行完畢後，系統會自動在 `reports/` 目錄生成一份詳細的 Markdown 對比報告 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，其中包含：
@@ -806,8 +811,8 @@ Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.js
 
 | 頻率 | 動作 | 指令 |
 | :--- | :--- | :--- |
-| **每週** | 訊號健康巡檢 | `python scripts/analyze_regime_stability.py` |
-| **每季**（3 個月）| 輕量全流程更新（跳過因子調參） | `python run_workflow_experiment.py --skip_factor_opt --fresh` |
+| **每週** | 訊號健康巡檢 + 全流程更新（跳過 Optuna 重調） | `python run_workflow_experiment.py --skip_optuna` |
+| **每季**（3 個月）| 輕量全流程更新（跳過因子調參，含 Optuna 風控調參） | `python run_workflow_experiment.py --skip_factor_opt --fresh` |
 | **每年**（或大事件後）| 完整重跑含因子重搜 | `python run_workflow_experiment.py --fresh` |
 
 ##### 🚨 指標觸發條件（看到即刻執行對應動作）

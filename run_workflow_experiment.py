@@ -496,6 +496,7 @@ def write_experiment_report(res):
 *   **風控最佳化搜尋設定 (Trading Search)**：最大輪數: `{args_info["trading_trials"]}` 輪 | 早停設定: `{args_info["trading_early_stopping"]}` 輪
 *   **模擬初始資金 (Capital)**：`{args_info["capital"]:,}` 元
 *   **模式 A 執行因子優化**：`{"否 (沿用歷史因子)" if args_info["skip_factor_opt"] else "是"}`
+*   **跳過 Optuna 最佳化**：`{"是 (沿用既有參數)" if args_info.get("skip_optuna") else "否"}`
 
 ---
 
@@ -577,7 +578,15 @@ def main():
     parser.add_argument("-c", "--capital", type=int, default=CAPITAL, help="回測與優化的初始資金")
     parser.add_argument("--skip_factor_opt", action="store_true", help="模式 A 跳過因子優化，直接沿用現有 best_factors.json")
     parser.add_argument("--fresh", action="store_true", help="強制重新執行所有步驟，忽略現有的 checkpoint 與中間 JSON 檔")
+    parser.add_argument("--skip_optuna", action="store_true",
+                        help="跳過所有 Optuna 貝葉斯最佳化（因子調參 + 模式 A/B 風控調參），"
+                             "但強制重算其他所有步驟（特徵、模型、Time Decay、診斷、模擬、推理）。"
+                             "適用於每周例行更新：僅一周新資料時，Optuna 最佳化差異不大，可沿用既有參數以大幅縮短執行時間。")
     args = parser.parse_args()
+
+    # --skip_optuna 隱含 --skip_factor_opt 與類似 --fresh 的行為（但排除 Optuna 步驟）
+    if args.skip_optuna:
+        args.skip_factor_opt = True
     
     # 參數標準化 (處理 'None')
     fact_es_str = format_val_for_config(args.factor_early_stopping)
@@ -610,6 +619,7 @@ def main():
     print(f"  * 模式 A 截斷日期 (BACKTEST_DATE): {mode_a_cutoff_str}")
     print(f"  * 最新資料日期 (自動偵測)        : {latest_date}")
     print(f"  * 模式 A 執行因子最佳化          : {'否 (沿用現有)' if args.skip_factor_opt else '是'}")
+    print(f"  * 跳過所有 Optuna 最佳化         : {'是 (沿用既有參數，僅重算特徵/模型/模擬)' if args.skip_optuna else '否'}")
     print(f"  * 續傳 / 復原機制啟動           : {'否 (強制重新執行)' if args.fresh else '是 (優先讀取 Checkpoints)'}")
     print("=" * 80)
     
@@ -657,7 +667,8 @@ def main():
             "trading_trials": args.trading_trials,
             "trading_early_stopping": trad_es_str,
             "capital": args.capital,
-            "skip_factor_opt": args.skip_factor_opt
+            "skip_factor_opt": args.skip_factor_opt,
+            "skip_optuna": args.skip_optuna
         },
         "date_info": {
             "mode_a_cutoff": mode_a_cutoff_str,
@@ -670,7 +681,7 @@ def main():
     
     # ── 1.1 讀取現有實驗進度 ──────────────────────────────────────────────
     progress_json_path = os.path.join(BASE_DIR, "reports", "workflow_experiment_results.json")
-    if os.path.exists(progress_json_path) and not args.fresh:
+    if os.path.exists(progress_json_path) and not args.fresh and not args.skip_optuna:
         print(f"\n[續傳/復原] 偵測到已有實驗進度檔 {progress_json_path}，正在載入上次進度...")
         try:
             with open(progress_json_path, "r", encoding="utf-8") as f:
@@ -705,10 +716,18 @@ def main():
         # Checkpoint: 檢查是否已有備份的最佳因子
         factor_mode_a_saved = os.path.join(BASE_DIR, "configs", "best_factors_mode_a.json")
         has_checkpoint_factor = os.path.exists(factor_mode_a_saved) and not args.fresh
+        # --skip_optuna：因子不重跑，但必須有既有因子可沿用
+        if args.skip_optuna:
+            has_checkpoint_factor = True
+            if not os.path.exists(factor_mode_a_saved) and not os.path.exists(BEST_FACTORS_PATH):
+                raise RuntimeError(
+                    "--skip_optuna 需要沿用既有因子，但找不到 best_factors_mode_a.json 或 best_factors.json！"
+                    "請先正常執行一次（不加 --skip_optuna）以建立基準因子。")
         
         if has_checkpoint_factor:
             print(f"\n[續傳/復原] 偵測到已存在的模式 A 最佳因子檔 {factor_mode_a_saved}，直接載入並跳過優化...")
-            shutil.copy2(factor_mode_a_saved, BEST_FACTORS_PATH)
+            if os.path.exists(factor_mode_a_saved):
+                shutil.copy2(factor_mode_a_saved, BEST_FACTORS_PATH)
         else:
             # A2. 如果不沿用因子，先移開現有的 best_factors.json，讓 Optuna 重頭搜尋
             if not args.skip_factor_opt:
@@ -728,7 +747,8 @@ def main():
 
         # A4 & A5 & A5.1. 訓練模型 A & 訊號診斷
         stability_summary_path = os.path.join(BASE_DIR, "reports", "mode_a_regime_stability_report.txt")
-        has_checkpoint_stability = os.path.exists(stability_summary_path) and not args.fresh
+        # --skip_optuna 時，特徵/模型/診斷全部強制重算（不讀取 checkpoint）
+        has_checkpoint_stability = os.path.exists(stability_summary_path) and not args.fresh and not args.skip_optuna
         
         if has_checkpoint_stability:
             with open(stability_summary_path, "r", encoding="utf-8") as rf:
@@ -859,9 +879,19 @@ def main():
         ]
         expected_sig_a = compute_opt_signature(opt_cmd_a)
         has_checkpoint_trading_a = os.path.exists(trading_mode_a_saved) and not args.fresh
+        # --skip_optuna：強制沿用既有風控參數，跳過 Optuna 風控優化
+        if args.skip_optuna:
+            if os.path.exists(trading_mode_a_saved):
+                has_checkpoint_trading_a = True
+            else:
+                raise RuntimeError(
+                    "--skip_optuna 需要沿用既有模式 A 風控參數，但找不到 best_trading_params_mode_a.json！"
+                    "請先正常執行一次（不加 --skip_optuna）以建立基準風控參數。")
         # Checkpoint 內容驗證：優化器原始碼或旗標一旦變動（或為舊版無指紋的 checkpoint），
         # 既有風控參數即視為過時，拒絕沿用並重新優化，避免靜默套用舊參數。
-        if has_checkpoint_trading_a and results["mode_a"].get("opt_signature") != expected_sig_a:
+        # 註：--skip_optuna 為使用者明示沿用既有參數（且不讀 progress json、無指紋可比），故豁免此驗證。
+        if has_checkpoint_trading_a and not args.skip_optuna \
+                and results["mode_a"].get("opt_signature") != expected_sig_a:
             print("\n⚠️ [Checkpoint 失效] 模式 A 風控優化器原始碼或旗標已變更（或為舊版無指紋 checkpoint），"
                   "將忽略既有 best_trading_params_mode_a.json 並重新優化。")
             has_checkpoint_trading_a = False
@@ -891,7 +921,7 @@ def main():
         save_progress(results)
         
         # A9. 在樣本外超級牛市進行模擬交易 (mode_a_oos_start ~ latest_date，動態推算)
-        has_checkpoint_sim_a = ("oos_return" in results["mode_a"]) and ("oos_mdd" in results["mode_a"]) and not args.fresh
+        has_checkpoint_sim_a = ("oos_return" in results["mode_a"]) and ("oos_mdd" in results["mode_a"]) and not args.fresh and not args.skip_optuna
         # 修正：若模擬結果為 None (先前解析錯誤導致)，則強制重新執行以獲取正確數據
         if has_checkpoint_sim_a and (results["mode_a"].get("oos_return") is None or results["mode_a"].get("oos_mdd") is None):
             print("  [提示] 偵測到模擬交易結果為 None (可能為先前解析錯誤的無效數據)，將重新執行模擬...")
@@ -939,12 +969,21 @@ def main():
         ]
         expected_sig_b = compute_opt_signature(opt_cmd_b)
         has_checkpoint_trading_b = os.path.exists(trading_mode_b_saved) and not args.fresh
+        # --skip_optuna：強制沿用既有風控參數，跳過 Optuna 風控優化
+        if args.skip_optuna:
+            if os.path.exists(trading_mode_b_saved):
+                has_checkpoint_trading_b = True
+            else:
+                raise RuntimeError(
+                    "--skip_optuna 需要沿用既有模式 B 風控參數，但找不到 best_trading_params_mode_b.json！"
+                    "請先正常執行一次（不加 --skip_optuna）以建立基準風控參數。")
 
         # Checkpoint: 檢查是否能復原 Mode B 的模型以節省時間
         # 注意：模型還原僅依檔案存在判定，與風控優化器指紋解耦——優化器旗標/目標函式變動
         # 只需重跑風控優化，不應連帶強制重建特徵與重訓模型 (B2/B3)。
         has_mode_b_model = False
-        if has_checkpoint_trading_b:
+        # --skip_optuna 時，模型必須重算（特徵/訓練），不從 checkpoint 還原
+        if has_checkpoint_trading_b and not args.skip_optuna:
             has_mode_b_model = restore_models(".mode_b")
 
         if has_mode_b_model:
@@ -961,7 +1000,8 @@ def main():
         # 風控參數 checkpoint 內容驗證：優化器原始碼或旗標一旦變動（或為舊版無指紋 checkpoint），
         # 既有風控參數即視為過時，拒絕沿用並重新優化。與上方模型還原刻意解耦。
         param_checkpoint_valid_b = has_checkpoint_trading_b
-        if param_checkpoint_valid_b and results["mode_b"].get("opt_signature") != expected_sig_b:
+        if param_checkpoint_valid_b and not args.skip_optuna \
+                and results["mode_b"].get("opt_signature") != expected_sig_b:
             print("\n⚠️ [Checkpoint 失效] 模式 B 風控優化器原始碼或旗標已變更（或為舊版無指紋 checkpoint），"
                   "將忽略既有 best_trading_params_mode_b.json 並重新優化。")
             param_checkpoint_valid_b = False
@@ -1001,7 +1041,7 @@ def main():
         save_progress(results)
         
         # B7. 執行全週期模擬交易回測（優化窗 = 回測窗，起點同 TRADING_OPT_START_DATE）
-        has_checkpoint_sim_b = ("full_return" in results["mode_b"]) and ("full_mdd" in results["mode_b"]) and not args.fresh
+        has_checkpoint_sim_b = ("full_return" in results["mode_b"]) and ("full_mdd" in results["mode_b"]) and not args.fresh and not args.skip_optuna
         # 修正：若模擬結果為 None (先前解析錯誤導致)，則強制重新執行以獲取正確數據
         if has_checkpoint_sim_b and (results["mode_b"].get("full_return") is None or results["mode_b"].get("full_mdd") is None):
             print("  [提示] 偵測到模擬交易結果為 None (可能為先前解析錯誤的無效數據)，將重新執行模擬...")
@@ -1037,7 +1077,7 @@ def main():
         #   • 候選 = 本輪 optimize 產出的 best_trading_params_mode_b.json (此刻已在 best_trading_params.json)
         #   • 現行 = 本次執行前已部署的參數 (best_trading_params.json.workflow.bak)
         has_checkpoint_cmp = ("cmp_candidate_oos_return" in results["mode_b"]) \
-                             and ("cmp_incumbent_oos_return" in results["mode_b"]) and not args.fresh
+                             and ("cmp_incumbent_oos_return" in results["mode_b"]) and not args.fresh and not args.skip_optuna
         # 現行結果為 None 有兩種情況：首次執行無現行參數可比 (維持跳過) vs 先前解析失敗 (需重跑)。
         # 前者 backup_trading_exists=False，後者為 True，以此區分。
         if has_checkpoint_cmp and backup_trading_exists \
@@ -1089,7 +1129,7 @@ def main():
             save_progress(results)
 
         # B8. 執行推理預測，產生明天的買賣建議
-        has_checkpoint_infer_b = results["mode_b"].get("inference_completed") and not args.fresh
+        has_checkpoint_infer_b = results["mode_b"].get("inference_completed") and not args.fresh and not args.skip_optuna
         
         if has_checkpoint_infer_b:
             print(f"\n[續傳/復原] 偵測到已完成模式 B 推理預測，跳過推理...")
@@ -1137,7 +1177,7 @@ def main():
         # C2. 下界回測：凍結參數 + Model A，回測未見區間 (無 lookahead，但模型退化)
         #     此時 models/ 已是 Model A、BACKTEST_DATE 已對齊 cutoff (上方已設定)。
         has_ckpt_oos_a = (results["mode_b"].get("oos_val_return_modelA") is not None) \
-                         and (results["mode_b"].get("oos_val_mdd_modelA") is not None) and not args.fresh
+                         and (results["mode_b"].get("oos_val_mdd_modelA") is not None) and not args.fresh and not args.skip_optuna
         if has_ckpt_oos_a:
             print(f"\n[續傳/復原] 偵測到已存在的 OOS 驗證 (Model A 下界) 回測結果，跳過...")
         else:
@@ -1156,7 +1196,7 @@ def main():
 
         # C3. 上界回測：同一凍結參數 + Model B，回測同段未見區間 (無退化，但對測試期有 lookahead)
         has_ckpt_oos_b = (results["mode_b"].get("oos_val_return_modelB") is not None) \
-                         and (results["mode_b"].get("oos_val_mdd_modelB") is not None) and not args.fresh
+                         and (results["mode_b"].get("oos_val_mdd_modelB") is not None) and not args.fresh and not args.skip_optuna
         if has_ckpt_oos_b:
             print(f"\n[續傳/復原] 偵測到已存在的 OOS 驗證 (Model B 上界) 回測結果，跳過...")
         else:
