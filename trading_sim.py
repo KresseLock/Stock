@@ -106,9 +106,12 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
     _bear_trend = regime_bear_trend if regime_bear_trend is not None else REGIME_BEAR_TREND
     
     try:
-        from scripts.utils import filter_stocks_by_train_industries, get_regime_label
+        from scripts.utils import filter_stocks_by_train_industries, get_regime_label, get_atr_pct_col
     except ImportError:
-        from utils import filter_stocks_by_train_industries, get_regime_label
+        from utils import filter_stocks_by_train_industries, get_regime_label, get_atr_pct_col
+
+    # ATR 停損欄名（atr_pct 正規別名，舊特徵檔退回 atr<N>_pct）
+    _atr_col = get_atr_pct_col(df)
 
     df_daily_mkt["regime"] = df_daily_mkt["market_trend_20d"].apply(lambda v: get_regime_label(v, _bull_trend, _bear_trend))
     
@@ -617,7 +620,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                 today_buys_amount += cost
                 
                 # 計算個股 ATR 停損百分比（買入當下鎖定，後續不再變動）
-                _atr_pct = prev_data.loc[sid, 'atr18_pct'] if 'atr18_pct' in prev_data.columns else None
+                _atr_pct = prev_data.loc[sid, _atr_col] if (_atr_col and _atr_col in prev_data.columns) else None
                 if ATR_STOP_ENABLED and _atr_pct is not None and not pd.isna(_atr_pct) and float(_atr_pct) > 0:
                     _raw = -ATR_STOP_MULTIPLIER * float(_atr_pct) * 100
                     _atr_stop_pct = max(ATR_STOP_FLOOR_PCT, min(ATR_STOP_CEILING_PCT, _raw))

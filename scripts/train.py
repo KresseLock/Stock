@@ -35,6 +35,7 @@ try:
         DEFAULT_DECAY_LAMBDA,
         EXCLUDE_FEATURES,
         BACKTEST_DATE,
+        TRAIN_SPLIT_RATIO, VALID_SPLIT_RATIO,
     )
     N_JOBS = TRAIN_N_JOBS
 except ImportError:
@@ -47,6 +48,7 @@ except ImportError:
     DEFAULT_DECAY_LAMBDA = 0.002
     EXCLUDE_FEATURES = []
     BACKTEST_DATE = None
+    TRAIN_SPLIT_RATIO = 0.70; VALID_SPLIT_RATIO = 0.80
 
 # 共用過濾工具
 try:
@@ -69,12 +71,12 @@ def train_model(df, feature_cols, target_col, days_ahead):
     else:
         df["sample_weight"] = 1.0
     
-    # 以日期分位數切割：70% 訓練, 10% 驗證, 20% 測試
+    # 以日期分位數切割（比例由 config 控制，預設 70% 訓練, 10% 驗證, 20% 測試）
     df = df.sort_values("date").reset_index(drop=True)
     unique_dates = sorted(df["date"].unique())
     n_dates = len(unique_dates)
-    train_end_date = unique_dates[int(n_dates * 0.7)]
-    valid_end_date = unique_dates[int(n_dates * 0.8)]
+    train_end_date = unique_dates[int(n_dates * TRAIN_SPLIT_RATIO)]
+    valid_end_date = unique_dates[int(n_dates * VALID_SPLIT_RATIO)]
     
     train_df = df[df["date"] < train_end_date]
     valid_df = df[(df["date"] >= train_end_date) & (df["date"] < valid_end_date)]

@@ -24,6 +24,7 @@
 | `run_workflow_experiment.py` | 雙模式實驗（模式A研究期截至2025-08-01／模式B生產期），含 Checkpoint 斷點續傳 |
 | `scripts/analyze_regime_stability.py` | OOS 訊號健康診斷：RankIC / Alpha / PSI 漂移 |
 | `scripts/param_sensitivity.py` | 參數敏感度診斷（OFAT）：跨市況掃單一風控參數，解釋優化器為何選某值 → `reports/param_sensitivity_report.md` |
+| `scripts/compare_model_modes.py` | 模型時效性三方對照（現行／解除截斷／訓練集涵蓋近期）：自動備份→重訓→同區間回測→出報告→還原環境，候選模型保留供 `--promote` 採用 |
 | `scripts/StockSync.py` | rclone 同步 `predictions/` 至 Google Drive |
 
 ---
@@ -66,6 +67,11 @@
    - **自營商改用「自行買賣」淨額（剔除避險造市）＝平手**（同檔測試）：+238% vs baseline +224%、Calmar 11.9 vs 11.6，在單次回測噪音內，不值得為它多維護原始 chips.csv 重讀與新欄相依。
    - **fortune 移植 z-score／日曆特徵＝否決**（`tests/test_feature_candidate_gate.py`）：僅 1/4 子窗勝出、疑過擬合。
    - **方法論**：任何特徵候選必先寫進上述其一的把關框架跑贏才可移植；**判準是「全 OOS 報酬與回撤雙贏 且 多數子窗穩健」**，單看全窗改善不算數（易由少數窗驅動）。想再從籌碼榨訊號，別走正規化淨額（死路）；未試、且不需新資料的方向：法人分歧度（`sign(fini)×sign(sitc)` 同向/對作）。
+5. **禁用「按月切割」評估策略——會系統性低估績效**：本策略 `MIN_HOLD_DAYS` 為 11～23 天且獲利靠肥尾（見 #1），按月分段回測會月初空手重建倉、月底強制截斷未平倉，把跨月贏家攔腰砍斷。已實測（2026-08-13，同模型同參數）：連續區間 2026-04-01~07-31 的報酬，遠高於同期四份單月報表的複利結果。評估一律用連續區間，單月報表只能看交易明細、不能拿來論績效。
+6. **「模型訓練資料不夠新」不是近月績效不佳的解釋（限模型重訓，不含重新調參）**：`BACKTEST_DATE` 只決定資料截斷點，真正 fit 的訓練集終點由 `TRAIN_SPLIT_RATIO` 決定（截斷點的 70%）。已用 `scripts/compare_model_modes.py` 三方對照（2026-08-13，2026-04~07 區間）：訓練集終點 2023-11（現行）／2024-08／2025-12 三者，績效與「資料新鮮度」**無單調關係**，且兩個較新的候選皆雙輸現行。
+   - **範圍限制**：該實驗只重跑 `train.py`，`best_factors.json`（2026-06-21、`backtest_date=20250801`）與 `best_trading_params.json` 固定、特徵檔共用，屬單一變因設計。**「完整重跑 optimize→feature→train 是否有用」尚未檢驗**，不可據此推論。
+   - **補測時的硬限制**：`optimize_factors.py` 的防洩漏保護看 `config.BACKTEST_DATE`，設 `None` 時**不截斷**，會把回測區間納入因子搜尋（lookahead）。故完整重訓比較只能用「截斷於回測起始日前一日」的設定，`None` 型無法做乾淨對照。
+   - ※ 單窗 30 筆交易、噪音大，反向結論（舊模型較優）同樣不成立，要動模型時效性須先跑多窗驗證。
 
 ---
 

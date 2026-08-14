@@ -205,10 +205,24 @@ OPTIMIZATION_TRIALS   = 600         # Optuna 最佳化最大輪數
 EARLY_STOPPING_ROUNDS = 200         # Optuna Early Stopping 輪數（None = 不提早結束）
 BACKTEST_DATE         = "20250801"  # 訓練／測試切分分界點（OOS 評估起點）
                                     # 設為 None → 模式 B（滾動重訓，用於實盤生產）
+TRAIN_SPLIT_RATIO     = 0.70        # train.py 日期分位切分：訓練集結束分位
+VALID_SPLIT_RATIO     = 0.80        # 驗證集（early stopping 用）結束分位；其後為測試集，僅評估不參與訓練
+                                    # 註：BACKTEST_DATE 只決定「資料截斷點」，真正 fit 的訓練集終點由
+                                    #     TRAIN_SPLIT_RATIO 決定。要讓模型吃到接近截斷點的近期資料，
+                                    #     必須同時調高這兩個比例（例如 0.95 / 0.98）。
 
 FEAT_N_JOBS   = -1   # 特徵工程平行核心數（-1 = 最大）
 TRAIN_N_JOBS  = -1   # LightGBM 訓練核心數
 OPTUNA_N_JOBS = 6    # Optuna 並行搜尋線程數
+
+# best_factors.json 的技術指標參數是否實際套用到 feature_engineering 的 TA 計算。
+# 2026-08-14 修復前，這些參數在多核心路徑下被子行程忽略（只有 CHIPS_SUM_WINDOWS 生效），
+# 詳見 tests/FACTOR_OBJECTIVE_PLAN.md §1。修復後參數已能正確送達子行程。
+#
+# 預設 False 是刻意的：實測啟用後單窗回測雙輸現行（見 FACTOR_OBJECTIVE_PLAN.md §10），
+# 推測因這些因子是以「Top-K 命中率」為目標搜出的，與本策略靠肥尾獲利的本質不同調。
+# 在多窗把關（Step 0）通過前維持 False，行為與修復前一致；屆時再由把關結果決定是否改 True。
+APPLY_BEST_FACTORS_TA = False
 
 
 # ── 5. 雲端備份設定 ───────────────────────────────────────────────
@@ -243,7 +257,9 @@ DEFAULT_DECAY_LAMBDA = 0.0            # 預設衰減係數（0 = 不衰減；0.0
 DECAY_LAMBDA_GRID    = [0.0, 0.001, 0.002, 0.003, 0.005]  # optimize_factors.py 搜尋網格
 
 # IC 反轉因子排除：填入欄位名稱後下次訓練生效；實驗確認效果前保持空列表
-EXCLUDE_FEATURES = []
+# atr_pct 是給風控引擎（trading_sim / inference）查停損用的期間無關別名，
+# 內容與 atr<N>_pct 完全相同。若放進訓練特徵會產生完全共線的重複欄，故排除。
+EXCLUDE_FEATURES = ["atr_pct"]
 
 # 動能特徵週期：同時計算 ret{w}（多週期報酬率）與 RS_{w}d（相對大盤強弱）
 # 修改後需重跑 auto_pipeline.py -s f 重建 parquet，再重新訓練

@@ -22,6 +22,7 @@ import datetime
 import glob
 import os
 import warnings
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -43,7 +44,7 @@ try:
     from config import (
         LABEL_STRONG_QUANTILE, LABEL_WEAK_QUANTILE,
         LABEL_STRONG_MIN_RET, LABEL_WEAK_MAX_RET,
-        MOMENTUM_WINDOWS,
+        MOMENTUM_WINDOWS, APPLY_BEST_FACTORS_TA,
     )
 except ImportError:
     LABEL_STRONG_QUANTILE = 0.80   # 強勢股 (label=2) 横截面百分位排名門櫛 (前 20%)
@@ -51,6 +52,7 @@ except ImportError:
     LABEL_STRONG_MIN_RET  = 0.00   # 強勢股絕對報酬率必須 > 此值 (空頭崩盤防線)
     LABEL_WEAK_MAX_RET    = -0.02  # 絕對跌幅超過此值強制歸類弱勢 (大跌個股防線)
     MOMENTUM_WINDOWS      = [3, 10, 20]
+    APPLY_BEST_FACTORS_TA = True
 
 # ══════════════════════════════════════════════════════
 # 可由外部覆寫的全域參數 (預設值)
@@ -87,6 +89,42 @@ N_JOBS              = -1
 
 # 滾動 Beta 計算窗口（交易日）
 BETA_WINDOW         = 60
+
+
+# ══════════════════════════════════════════════════════
+# 因子參數的顯式傳遞
+# ══════════════════════════════════════════════════════
+# _compute_ta 在 joblib 子行程中執行，子行程會重新 import 本模組，
+# 因此看不到 auto_pipeline._apply_best_params() 在父行程做的 setattr。
+# 若讓 _compute_ta 直接讀模組全域，best_factors.json 的技術指標參數會被靜默忽略
+# （2026-08-14 修復前的實況，詳見 tests/FACTOR_OBJECTIVE_PLAN.md §1）。
+# 解法：在父行程用 current_factor_params() 快照，再顯式傳給每個 worker。
+
+# 由 best_factors.json 控制、且會影響 TA 欄位名稱與數值的參數
+_TA_OVERRIDABLE_KEYS = (
+    "MA_WINDOWS", "RSI_PERIOD", "ATR_PERIOD", "KD_PERIOD",
+    "MACD_FAST", "MACD_SLOW", "MACD_SIGNAL",
+    "BOLL_WINDOW", "BOLL_STD_MULT", "VOL_MA_WINDOW",
+)
+# 由 config 提供、不受 best_factors 覆寫，但同樣需隨參數包傳入子行程
+_TA_FIXED_KEYS = ("MOMENTUM_WINDOWS", "FORECAST_DAYS")
+
+# 模組載入當下的預設值快照（早於任何 setattr），供 APPLY_BEST_FACTORS_TA=False 還原
+_TA_DEFAULTS = {k: globals()[k] for k in _TA_OVERRIDABLE_KEYS}
+
+
+def current_factor_params() -> dict:
+    """快照目前生效的技術指標參數。
+
+    必須在父行程呼叫，並把回傳值顯式傳給 _compute_ta；
+    直接依賴模組全域會在多核心路徑下失效。
+    APPLY_BEST_FACTORS_TA=False 時，可覆寫的部分退回模組預設值。
+    """
+    g = globals()
+    src = _TA_DEFAULTS if not APPLY_BEST_FACTORS_TA else g
+    p = {k: src[k] for k in _TA_OVERRIDABLE_KEYS}
+    p.update({k: g[k] for k in _TA_FIXED_KEYS})
+    return p
 
 
 
@@ -135,52 +173,75 @@ def _add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
 # ══════════════════════════════════════════════════════
 # A. 技術面特徵
 # ══════════════════════════════════════════════════════
-def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
+def _compute_ta(g: pd.DataFrame, p: dict = None) -> pd.DataFrame:
+    """計算技術面特徵。
+
+    p: 由 current_factor_params() 產生的參數包。在多核心路徑下**必須顯式傳入**，
+       省略時退回讀模組全域（僅適用於同行程呼叫）。
+    """
+    if p is None:
+        p = current_factor_params()
+    ma_windows  = p["MA_WINDOWS"]
+    rsi_period  = p["RSI_PERIOD"]
+    atr_period  = p["ATR_PERIOD"]
+    kd_period   = p["KD_PERIOD"]
+    macd_fast   = p["MACD_FAST"]
+    macd_slow   = p["MACD_SLOW"]
+    macd_signal = p["MACD_SIGNAL"]
+    boll_window = p["BOLL_WINDOW"]
+    boll_std    = p["BOLL_STD_MULT"]
+    vol_ma      = p["VOL_MA_WINDOW"]
+    momentum_windows = p["MOMENTUM_WINDOWS"]
+    forecast_days    = p["FORECAST_DAYS"]
+
     c, h, l, v, o = g["close"], g["high"], g["low"], g["volume"], g["open"]
 
     # 均線與乖離率 (由外部參數 MA_WINDOWS 控制)
-    for w in MA_WINDOWS:
+    for w in ma_windows:
         g[f"ma{w}"] = c.rolling(w, min_periods=1).mean()
         g[f"bias{w}"] = (c - g[f"ma{w}"]) / (g[f"ma{w}"] + 1e-9)  # 乖離率 (Bias Ratio)
-    if len(MA_WINDOWS) >= 2:
-        short, long_ = MA_WINDOWS[0], MA_WINDOWS[-1]
+    if len(ma_windows) >= 2:
+        short, long_ = ma_windows[0], ma_windows[-1]
         g["ma_short_over_long"] = g[f"ma{short}"] / (g[f"ma{long_}"] + 1e-9)
 
     # 布林通道
-    std_boll = c.rolling(BOLL_WINDOW, min_periods=5).std()
-    g["boll_mid"] = c.rolling(BOLL_WINDOW, min_periods=1).mean()
-    g["boll_up"]  = g["boll_mid"] + BOLL_STD_MULT * std_boll
-    g["boll_dn"]  = g["boll_mid"] - BOLL_STD_MULT * std_boll
+    std_boll = c.rolling(boll_window, min_periods=5).std()
+    g["boll_mid"] = c.rolling(boll_window, min_periods=1).mean()
+    g["boll_up"]  = g["boll_mid"] + boll_std * std_boll
+    g["boll_dn"]  = g["boll_mid"] - boll_std * std_boll
     g["boll_pct"] = (c - g["boll_dn"]) / (g["boll_up"] - g["boll_dn"] + 1e-9)
 
     # RSI
     delta = c.diff()
-    gain  = delta.clip(lower=0).rolling(RSI_PERIOD, min_periods=1).mean()
-    loss  = (-delta.clip(upper=0)).rolling(RSI_PERIOD, min_periods=1).mean()
-    g[f"rsi{RSI_PERIOD}"] = 100 - 100 / (1 + gain / (loss + 1e-9))
+    gain  = delta.clip(lower=0).rolling(rsi_period, min_periods=1).mean()
+    loss  = (-delta.clip(upper=0)).rolling(rsi_period, min_periods=1).mean()
+    g[f"rsi{rsi_period}"] = 100 - 100 / (1 + gain / (loss + 1e-9))
 
     # MACD
-    ema_fast = c.ewm(span=MACD_FAST, adjust=False).mean()
-    ema_slow = c.ewm(span=MACD_SLOW, adjust=False).mean()
+    ema_fast = c.ewm(span=macd_fast, adjust=False).mean()
+    ema_slow = c.ewm(span=macd_slow, adjust=False).mean()
     g["macd"]      = ema_fast - ema_slow
-    g["macd_sig"]  = g["macd"].ewm(span=MACD_SIGNAL, adjust=False).mean()
+    g["macd_sig"]  = g["macd"].ewm(span=macd_signal, adjust=False).mean()
     g["macd_hist"] = g["macd"] - g["macd_sig"]
 
     # KD 隨機指標
-    low_n  = l.rolling(KD_PERIOD, min_periods=1).min()
-    high_n = h.rolling(KD_PERIOD, min_periods=1).max()
+    low_n  = l.rolling(kd_period, min_periods=1).min()
+    high_n = h.rolling(kd_period, min_periods=1).max()
     rsv = (c - low_n) / (high_n - low_n + 1e-9) * 100
-    g[f"k{KD_PERIOD}"] = rsv.ewm(com=2, adjust=False).mean()
-    g[f"d{KD_PERIOD}"] = g[f"k{KD_PERIOD}"].ewm(com=2, adjust=False).mean()
+    g[f"k{kd_period}"] = rsv.ewm(com=2, adjust=False).mean()
+    g[f"d{kd_period}"] = g[f"k{kd_period}"].ewm(com=2, adjust=False).mean()
 
     # ATR (真實波幅)
     tr = pd.concat([h - l, (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1).max(axis=1)
-    g[f"atr{ATR_PERIOD}"]     = tr.rolling(ATR_PERIOD, min_periods=1).mean()
-    g[f"atr{ATR_PERIOD}_pct"] = g[f"atr{ATR_PERIOD}"] / (c + 1e-9)
+    g[f"atr{atr_period}"]     = tr.rolling(atr_period, min_periods=1).mean()
+    g[f"atr{atr_period}_pct"] = g[f"atr{atr_period}"] / (c + 1e-9)
+    # 期間無關的正規別名：風控引擎（trading_sim / inference）一律讀這欄，
+    # 避免 ATR_PERIOD 一變動就找不到 atr18_pct 而讓 ATR 停損靜默失效。
+    g["atr_pct"] = g[f"atr{atr_period}_pct"]
 
     # 成交量
-    g[f"vol_ma{VOL_MA_WINDOW}"]    = v.rolling(VOL_MA_WINDOW, min_periods=1).mean()
-    g[f"vol_ratio{VOL_MA_WINDOW}"] = v / (g[f"vol_ma{VOL_MA_WINDOW}"] + 1)
+    g[f"vol_ma{vol_ma}"]    = v.rolling(vol_ma, min_periods=1).mean()
+    g[f"vol_ratio{vol_ma}"] = v / (g[f"vol_ma{vol_ma}"] + 1)
 
     # 報酬率
     g["ret1"]      = c.pct_change(1)
@@ -188,7 +249,7 @@ def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
     g["amplitude"] = (h - l) / (o + 1e-9)
 
     # 多週期動能特徵
-    for w in MOMENTUM_WINDOWS:
+    for w in momentum_windows:
         g[f"ret{w}"] = c.pct_change(w)
     g["up_days_5"] = (c.diff() > 0).astype(int).rolling(5, min_periods=1).sum()
 
@@ -205,7 +266,7 @@ def _compute_ta(g: pd.DataFrame) -> pd.DataFrame:
         g[f"close_z{w}"] = (c - _zmean) / (_zstd + 1e-9)
 
     # 標籤 (預測未來 N 天收益率)
-    for d in FORECAST_DAYS:
+    for d in forecast_days:
         g[f"next_ret_{d}"] = c.shift(-d) / c - 1
 
     return g
@@ -580,8 +641,15 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
         return pd.concat(res, ignore_index=True)
 
     # Step 2: 技術面 (A) + 法人籌碼衍生特徵 (B)
+    # 因子參數必須在父行程快照後顯式傳入，子行程讀不到 setattr 的模組全域
+    _p = current_factor_params()
     print("  計算技術面特徵 (含乖離率)... (多核心運算中)")
-    df = apply_parallel(df.groupby("stock_id"), _compute_ta)
+    print(f"  [生效因子] MA={_p['MA_WINDOWS']} RSI={_p['RSI_PERIOD']} ATR={_p['ATR_PERIOD']} "
+          f"KD={_p['KD_PERIOD']} MACD={_p['MACD_FAST']}/{_p['MACD_SLOW']}/{_p['MACD_SIGNAL']} "
+          f"Boll={_p['BOLL_WINDOW']}/{_p['BOLL_STD_MULT']} VolMA={_p['VOL_MA_WINDOW']} "
+          f"Chips={CHIPS_SUM_WINDOWS}"
+          + ("" if APPLY_BEST_FACTORS_TA else "  [APPLY_BEST_FACTORS_TA=False → TA 用預設值]"))
+    df = apply_parallel(df.groupby("stock_id"), partial(_compute_ta, p=_p))
     df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
     
     print("  計算相對大盤強弱指標 (Cross-Sectional RS) 與總體市場/板塊特徵 (方案 B)...")

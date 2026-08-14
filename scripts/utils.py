@@ -213,6 +213,19 @@ def filter_stocks_by_train_industries(df, target_col="stock_id") -> "pd.DataFram
     return df
 
 
+def get_atr_pct_col(df) -> str:
+    """回傳 ATR 百分比欄名，找不到時回傳 None。
+
+    ATR 欄名帶週期（atr18_pct / atr23_pct…），會隨 best_factors.json 的 ATR_PERIOD 變動。
+    2026-08-14 起 feature_engineering 會額外產生期間無關的正規別名 atr_pct，
+    此處優先取用；舊特徵檔沒有該欄時，退回既有的 atr<N>_pct，維持向後相容。
+    """
+    if "atr_pct" in df.columns:
+        return "atr_pct"
+    legacy = sorted(c for c in df.columns if c.startswith("atr") and c.endswith("_pct"))
+    return legacy[0] if legacy else None
+
+
 def get_regime_label(trend_val: float, bull_trend: float, bear_trend: float) -> str:
     """根據大盤滾動均值區分市況 (Bull / Bear / Sideways)"""
     import pandas as pd

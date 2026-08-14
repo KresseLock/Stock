@@ -57,7 +57,7 @@ except ImportError:
 
 def compute_stop_pct(atr_pct) -> float:
     """個股停損趴數，與 trading_sim.py 同一套 ATR 邏輯。
-    ATR 有效時：-ATR_STOP_MULTIPLIER × atr18_pct × 100，夾 [floor, ceiling]；
+    ATR 有效時：-ATR_STOP_MULTIPLIER × atr_pct × 100，夾 [floor, ceiling]；
     否則退回固定 STOP_LOSS_PCT。"""
     if ATR_STOP_ENABLED and atr_pct is not None and not pd.isna(atr_pct) and float(atr_pct) > 0:
         raw = -ATR_STOP_MULTIPLIER * float(atr_pct) * 100
@@ -110,10 +110,17 @@ def main(target_date_str=None):
         return
 
     df = pd.read_parquet(DATA_PATH)
-    
+
     # 確保 date 欄位為 Timestamp 類型以利時間比對與計算
     df["date"] = pd.to_datetime(df["date"])
-    
+
+    # ATR 停損來源欄名（atr_pct 正規別名，舊特徵檔退回 atr<N>_pct）
+    try:
+        from scripts.utils import get_atr_pct_col
+    except ImportError:
+        from utils import get_atr_pct_col
+    _atr_col = get_atr_pct_col(df)
+
     # ── 根據 config.py 中的 TRAIN_INDUSTRIES 過濾股票 ──────────────────
     try:
         from scripts.utils import filter_stocks_by_train_industries
@@ -277,7 +284,8 @@ def main(target_date_str=None):
     results_market = df_latest_market[["stock_id"]].copy()
     results_market["close"] = df_latest_market["close"].values if "close" in df_latest_market.columns else 0.0
     # 帶入 ATR 百分比供動態停損判定（與 trading_sim.py 同一套邏輯）
-    results_market["atr18_pct"] = df_latest_market["atr18_pct"].values if "atr18_pct" in df_latest_market.columns else np.nan
+    results_market["atr_pct"] = (df_latest_market[_atr_col].values
+                                 if (_atr_col and _atr_col in df_latest_market.columns) else np.nan)
 
     for days in [1, 2, 3]:
         model_path = os.path.join(MODEL_DIR, f"lgbm_model_{days}.txt")
@@ -489,8 +497,8 @@ def main(target_date_str=None):
         # （重算＝成本×(1+手續費)×(1+訊號日 ATR 停損%)，與 trading_sim 鎖定邏輯一致；需填買入日）
         if stored_stop and stored_stop > 0 and cost and cost > 0 and buy_ts_aligned is not None:
             _sig_hist = df[(df["stock_id"] == sid) & (df["date"] < buy_ts_aligned)]
-            if not _sig_hist.empty and "atr18_pct" in _sig_hist.columns:
-                _lock_pct = compute_stop_pct(_sig_hist.sort_values("date").iloc[-1]["atr18_pct"])
+            if not _sig_hist.empty and _atr_col and _atr_col in _sig_hist.columns:
+                _lock_pct = compute_stop_pct(_sig_hist.sort_values("date").iloc[-1][_atr_col])
                 _lock_stop = round_to_tick(cost * (1 + FEE_RATE) * (1 + _lock_pct / 100.0))
                 if _lock_stop > 0 and stored_stop < _lock_stop:
                     stop_corrections.append(
@@ -502,9 +510,9 @@ def main(target_date_str=None):
             if close_p <= stored_stop:
                 reasons.append(f"停損(收 {close_p:.2f} <= 鎖定 {stored_stop:.2f})")
         elif cost and cost > 0:
-            # 退回：未記錄停損價時，以當日 atr18_pct 近似（snapshot 無買入日 ATR），
+            # 退回：未記錄停損價時，以當日 ATR 近似（snapshot 無買入日 ATR），
             # 夾 floor/ceiling，與 trading_sim.py 計算一致；ATR 無效時退回固定 STOP_LOSS_PCT。
-            _stop_pct = compute_stop_pct(row.get("atr18_pct"))
+            _stop_pct = compute_stop_pct(row.get("atr_pct"))
             if pnl_pct <= _stop_pct:
                 reasons.append(f"停損({pnl_pct:.1f}% <= {_stop_pct:.1f}%)")
         if reasons:
@@ -593,7 +601,7 @@ def main(target_date_str=None):
 
             # 買入日鎖定的 ATR 停損價：以掛單價為成本基準 × (1+手續費) × (1+停損%)，對齊 Tick。
             # 成交後請把此價填入 Stocks.txt 第 4 欄（代號,成本,股數,停損價）。
-            _stop_pct = compute_stop_pct(getattr(row, "atr18_pct", None))
+            _stop_pct = compute_stop_pct(getattr(row, "atr_pct", None))
             stop_price = round_to_tick(target_price * (1 + FEE_RATE) * (1 + _stop_pct / 100.0))
 
             tag = "[優先買進]" if (available_slots > 0 and idx <= available_slots) else "[觀察遞補]"
