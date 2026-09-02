@@ -1,7 +1,57 @@
 import os
+import sys
+import datetime
 
 # 統一將 BASE_DIR 設定為專案根目錄 (即 scripts/ 的上一層)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+class _Tee:
+    """把 stdout 同時寫到主控台與 log 檔（每次寫入即時 flush）。見 start_tee_log()。"""
+
+    def __init__(self, stream, fh):
+        self._s, self._f = stream, fh
+
+    def write(self, data):
+        # 主控台寫入包 try/except：Windows 主控台是 cp950，若輸出含編不出來的字元
+        # （emoji 等），不該讓跑了一小時的長流程在最後一行崩掉——主控台印不出來就算了，
+        # log 檔（utf-8）仍要完整。
+        try:
+            self._s.write(data)
+            self._s.flush()
+        except Exception:
+            pass
+        self._f.write(data)
+        self._f.flush()
+        return len(data)
+
+    def flush(self):
+        try:
+            self._s.flush()
+        except Exception:
+            pass
+        self._f.flush()
+
+    def isatty(self):
+        return getattr(self._s, "isatty", lambda: False)()
+
+
+def start_tee_log(script_name: str) -> str:
+    """把 sys.stdout 換成 tee，全程同時寫主控台與 reports/<script_name>_<時間戳>.log。
+
+    回傳 log 的絕對路徑（呼叫端通常會把相對路徑印在標頭）。
+
+    為何內建而不是叫使用者自己 `> file` 或 `| Tee-Object`：長流程（風控優化一輪 1~2 小時）
+      * 用 `> file` 重導向 → 主控台整段空白，只能另開視窗 tail，還要記得 -u 否則塊緩衝到結束才吐；
+      * 不重導向 → 看得到進度，但視窗一關結果就沒了（2026-08-28 就這樣丟掉整輪驗證數字）。
+    兩者都不該讓使用者用旗標去湊。log 一律 utf-8，事後讀取不必再指定 cp950/BIG5。
+    時間戳檔名使歷次執行不互相覆蓋。
+    """
+    log_dir = os.path.join(BASE_DIR, "reports")
+    os.makedirs(log_dir, exist_ok=True)
+    path = os.path.join(log_dir, f"{script_name}_{datetime.datetime.now():%Y%m%d_%H%M%S}.log")
+    sys.stdout = _Tee(sys.stdout, open(path, "w", encoding="utf-8"))
+    return path
 
 def parse_stocks_file(file_path: str = "Stocks.txt") -> dict:
     """

@@ -379,7 +379,11 @@ def main():
     print(f"  搜尋參數個數: {len(BOUNDS)} 個連續參數")
     print()
 
-    parquet_path = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
+    try:
+        from config import FEATURES_PARQUET as parquet_path   # 唯一來源：config.py § 0
+    except ImportError:
+        # ↓ fallback 必須與 config.py § 0 一致
+        parquet_path = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
     if not os.path.exists(parquet_path):
         print("[錯誤] 找不到特徵檔，請先執行特徵工程計算。")
         return

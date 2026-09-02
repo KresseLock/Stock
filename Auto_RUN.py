@@ -21,7 +21,8 @@ import argparse
 import atexit
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOCK_PATH = os.path.join(BASE_DIR, "data", "auto_run.lock")
+from config import DATA_DIR   # 唯一來源：config.py § 0
+LOCK_PATH = os.path.join(DATA_DIR, "auto_run.lock")
 LOCK_STALE_SECONDS = 6 * 3600  # 逾此時間視為前次崩潰殘留的死鎖，可安全接管
 
 

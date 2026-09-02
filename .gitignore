@@ -36,6 +36,8 @@ models/*
 
 # 3. 系統日誌、暫存與環境變數
 *.log
+# 執行期日誌目錄整個排除（只靠 *.log 擋不住 logs/xxx.txt 這類產出）
+logs/
 temp/
 .tmp/
 .DS_Store
@@ -43,6 +45,13 @@ Thumbs.db
 .env
 .envrc
 *.bak
+# 帶後綴的備份檔：validate_candidate_params.py 等腳本產出的
+# configs/best_trading_params.json.bak_validate_YYYYMMDD_HHMMSS、
+# *.backup_pre_regime.json 之類，屬執行期快照，不進版控
+*.bak_*
+*.backup_*
+# scraper 單一實例鎖 (scraper_twse.lock / scraper_finmind.lock)，執行期產物
+*.lock
 predictions/
 sample_data/
 reports/
@@ -179,6 +188,8 @@ venv.bak/
 .ropeproject
 .idea/
 .vscode/
+# 個人 IDE 工作區設定，不屬專案共用
+*.code-workspace
 tempCodeRunnerFile.py
 
 # Static Analysis / Type Checkers
@@ -201,7 +212,11 @@ __marimo__/
 .streamlit/secrets.toml
 /site
 .agents/
-.claude/
+# .claude/ 內容不進版控，但保留 AI 導航指南 CLAUDE.md
+# ⚠️ 須寫成 .claude/* 而非 .claude/：父目錄被整個排除時，
+#    內層檔案的 ! 重新包含規則不會生效
+.claude/*
+!.claude/CLAUDE.md
 
 # 密鑰檔案 (防外洩)
 FINMIND_TOKEN.txt

@@ -23,7 +23,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
+# 資料路徑唯一來源：config.py § 0
+try:
+    from config import FEATURES_PARQUET as DATA_PATH, RAW_PRICE_DIR
+except ImportError:
+    # ↓ fallback 必須與 config.py § 0 一致（見該節說明）
+    DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
+    RAW_PRICE_DIR = os.path.join(BASE_DIR, "data", "raw_price")
 
 # ── 載入中央控制面板 config ──────────────────────────────────
 try:
@@ -55,7 +61,7 @@ def load_watchlist_detailed() -> dict:
 
 
 def get_stock_name(sid, date_str):
-    price_file = os.path.join(BASE_DIR, "data", "raw_price", f"{date_str}_price.csv")
+    price_file = os.path.join(RAW_PRICE_DIR, f"{date_str}_price.csv")
     if os.path.exists(price_file):
         try:
             df_price = pd.read_csv(price_file, usecols=["證券代號", "證券名稱"], dtype=str)
@@ -278,7 +284,7 @@ def run_backtest(backtest_date_str):
         if not df_watch.empty:
             stock_names = {}
             date_str = backtest_date.strftime("%Y%m%d")
-            price_file = os.path.join(BASE_DIR, "data", "raw_price", f"{date_str}_price.csv")
+            price_file = os.path.join(RAW_PRICE_DIR, f"{date_str}_price.csv")
             if os.path.exists(price_file):
                 try:
                     df_p = pd.read_csv(price_file, usecols=["證券代號", "證券名稱"], dtype=str)
@@ -353,7 +359,7 @@ def run_backtest(backtest_date_str):
         top5_market = df_eval.sort_values(["pred_1"], ascending=False).head(5)
         stock_names = {}
         date_str = backtest_date.strftime("%Y%m%d")
-        price_file = os.path.join(BASE_DIR, "data", "raw_price", f"{date_str}_price.csv")
+        price_file = os.path.join(RAW_PRICE_DIR, f"{date_str}_price.csv")
         if os.path.exists(price_file):
             try:
                 df_p = pd.read_csv(price_file, usecols=["證券代號", "證券名稱"], dtype=str)

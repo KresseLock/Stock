@@ -31,8 +31,19 @@ from joblib import Parallel, delayed
 warnings.filterwarnings("ignore")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "..", "data")
-FEAT_DIR = os.path.join(DATA_DIR, "features")
+PARENT_DIR = os.path.dirname(BASE_DIR)
+
+# 資料路徑唯一來源：config.py § 0
+try:
+    import sys as _sys
+    if PARENT_DIR not in _sys.path:
+        _sys.path.insert(0, PARENT_DIR)
+    from config import DATA_DIR, FEATURES_DIR as FEAT_DIR, FEATURES_PARQUET
+except ImportError:
+    # ↓ fallback 必須與 config.py § 0 一致
+    DATA_DIR = os.path.normpath(os.path.join(PARENT_DIR, "data"))
+    FEAT_DIR = os.path.join(DATA_DIR, "features")
+    FEATURES_PARQUET = os.path.join(FEAT_DIR, "features_combined.parquet")
 os.makedirs(FEAT_DIR, exist_ok=True)
 
 # ── 載入中央控制面板標籤設計參數 ──────────────────────────
@@ -898,7 +909,7 @@ if __name__ == "__main__":
         try:
             import lightgbm as lgb
             bt_date = pd.to_datetime(args.backtest, format="%Y%m%d")
-            parquet_path = os.path.join(PARENT_DIR, "data", "features", "features_combined.parquet")
+            parquet_path = FEATURES_PARQUET   # 唯一來源：config.py § 0
             if not os.path.exists(parquet_path):
                 print("[錯誤] 找不到特徵 Parquet 檔案，無法執行回測")
             else:

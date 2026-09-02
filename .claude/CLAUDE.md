@@ -12,7 +12,7 @@
 
 | 腳本 | 功能摘要 |
 |------|---------|
-| `scripts/scraper.py` | 增量下載 TWSE/TAIFEX/FinMind。`-p <sid>` 補財報、`-fc` 更新產業表、`-c` 檢查清理 |
+| `scripts/scraper.py` | 增量下載 TWSE/TAIFEX/FinMind。`-s twse/finmind` 只跑單一來源（分鎖，可並行）、`-p <sid>` 補財報、`-fc` 更新產業表、`-c` 檢查清理。FinMind 母體由 `FINMIND_FETCH_MODE` 決定（`listed` 由 `data/raw_price` 全歷史推導，快取於 `data/universe_cache.json`） |
 | `scripts/feature_engineering.py` | 技術指標＋板塊情緒（方案B）＋混合標籤（方案C），輸出 `features_combined.parquet` |
 | `scripts/optimize_factors.py` | Optuna TPE 尋最佳技術指標參數 → `configs/best_factors.json` |
 | `scripts/train.py` | 訓練 LightGBM，大跌樣本加權懲罰，輸出 `models/feature_cols.json` |
@@ -43,6 +43,7 @@
 
 ## 4. AI 作業規範
 1. **常數集中**：任何常數必須宣告在 `config.py`，嚴禁在腳本中寫死。
+   **資料路徑同理**：一律取自 `config.py` § 0（`DATA_DIR` / `RAW_*_DIR` / `FEATURES_PARQUET`），嚴禁自行拼接 `data` 目錄——大小寫不同的拼法（`data` vs `Data`）在 Windows 上會恰好指向同一處而看不出問題，移植到 Linux/macOS 才會分裂成兩個資料目錄，症狀是「明明抓過卻又整批重抓」。少數腳本（`scraper.py`、`trading_sim.py`、`inference.py` 等）在 `except ImportError` 內留有等價 fallback 以支援脫離 config 獨立執行，**改 § 0 的目錄名稱時必須同步這些 fallback**。
 2. **動態特徵命名**：新增技術指標需同步 `optimize_factors.py`，確保欄位名稱動態可讀。
 3. **文件連結**：說明文件中只能用相對路徑（如 `[config.py](config.py)`），禁用 `file:///` 絕對路徑。
 4. **Checkpoint 故障排查**：`mode_b={}` 代表模式B未執行；`sim=0.0` 代表解析錯誤（會自動重跑）。
@@ -72,6 +73,11 @@
    - **範圍限制**：該實驗只重跑 `train.py`，`best_factors.json`（2026-06-21、`backtest_date=20250801`）與 `best_trading_params.json` 固定、特徵檔共用，屬單一變因設計。**「完整重跑 optimize→feature→train 是否有用」尚未檢驗**，不可據此推論。
    - **補測時的硬限制**：`optimize_factors.py` 的防洩漏保護看 `config.BACKTEST_DATE`，設 `None` 時**不截斷**，會把回測區間納入因子搜尋（lookahead）。故完整重訓比較只能用「截斷於回測起始日前一日」的設定，`None` 型無法做乾淨對照。
    - ※ 單窗 30 筆交易、噪音大，反向結論（舊模型較優）同樣不成立，要動模型時效性須先跑多窗驗證。
+7. **「降級砍倉／閃現部位提前出清」已二度否決，程式碼已刪除，勿再實作**：構想是「regime 由 Bull 降級且持倉超過 `REGIME_MAX_POSITIONS` 時，出清買後 ≤N 個交易日的 Bull 進場部位（LIFO、開盤價、不受 `MIN_HOLD_DAYS` 限制）」。**第一次否決**（`scripts/EXPERIMENTS_PENDING.md`）：全面砍倉版本 −53.8 萬、誤殺 20 筆贏家。**第二次否決**（2026-08-26）：改成只砍「閃現部位」的收斂版本，`DOWNGRADE_FLASH_TRIM=12` 曾短暫進入 `config.py`（未 commit），現已從 `config.py`／`trading_sim.py`／`scripts/inference.py` 完整移除。
+   - **判死數字**：終點固定 2026-08-25、六個起點的多起點掃描，trim=12 對比停用的報酬差為 `+75 / +31 / +22 / −72 / −48 / +21` pp（起點 2025-08-02、10-01、12-01、2026-01-01、02-02、04-01）。**報酬期望值≈+5pp、變異達 ±70pp**；回撤雖 6/6 起點改善約 5pp，Calmar 僅 4/6 改善。
+   - **為何必然失敗（機制層面，這才是重點）**：該規則觸發 16 次中有 **13 次砍的是獲利部位**，而 §4.5 #1 已確立本策略獲利完全來自出場端吃肥尾。它砍的正是「短期暴漲」的部位——那恰恰是肥尾贏家的早期特徵。一旦砍到就是數十 pp 的損失，這不是可調參數能修好的，是**規則定義與獲利來源直接對立**。
+   - **當初為何誤判為「有效」**：取值依據只看單一全窗（2025-08-02~2026-08-25）的雙贏，而該窗的優勢**全部由 2025 下半年 5 個月產生並被複利放大**（前段抬高期末資金再吃後段），2026 那 8 個月其實大幅為負。呼應 #4 判準：**單看全窗改善不算數**。且掃描曲線根本不單調（trim=3 反而大輸 trim=0 達 38pp），當時卻被描述成「單調遞增後轉平的高原」——16 個觸發樣本撐不起任何「高原」結論。
+   - **教訓（可推廣）**：(a) 任何新出場規則都必須先問「它會不會砍到肥尾贏家」，若觸發樣本多數為獲利部位就該直接懷疑；(b) 參數掃描必須看**多起點**而非單一窗，且非單調曲線＝雜訊擬合，不可解釋成高原；(c) 提防與 `REGIME_MAX_POSITIONS` 的隱性耦合——當 Sideways 上限等於 `MAX_POSITIONS` 時該規則實質只在 Bear 生效，換一組風控參數它的作用面就完全改變，這種「參數依賴的觸發率」本身就使結論不可移植。
 
 ---
 

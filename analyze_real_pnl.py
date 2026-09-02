@@ -49,7 +49,7 @@ def parse_stock_info(info_str):
 
 def get_latest_prices():
     """從 data/raw_price/ 中讀取最新一天的股票收盤價"""
-    price_dir = os.path.join(BASE_DIR, "data", "raw_price")
+    from config import RAW_PRICE_DIR as price_dir   # 唯一來源：config.py § 0
     csv_files = sorted(glob.glob(os.path.join(price_dir, "*_price.csv")))
     if not csv_files:
         return {}, "無資料"

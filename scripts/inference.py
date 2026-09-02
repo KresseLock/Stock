@@ -19,7 +19,12 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
+# 資料路徑唯一來源：config.py § 0
+try:
+    from config import FEATURES_PARQUET as DATA_PATH
+except ImportError:
+    # ↓ fallback 必須與 config.py § 0 一致（見該節說明）
+    DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 
 # ── 載入中央控制面板 config ──────────────────────────────────

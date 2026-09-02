@@ -1,23 +1,23 @@
 {
   "2315": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
+    "status": "pending",
+    "first_seen": "2026-09-01"
   },
   "2336": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
+    "status": "pending",
+    "first_seen": "2026-09-01"
   },
   "2341": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
+    "status": "pending",
+    "first_seen": "2026-09-01"
   },
   "2350": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
+    "status": "pending",
+    "first_seen": "2026-09-01"
   },
   "2361": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
+    "status": "pending",
+    "first_seen": "2026-09-01"
   },
   "2381": {
     "status": "confirmed",
@@ -204,8 +204,8 @@
     "confirmed_date": "2026-06-03"
   },
   "1262": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
+    "status": "pending",
+    "first_seen": "2026-09-02"
   },
   "1311": {
     "status": "confirmed",
@@ -220,8 +220,8 @@
     "first_seen": "2026-06-03"
   },
   "1523": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
+    "status": "pending",
+    "first_seen": "2026-09-01"
   },
   "2391": {
     "status": "confirmed",

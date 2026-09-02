@@ -25,11 +25,13 @@ skip_dates.json 說明:
     "empty_response"    - API 有回應但資料為空
 """
 
+import csv
 import datetime
 import io
 import json
 import os
 import random
+import sys
 import time
 import warnings
 
@@ -66,8 +68,9 @@ class _SingleInstanceLock:
             self._fh.close()
             self._fh = None
             raise RuntimeError(
-                "偵測到另一個 scraper 實例正在執行 (lock 被佔用)。"
-                "請等待其結束，避免兩個實例互相覆寫 failed_dates.json。"
+                f"偵測到另一個 scraper 實例正在佔用 "
+                f"{os.path.basename(self.lock_path)}。"
+                "請等待其結束，避免兩個實例互相覆寫同一份狀態檔。"
             )
         return self
 
@@ -94,15 +97,70 @@ except Exception:
 # ── 建立所有資料夾 ──────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(BASE_DIR)
-DATA_DIR = os.path.join(BASE_DIR, "..", "data")
+# ★ 資料路徑的唯一來源是 config.py 的 § 0，這裡只負責把它取進來。
+#   任何新增的路徑都必須由下面這幾個常數組出來，不要在函式裡另外拼
+#   os.path.join(..., "data", ...) 或寫死資料夾名稱——一旦出現第二種拼法
+#   （尤其大小寫不同的 "Data"），在 Windows 上因為檔名大小寫不敏感會恰好
+#   指向同一處而看不出問題，搬到 Linux/macOS 就會分裂成兩個資料目錄，
+#   症狀是「明明抓過卻又重抓一遍」，而且沒有任何錯誤訊息。
+#
+# ★ fallback 的用途：本檔要能在沒有 config.py 的環境單獨執行（例如只把
+#   scripts/ 複製到另一台機器補資料）。因此下面重複了一份等價定義——
+#   **這是刻意的重複，修改 config.py § 0 的目錄名稱時務必同步這裡**，
+#   兩邊不一致正是上面那個「分裂成兩個目錄」的成因。
+try:
+    if PARENT_DIR not in sys.path:
+        sys.path.insert(0, PARENT_DIR)
+    from config import (
+        DATA_DIR,
+        RAW_PRICE_DIR, RAW_CHIPS_DIR, RAW_MARGIN_DIR, RAW_TWSE_PER_DIR,
+        RAW_TAIFEX_DIR, RAW_SHAREHOLDING_DIR, RAW_FINANCIAL_DIR,
+    )
+except ImportError:
+    # normpath 去掉 ".."：os.path.join(PARENT_DIR, "data") 已無 ".."，
+    # 但仍保留 normpath 以確保與 config.py 算出的字串完全一致。
+    DATA_DIR = os.path.normpath(os.path.join(PARENT_DIR, "data"))
+    RAW_PRICE_DIR        = os.path.join(DATA_DIR, "raw_price")
+    RAW_CHIPS_DIR        = os.path.join(DATA_DIR, "raw_chips")
+    RAW_MARGIN_DIR       = os.path.join(DATA_DIR, "raw_margin")
+    RAW_TWSE_PER_DIR     = os.path.join(DATA_DIR, "raw_twse_per")
+    RAW_TAIFEX_DIR       = os.path.join(DATA_DIR, "raw_taifex")
+    RAW_SHAREHOLDING_DIR = os.path.join(DATA_DIR, "raw_shareholding")
+    RAW_FINANCIAL_DIR    = os.path.join(DATA_DIR, "raw_financial")
 
-DIRS = [
-    "raw_price", "raw_chips", "raw_margin",
-    "raw_twse_per", "raw_taifex", "raw_shareholding",
-    "raw_financial",
+# 逐日資料所在的資料夾（check_data_integrity 掃描、幽靈日清理都用這一份）
+TWSE_DAILY_DIRS = [
+    RAW_PRICE_DIR, RAW_CHIPS_DIR, RAW_MARGIN_DIR,
+    RAW_TWSE_PER_DIR, RAW_TAIFEX_DIR,
 ]
-for folder in DIRS:
-    os.makedirs(os.path.join(DATA_DIR, folder), exist_ok=True)
+
+# ── 分來源鎖檔 ────────────────────────────────────────
+#
+# 為什麼不是一把鎖：TWSE 段（含 TDCC）與 FinMind 段寫入的狀態檔完全不重疊——
+#   TWSE 段    → failed_dates.json / skip_dates.json
+#   FinMind 段 → no_finmind_data.json / missing_fm_datasets.json
+# 兩段之間沒有共用可變狀態，因此可以安全地在兩個終端機並行執行。
+# 但同一段仍然只能有一個實例，否則會回到「互相覆寫狀態檔」的老問題。
+#
+# 規則：--source twse 取 twse 鎖、--source finmind 取 finmind 鎖、
+#       --source all（預設）兩把都取。因此 all 與任一單獨模式仍會互斥，
+#       不會出現「all 正在跑，另一個終端機又開一個 twse」的重複抓取。
+LOCK_FILES = {
+    "twse":    os.path.join(DATA_DIR, "scraper_twse.lock"),
+    "finmind": os.path.join(DATA_DIR, "scraper_finmind.lock"),
+}
+
+
+def _locks_for(source: str) -> list:
+    """回傳指定來源需要取得的鎖檔路徑清單。"""
+    if source == "all":
+        return [LOCK_FILES["twse"], LOCK_FILES["finmind"]]
+    return [LOCK_FILES[source]]
+
+
+DIRS = TWSE_DAILY_DIRS + [RAW_SHAREHOLDING_DIR, RAW_FINANCIAL_DIR]
+for _folder in DIRS:
+    os.makedirs(_folder, exist_ok=True)
 
 # ── 所有每日 dataset 名稱清單 (price 排第一，其餘為子資料) ──
 _ALL_DATASETS = [
@@ -124,12 +182,163 @@ def _load_etf_set() -> set:
         return set()
 
 
+# ── 抓取母體：由 data/raw_price 推導 (FINMIND_FETCH_MODE="listed") ──
+#
+# 為什麼需要第三種母體來源：
+#   limited/all 兩種模式都以 stock_categories.json 的產業對照為準，而該檔是 FinMind
+#   的全市場清單（含大量上櫃股與特別股）。實測 limited 模式的 1,258 檔目標中，有 723 檔
+#   在 TWSE 沒有價量資料或沒有獨立財報（上櫃股、3036A 這類特別股），生產流水線根本用不到，
+#   額度純浪費；同時漏掉 591 檔有價量的上市普通股（台泥 1101、亞泥 1102、統一 1216 等
+#   TRAIN_INDUSTRIES=False 的產業），它們的財報會停在最後一次抓取的版本。
+#
+# listed 模式改以「本系統自己抓下來的 data/raw_price」推導母體：凡是在 TWSE 掛牌交易過的
+# 上市普通股都在裡面，不依賴任何外部檔案或另一套系統的產出。
+#
+# ★ 掃全部歷史而不是只掃近期，是為了含入已下市標的（實測 51 檔）。
+#   只掃近期會讓母體只剩「活到今天」的公司，用這種母體補來的財報做回測就是倖存者偏誤，
+#   而且不會有任何錯誤訊息——數量看起來很正常，正是它危險的地方。
+_UNIVERSE_MIN_EXPECTED = 500   # 低於此數視為清單解析出錯，大聲警告（實測約 1,142 檔）
+_UNIVERSE_CACHE_PATH = os.path.join(DATA_DIR, "universe_cache.json")
+
+
+def _is_common_stock(sid: str) -> bool:
+    """上市普通股：4 位純數字且非 00 開頭。
+
+    順帶排除 00 開頭的 ETF/受益證券，以及 3036A/3702A/8112A 這類特別股 ——
+    特別股在 FinMind 沒有獨立財報，抓它們只會拿到空回應並吃掉額度。"""
+    return len(sid) == 4 and sid.isdigit() and not sid.startswith("00")
+
+
+def _scan_price_files(price_dir: str, fnames: list) -> set:
+    """從指定的價格檔中取出所有上市普通股代號。"""
+    out = set()
+    for fname in fnames:
+        # 用 csv 而非 pandas：這裡只需要代號那一欄，pandas 卻會把整張表
+        # (約 1,100 列 × 16 欄) 建成 DataFrame 再整個丟掉。單檔差距看不出來，
+        # 乘以 1,600 個檔就是啟動時多等的那分鐘。
+        try:
+            with open(os.path.join(price_dir, fname), "r",
+                      encoding="utf-8-sig", newline="") as f:
+                reader = csv.reader(f)
+                header = next(reader, None)
+                if not header:
+                    continue
+                idx = next((i for i, c in enumerate(header)
+                            if "證券代號" in str(c) or "股票代號" in str(c)), None)
+                if idx is None:
+                    continue
+                for row in reader:
+                    # 欄數不足的壞列直接跳過，等同 pandas 的 on_bad_lines="skip"
+                    if len(row) > idx:
+                        sid = row[idx].strip()
+                        if _is_common_stock(sid):
+                            out.add(sid)
+        except Exception:
+            continue
+    return out
+
+
+def _universe_from_raw_price() -> set:
+    """
+    掃 data/raw_price 全歷史，推導上市普通股母體（含已下市）。
+
+    ★ 增量快取：母體是「每日代號的聯集」，只增不減，所以新增的價格檔只可能加入新代號，
+      不可能讓舊代號消失。因此快取存「已掃到哪一個檔」+ 集合本身，下次只掃該檔之後的新檔。
+      全掃 1,600 個檔約 50 秒，只發生一次；日常增量掃 1~2 個檔在毫秒級。
+      若快取記錄的最後一檔已不存在（例如被 -c 清掉幽靈日），就整個重掃——往安全方向倒。
+    """
+    price_dir = RAW_PRICE_DIR
+    if not os.path.isdir(price_dir):
+        return set()
+    files = sorted(f for f in os.listdir(price_dir) if f.endswith("_price.csv"))
+    if not files:
+        return set()
+
+    cached_stocks, scanned_upto = set(), None
+    try:
+        with open(_UNIVERSE_CACHE_PATH, "r", encoding="utf-8") as f:
+            cached = json.load(f)
+        if cached.get("scanned_upto") in files:
+            cached_stocks = set(cached.get("stocks", []))
+            scanned_upto = cached["scanned_upto"]
+    except Exception:
+        pass
+
+    if scanned_upto is None:
+        pending = files
+        print(f"  [母體] 首次建立清單，掃描 {len(pending)} 個價格檔（約需 1 分鐘，之後只掃新增檔）...")
+    else:
+        pending = files[files.index(scanned_upto) + 1:]
+
+    out = cached_stocks | _scan_price_files(price_dir, pending)
+
+    if pending:
+        # 原子寫入：避免中斷時留下截斷的 JSON，下次讀到壞快取又要重掃
+        try:
+            tmp = _UNIVERSE_CACHE_PATH + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"scanned_upto": files[-1], "stocks": sorted(out)}, f)
+            os.replace(tmp, _UNIVERSE_CACHE_PATH)
+        except Exception:
+            pass
+
+    return out
+
+
+def _load_watchlist_stocks() -> set:
+    """讀 Stocks.txt 自選股；用絕對路徑，相對路徑會依 cwd 而定造成靜默讀不到。"""
+    path = os.path.join(PARENT_DIR, "Stocks.txt")
+    try:
+        from scripts.utils import load_target_stocks
+    except ImportError:
+        try:
+            from utils import load_target_stocks
+        except Exception as exc:
+            print(f"  [警告] 找不到 Stocks.txt 解析器：{type(exc).__name__}: {exc}")
+            return set()
+    try:
+        return set(load_target_stocks(path))
+    except Exception as exc:
+        print(f"  [警告] 讀取 Stocks.txt 失敗：{type(exc).__name__}: {exc}")
+        return set()
+
+
+def resolve_target_stocks() -> list:
+    """
+    listed 模式的清單解析：data/raw_price 全歷史上市普通股 ∪ Stocks.txt 自選股。
+
+    把來源與數量印出來不是為了好看：這類清單的失敗模式是「靜默縮成幾十檔」——
+    抓取不會報錯，只是不再抓。來源與數量顯示在畫面上，問題才看得見。
+    """
+    from_stocks_txt = _load_watchlist_stocks()
+    universe = _universe_from_raw_price()
+
+    if universe:
+        source = "data/raw_price（全歷史推導，含已下市）"
+    else:
+        # 保底：至少把自選股抓回來，但這代表資料層有問題，不能安靜帶過
+        print("  [警告] data/raw_price 無法推導母體，僅抓 Stocks.txt 自選股。")
+        print("     請先執行 python scripts/scraper.py -s twse 下載歷史價格資料。")
+        source = "Stocks.txt（保底模式）"
+
+    # 自選股一律聯集：它們可能含上櫃股或剛掛牌、尚未進入價格檔的標的
+    targets = sorted(universe | from_stocks_txt)
+
+    print(f"  母體來源: {source}")
+    print(f"  上市普通股 {len(universe)} 檔 + 自選股 {len(from_stocks_txt)} 檔"
+          f" → 去重後 {len(targets)} 檔")
+
+    if len(targets) < _UNIVERSE_MIN_EXPECTED:
+        print(f"  ★★ 警告：清單只有 {len(targets)} 檔，遠低於預期的 "
+              f"{_UNIVERSE_MIN_EXPECTED}+ 檔。")
+        print("     請確認 data/raw_price 是否有完整歷史（執行 "
+              "python scripts/scraper.py -s twse 補齊），")
+        print(f"     或刪除 {os.path.basename(_UNIVERSE_CACHE_PATH)} 後重跑以強制重建清單。")
+    return targets
+
+
 # ── FinMind 基本面快取天數設定 ──────────────────────────
 try:
-    import sys
-    _PARENT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if _PARENT not in sys.path:
-        sys.path.insert(0, _PARENT)
     from config import FINMIND_CACHE_DAYS as _FINMIND_CACHE_DAYS
 except ImportError:
     _FINMIND_CACHE_DAYS = 15
@@ -316,6 +525,14 @@ def _polite_sleep(lo: float = 1.5, hi: float = 3.0):
     time.sleep(random.uniform(lo, hi))
 
 
+# 累計「實際送出的 HTTP 請求數」。
+# 用途：日期迴圈用它判斷某一天有沒有真的碰網路。禮貌性等待的意義是「別連續打人家的
+# 伺服器」，所以它該綁在請求上，而不是綁在「這天有缺檔」上——當缺的東西全部由快取、
+# 既有檔案或期交所保存期界線就地解決時（例如 skip_dates.json 遺失後重建那 826 天），
+# 一個請求都沒發卻照睡 2 秒，就是白白多等半小時。
+_REQUESTS_MADE = 0
+
+
 # =====================================================================
 # 模組 1: TWSE & TAIFEX 每日全市場資料 (免費無限制)
 # =====================================================================
@@ -327,6 +544,40 @@ TWSE_THROTTLE_KEYWORDS  = ("查詢過於頻繁", "過於頻繁")
 TWSE_THROTTLE_MAX_WAITS = 8    # 連續限流退避上限，超過視為本次失敗 (回 None，下次再試)
 TWSE_THROTTLE_WAIT_SEC  = 30   # 每次退避基礎秒數 (線性遞增，單次上限 300 秒)
 
+# 證交所 WAF 會對查詢過量的來源 IP 封鎖「資料查詢路徑」：HTTP 307 + 一頁
+# "FOR SECURITY REASONS, THIS PAGE CAN NOT BE ACCESSED." 的 HTML。
+# 判別重點：此時 www.twse.com.tw 首頁與 openapi.twse.com.tw 仍可正常回 200，
+# 所以不是網路、DNS 或端點失效，是這台機器的 IP 被擋。
+#
+# 這種狀態必須立即中止整輪，理由有二：
+#   1. 重試無效，只會延長封鎖時間。
+#   2. 絕不能計入 fail_log —— 被擋期間每個日期都會 error，累計 SKIP_AFTER_FAILS 次
+#      就被列入「永久略過」名單，解封後再也不會補抓，等於把暫時性封鎖變成永久資料缺洞。
+TWSE_BLOCK_KEYWORDS = ("FOR SECURITY REASONS", "CAN NOT BE ACCESSED")
+
+# 連線異常（DNS 失敗、連線被拒、逾時）的重試policy，刻意與上面的限流退避分開計。
+# 兩者性質不同：限流是伺服器叫你慢一點，等久有用；連線異常則可能是整條網路斷了，
+# 套用 8 次 × 最長 300 秒的長退避只會把「抓不到」變成「每個日期卡 18 分鐘」。
+# 短退避 5/10/15 秒，約 30 秒內認賠，讓失敗計數與下次重試機制去處理。
+TWSE_NETWORK_MAX_RETRY = 3
+TWSE_NETWORK_WAIT_SEC  = 5
+
+# 每次 TWSE 請求前的最小間隔。原本只在「日期迴圈」尾端 sleep 一次，但每個交易日
+# 會打 7 個 TWSE endpoint，實際速率是 3~5 req/s —— 這正是 IP 被封鎖的直接原因。
+# 改為對每次請求節流，把整體速率壓到約 1 req/s。
+TWSE_REQUEST_GAP = (0.7, 1.4)
+
+
+class TwseAccessBlocked(Exception):
+    """來源 IP 被證交所 WAF 封鎖，本輪抓取應立即中止（不記失敗、不寫 skip）。"""
+
+
+# 期交所 futContractsDateDown 只提供近約 3 年的資料，更早的日期一律回 HTTP 200 +
+# 617 bytes 的 HTML 首頁。舊版每次執行都會為每一天各發一次 POST 並 _polite_sleep()，
+# 光這一項就佔掉數十分鐘；又因整輪跑不完就被中斷，skip_dates 只累積到少數幾筆，
+# 下次重跑再從頭浪費一次。故在送出請求前先用日期界線攔截並寫入 skip，讓它只發生一次。
+TAIFEX_HISTORY_DAYS = 365 * 3  # 早於「今天 - 此天數」的日期不再向期交所查詢
+
 
 def _fetch_twse_json(url: str):
     """
@@ -334,20 +585,56 @@ def _fetch_twse_json(url: str):
       dict      = API 正常且有內容
       "NO_DATA" = API 正常但明確無資料 (含 404 網頁、很抱歉、data=[] 等)
       None      = 網路/解析錯誤、被 Ban 或連續限流放棄
+
+    另有一種不回傳、直接拋 TwseAccessBlocked 的情況：來源 IP 被 WAF 封鎖。
     """
     throttle_waits = 0
+    net_retries    = 0
     while True:
         try:
+            global _REQUESTS_MADE
+            _REQUESTS_MADE += 1
+            _polite_sleep(*TWSE_REQUEST_GAP)   # 逐次請求節流，見 TWSE_REQUEST_GAP 說明
             r = requests.get(url, headers=HEADERS, timeout=15)
-            if r.status_code != 200:
-                return None
             body = r.text.strip()
+
+            # ── WAF 封鎖：整輪中止，不重試、不計失敗 ──────────
+            # 必須排在其他判斷之前：封鎖頁是 HTTP 307 + HTML，會分別被下方
+            # 「非 200」判成 None、被「非 JSON」誤觸 8 輪退避重試，兩者都看不出原因。
+            if any(k in body for k in TWSE_BLOCK_KEYWORDS):
+                raise TwseAccessBlocked(
+                    f"證交所已封鎖本機 IP 的資料查詢 (HTTP {r.status_code})。\n"
+                    f"       這是查詢速率過高觸發的暫時性封鎖，通常數小時後自動解除；\n"
+                    f"       重試無效且會延長封鎖，故立即中止本輪抓取。\n"
+                    f"       本輪未完成的日期不會計入 failed_dates.json，解封後原地續抓即可。"
+                )
+
+            if r.status_code != 200:
+                if r.status_code in (429, 403, 500, 502, 503, 504):
+                    throttle_waits += 1
+                    if throttle_waits > TWSE_THROTTLE_MAX_WAITS:
+                        print(f"\n    [系統提示] 連續 {throttle_waits} 次收到 HTTP {r.status_code} 限流/錯誤，放棄本次查詢。", flush=True)
+                        return None
+                    wait = min(TWSE_THROTTLE_WAIT_SEC * throttle_waits, 300)
+                    print(f"\n    [系統提示] 證交所伺服器回應 HTTP {r.status_code}，第 {throttle_waits}/{TWSE_THROTTLE_MAX_WAITS} 次退避 {wait} 秒後重試...", flush=True)
+                    time.sleep(wait)
+                    continue
+                # 原本靜默 return None，使得失敗原因完全看不出來。
+                print(f"\n    [系統提示] 非預期的 HTTP {r.status_code}，本次查詢視為失敗。", flush=True)
+                return None
 
             # 證交所對某些過舊日期回傳 HTTP 200 但內容是 HTML (含 404)
             if not body or body[0] == "<":
                 if "<title>404</title>" in body:
                     return "NO_DATA"
-                return None
+                throttle_waits += 1
+                if throttle_waits > TWSE_THROTTLE_MAX_WAITS:
+                    print(f"\n    [系統提示] 連續 {throttle_waits} 次收到非 JSON 網頁，放棄本次查詢。", flush=True)
+                    return None
+                wait = min(TWSE_THROTTLE_WAIT_SEC * throttle_waits, 300)
+                print(f"\n    [系統提示] 證交所回應 HTML 非 JSON (可能暫時被擋)，第 {throttle_waits}/{TWSE_THROTTLE_MAX_WAITS} 次退避 {wait} 秒後重試...", flush=True)
+                time.sleep(wait)
+                continue
 
             data = r.json()
 
@@ -378,10 +665,17 @@ def _fetch_twse_json(url: str):
                 return "NO_DATA"
 
             return data
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, TwseAccessBlocked):
             raise
-        except Exception:
-            return None
+        except Exception as e:
+            net_retries += 1
+            if net_retries > TWSE_NETWORK_MAX_RETRY:
+                print(f"\n    [系統提示] 連線異常 ({type(e).__name__}) 連續 {net_retries - 1} 次重試仍失敗，本次查詢視為失敗。", flush=True)
+                return None
+            wait = TWSE_NETWORK_WAIT_SEC * net_retries
+            print(f"\n    [系統提示] 連線異常 ({type(e).__name__})，第 {net_retries}/{TWSE_NETWORK_MAX_RETRY} 次退避 {wait} 秒後重試...", flush=True)
+            time.sleep(wait)
+            continue
 
 
 def crawl_daily_price(date_str: str, skip: dict) -> str:
@@ -394,7 +688,7 @@ def crawl_daily_price(date_str: str, skip: dict) -> str:
       "error"         - 網路錯誤或解析失敗，應計入 fail_log
       "not_ready"     - 今日資料尚未上架，不計入 fail_log，待稍後重試
     """
-    path = os.path.join(DATA_DIR, "raw_price", f"{date_str}_price.csv")
+    path = os.path.join(RAW_PRICE_DIR, f"{date_str}_price.csv")
     if _already_exists(path):
         return "exists"
 
@@ -439,7 +733,7 @@ def crawl_daily_price(date_str: str, skip: dict) -> str:
 
 
 def crawl_daily_chips(date_str: str, skip: dict) -> bool:
-    path = os.path.join(DATA_DIR, "raw_chips", f"{date_str}_chips.csv")
+    path = os.path.join(RAW_CHIPS_DIR, f"{date_str}_chips.csv")
     if _already_exists(path): return True
     if _is_skip_date(skip, "chips", date_str): return True
 
@@ -464,7 +758,7 @@ def crawl_daily_chips(date_str: str, skip: dict) -> bool:
 
 
 def crawl_daily_margin(date_str: str, skip: dict) -> bool:
-    path = os.path.join(DATA_DIR, "raw_margin", f"{date_str}_margin.csv")
+    path = os.path.join(RAW_MARGIN_DIR, f"{date_str}_margin.csv")
     if _already_exists(path): return True
     if _is_skip_date(skip, "margin", date_str): return True
 
@@ -501,7 +795,7 @@ def crawl_daily_margin(date_str: str, skip: dict) -> bool:
 
 
 def crawl_daily_sbl(date_str: str, skip: dict) -> bool:
-    path = os.path.join(DATA_DIR, "raw_margin", f"{date_str}_sbl.csv")
+    path = os.path.join(RAW_MARGIN_DIR, f"{date_str}_sbl.csv")
     if _already_exists(path): return True
     if _is_skip_date(skip, "sbl", date_str): return True
 
@@ -529,7 +823,7 @@ def crawl_daily_sbl(date_str: str, skip: dict) -> bool:
 
 
 def crawl_daily_twse_per(date_str: str, skip: dict) -> bool:
-    path = os.path.join(DATA_DIR, "raw_twse_per", f"{date_str}_twse_per.csv")
+    path = os.path.join(RAW_TWSE_PER_DIR, f"{date_str}_twse_per.csv")
     if _already_exists(path): return True
     if _is_skip_date(skip, "twse_per", date_str): return True
 
@@ -565,7 +859,7 @@ def crawl_daily_twse_per(date_str: str, skip: dict) -> bool:
 
 
 def crawl_daily_daytrading(date_str: str, skip: dict) -> bool:
-    path = os.path.join(DATA_DIR, "raw_chips", f"{date_str}_daytrading.csv")
+    path = os.path.join(RAW_CHIPS_DIR, f"{date_str}_daytrading.csv")
     if _already_exists(path): return True
     if _is_skip_date(skip, "daytrading", date_str): return True
 
@@ -602,7 +896,7 @@ def crawl_daily_daytrading(date_str: str, skip: dict) -> bool:
 
 
 def crawl_daily_fini_holding(date_str: str, skip: dict) -> bool:
-    path = os.path.join(DATA_DIR, "raw_chips", f"{date_str}_fini_holding.csv")
+    path = os.path.join(RAW_CHIPS_DIR, f"{date_str}_fini_holding.csv")
     if _already_exists(path): return True
     if _is_skip_date(skip, "fini_holding", date_str): return True
 
@@ -630,16 +924,27 @@ def crawl_daily_fini_holding(date_str: str, skip: dict) -> bool:
 
 
 def crawl_daily_taifex_inst(date_str: str, skip: dict) -> bool:
-    path = os.path.join(DATA_DIR, "raw_taifex", f"{date_str}_taifex_inst.csv")
+    path = os.path.join(RAW_TAIFEX_DIR, f"{date_str}_taifex_inst.csv")
     if _already_exists(path): return True
     if _is_skip_date(skip, "taifex_inst", date_str): return True
 
     # 支援 20260531 / 2026-05-31 / 2026/05/31 三種格式輸入
+    date_obj = None
     try:
         clean_date = date_str.replace("-", "").replace("/", "")
-        query_date = datetime.datetime.strptime(clean_date, "%Y%m%d").strftime("%Y/%m/%d")
+        date_obj   = datetime.datetime.strptime(clean_date, "%Y%m%d").date()
+        query_date = date_obj.strftime("%Y/%m/%d")
     except Exception:
         query_date = date_str
+
+    # ── 超出期交所保存期：不發請求，直接標記略過 ─────────
+    # 這些日期查詢必定回 HTML 首頁，下方本來也會判定 no_data，
+    # 差別在於這裡省下一次 POST（timeout 15 秒）與外層的 _polite_sleep()。
+    if date_obj is not None:
+        cutoff = datetime.date.today() - datetime.timedelta(days=TAIFEX_HISTORY_DAYS)
+        if date_obj < cutoff:
+            _mark_skip_date(skip, "taifex_inst", date_str, reason="no_data")
+            return True
 
     url = "https://www.taifex.com.tw/cht/3/futContractsDateDown"
     payload = {
@@ -648,6 +953,8 @@ def crawl_daily_taifex_inst(date_str: str, skip: dict) -> bool:
         "commodityId":    "TXF",
     }
     try:
+        global _REQUESTS_MADE
+        _REQUESTS_MADE += 1
         r = requests.post(url, data=payload, headers=HEADERS, timeout=15)
         if r.status_code != 200:
             return False
@@ -697,7 +1004,7 @@ def crawl_weekly_shareholding() -> bool:
         if len(dates) == 0:
             return False
         date_str = str(dates[0])
-        path = os.path.join(DATA_DIR, "raw_shareholding", f"{date_str}_shareholding.csv")
+        path = os.path.join(RAW_SHAREHOLDING_DIR, f"{date_str}_shareholding.csv")
         if not _already_exists(path):
             df.to_csv(path, index=False, encoding="utf-8-sig")
             print(f"  [持股分級] {date_str} 下載成功 ({len(df)} 筆)")
@@ -723,7 +1030,7 @@ def _is_holiday(date_obj: datetime.date) -> bool:
 # =====================================================================
 
 def _get_finmind_token() -> str:
-    token_path = os.path.join(BASE_DIR, "..", "FINMIND_TOKEN.txt")
+    token_path = os.path.join(PARENT_DIR, "FINMIND_TOKEN.txt")
     if os.path.exists(token_path):
         with open(token_path, "r", encoding="utf-8") as f:
             t = f.read().strip()
@@ -899,11 +1206,11 @@ def _crawl_fm_dataset(
 # 主下載控制
 # =====================================================================
 
-def download_history_data(
+def _run_twse_stage(
     start_date_obj: datetime.date,
     end_date_obj:   datetime.date,
-    target_stocks:  list = None,
 ):
+    """TWSE / TAIFEX / TDCC 逐日爬取。只讀寫 failed_dates.json 與 skip_dates.json。"""
     delta = datetime.timedelta(days=1)
 
     print("\n[啟動] 官方全市場資料爬蟲 (免 Token 吃到飽)")
@@ -938,16 +1245,16 @@ def download_history_data(
             curr += delta
             continue
 
-        # ── 9 個 dataset 全部處理完畢才跳過 ───────────────
+        # ── 8 個 dataset 全部處理完畢才跳過 ───────────────
         files_required = [
-            ("price",        os.path.join(DATA_DIR, "raw_price",    f"{d_str}_price.csv")),
-            ("chips",        os.path.join(DATA_DIR, "raw_chips",    f"{d_str}_chips.csv")),
-            ("twse_per",     os.path.join(DATA_DIR, "raw_twse_per", f"{d_str}_twse_per.csv")),
-            ("taifex_inst",  os.path.join(DATA_DIR, "raw_taifex",   f"{d_str}_taifex_inst.csv")),
-            ("margin",       os.path.join(DATA_DIR, "raw_margin",   f"{d_str}_margin.csv")),
-            ("sbl",          os.path.join(DATA_DIR, "raw_margin",   f"{d_str}_sbl.csv")),
-            ("daytrading",   os.path.join(DATA_DIR, "raw_chips",    f"{d_str}_daytrading.csv")),
-            ("fini_holding", os.path.join(DATA_DIR, "raw_chips",    f"{d_str}_fini_holding.csv")),
+            ("price",        os.path.join(RAW_PRICE_DIR,    f"{d_str}_price.csv")),
+            ("chips",        os.path.join(RAW_CHIPS_DIR,    f"{d_str}_chips.csv")),
+            ("twse_per",     os.path.join(RAW_TWSE_PER_DIR, f"{d_str}_twse_per.csv")),
+            ("taifex_inst",  os.path.join(RAW_TAIFEX_DIR,   f"{d_str}_taifex_inst.csv")),
+            ("margin",       os.path.join(RAW_MARGIN_DIR,   f"{d_str}_margin.csv")),
+            ("sbl",          os.path.join(RAW_MARGIN_DIR,   f"{d_str}_sbl.csv")),
+            ("daytrading",   os.path.join(RAW_CHIPS_DIR,    f"{d_str}_daytrading.csv")),
+            ("fini_holding", os.path.join(RAW_CHIPS_DIR,    f"{d_str}_fini_holding.csv")),
         ]
 
         def _done(ds, p):
@@ -959,6 +1266,7 @@ def download_history_data(
             continue
 
         # ── price 已完成（有檔案或已 skip），補抓缺失子資料 ─
+        _reqs_before = _REQUESTS_MADE
         price_ds, price_path = files_required[0]
         if _done(price_ds, price_path):
             missing_names = [
@@ -981,7 +1289,8 @@ def download_history_data(
                     downloaded_days += 1
                 else:
                     print(f"    [警告] {d_str} 部分補抓失敗，下次重試")
-                _polite_sleep()
+                if _REQUESTS_MADE > _reqs_before:
+                    _polite_sleep()
             curr += delta
             continue
 
@@ -1064,10 +1373,17 @@ def download_history_data(
         f" | 永久略過: {auto_skip_days} 天)"
     )
 
+
+def _run_finmind_stage(
+    start_date_obj: datetime.date,
+    end_date_obj:   datetime.date,
+    target_stocks:  list = None,
+):
+    """FinMind 基本面爬取。只讀寫 no_finmind_data.json 與 missing_fm_datasets.json。"""
     if not target_stocks:
+        print("\n[略過] FinMind 階段：股票清單為空。")
         return
 
-    # ── FinMind 基本面爬蟲 ────────────────────────────────
     start_str = start_date_obj.strftime("%Y-%m-%d")
     end_str   = end_date_obj.strftime("%Y-%m-%d")
 
@@ -1079,6 +1395,7 @@ def download_history_data(
     missing_fm_cache = _load_missing_fm()   # ← 迴圈外只讀一次，減少磁碟 I/O
 
     total         = len(target_stocks)
+    idx           = 0   # 迴圈未進入就拋額度例外時，except 區塊仍需要 idx
     skipped_etf   = 0
     skipped_cache = 0
     updated       = 0
@@ -1089,7 +1406,10 @@ def download_history_data(
         for idx, stock_id in enumerate(target_stocks, 1):
             print(f"  FinMind 進度: {idx}/{total} ({stock_id})          ", end="\r", flush=True)
 
-            if stock_id in ETF_SET:
+            # ETF_SET 來自 stock_categories.json，該檔缺漏時會是空集合，
+            # 於是 ETF 照樣被抓。補上不依賴外部檔案的結構性判斷當第二道防線，
+            # 同時擋掉沒有獨立財報的特別股 (3036A / 3702A / 8112A)。
+            if stock_id in ETF_SET or not _is_common_stock(stock_id):
                 skipped_etf += 1
                 continue
 
@@ -1106,7 +1426,7 @@ def download_history_data(
                 ("股利",   "TaiwanStockDividend",            f"{stock_id}_dividend.csv"),
             ]
             for label, dataset, fname in datasets:
-                path = os.path.join(DATA_DIR, "raw_financial", fname)
+                path = os.path.join(RAW_FINANCIAL_DIR, fname)
                 res  = _crawl_fm_dataset(dataset, stock_id, start_str, end_str, path, missing_fm_cache)
                 results.append((label, res))
                 if res != "skipped":
@@ -1171,6 +1491,31 @@ def download_history_data(
             f" | 錯誤: {errors_total})"
         )
         raise
+
+
+def download_history_data(
+    start_date_obj: datetime.date,
+    end_date_obj:   datetime.date,
+    target_stocks:  list = None,
+    source:         str = "all",
+):
+    """
+    依 source 決定跑哪些階段。
+
+    source="twse"    只跑證交所/期交所/集保（不需要 Token，慢在逐日 request）
+    source="finmind" 只跑 FinMind 財報（慢在逐檔 API，且受額度限制）
+    source="all"     兩段依序跑（預設，與舊行為相同）
+
+    兩段沒有共用可變狀態，因此 twse 與 finmind 可以在兩個終端機同時執行。
+    """
+    if source not in ("all", "twse", "finmind"):
+        raise ValueError(f"未知的 source: {source!r} (可用: all / twse / finmind)")
+
+    if source in ("all", "twse"):
+        _run_twse_stage(start_date_obj, end_date_obj)
+
+    if source in ("all", "finmind"):
+        _run_finmind_stage(start_date_obj, end_date_obj, target_stocks)
 
 
 # =====================================================================
@@ -1238,7 +1583,7 @@ def patch_stock_finmind(stock_id: str):
         ("股利",   "TaiwanStockDividend",            f"{stock_id}_dividend.csv"),
     ]
     for label, dataset, fname in datasets:
-        path = os.path.join(DATA_DIR, "raw_financial", fname)
+        path = os.path.join(RAW_FINANCIAL_DIR, fname)
         print(f"  -> 正在抓取 {label}...", end=" ", flush=True)
         res = _crawl_fm_dataset(dataset, stock_id, start_str, end_str, path, {}, force=True)
         if res is True:
@@ -1260,7 +1605,7 @@ def check_data_integrity():
         from config import GHOST_DATA_PCT_THRESHOLD
     except ImportError:
         GHOST_DATA_PCT_THRESHOLD = 0.15
-    financial_dir = os.path.join(DATA_DIR, "raw_financial")
+    financial_dir = RAW_FINANCIAL_DIR
     specs = {
         "monthly_revenue": ["date", "revenue"],
         "financial_stmt":  ["date", "type", "value"],
@@ -1295,10 +1640,8 @@ def check_data_integrity():
     print("==================================================")
     print("  [2/3] 檢查 證交所/期交所 歷史資料檔...")
     print("==================================================")
-    twse_dirs = ["raw_price", "raw_chips", "raw_margin", "raw_twse_per", "raw_taifex"]
     twse_del = 0
-    for d in twse_dirs:
-        dir_path = os.path.join(DATA_DIR, d)
+    for dir_path in TWSE_DAILY_DIRS:
         if not os.path.exists(dir_path): continue
         for fpath in glob.glob(os.path.join(dir_path, "*.csv")):
             try:
@@ -1325,8 +1668,7 @@ def check_data_integrity():
     print("==================================================")
     print("  [3/3] 檢查極端價格異常 (休市假數據/幽靈資料)...")
     print("==================================================")
-    price_dir = os.path.join(DATA_DIR, "raw_price")
-    price_files = sorted(glob.glob(os.path.join(price_dir, "*_price.csv")))
+    price_files = sorted(glob.glob(os.path.join(RAW_PRICE_DIR, "*_price.csv")))
     history = []
     for fpath in price_files:
         date_str = os.path.basename(fpath).split("_")[0]
@@ -1340,8 +1682,9 @@ def check_data_integrity():
                     history.append({"date": date_str, "file": fpath, "price": close_price})
         except Exception:
             continue
-    skip_dates_path = os.path.join(DATA_DIR, "skip_dates.json")
-    fail_log_path = os.path.join(DATA_DIR, "failed_dates.json")
+    # 用模組層既有常數，避免同一份檔案在兩處各拼一次路徑而日後走岔
+    skip_dates_path = SKIP_DATES_PATH
+    fail_log_path = FAIL_LOG_PATH
     skip_dates = {}
     if os.path.exists(skip_dates_path):
         try:
@@ -1379,8 +1722,8 @@ def check_data_integrity():
             if is_anomaly:
                 bad_date = curr["date"]
                 print(f"  [幽靈資料] {bad_date} 發現 0050 價格異常跳空！")
-                for d in twse_dirs:
-                    for bad_f in glob.glob(os.path.join(DATA_DIR, d, f"{bad_date}_*.csv")):
+                for d in TWSE_DAILY_DIRS:
+                    for bad_f in glob.glob(os.path.join(d, f"{bad_date}_*.csv")):
                         os.remove(bad_f)
                 for k in list(skip_dates.keys()):
                     if k.endswith(f"_{bad_date}"):
@@ -1406,6 +1749,15 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--patch", type=str, help="手動強制補抓指定股票代號的 FinMind 財報資料")
     parser.add_argument("-fc", "--fc", "--fetch-categories", dest="fetch_categories", action="store_true", help="重新抓取並更新全市場產業分類對照表")
     parser.add_argument("-c", "--check", action="store_true", help="執行資料庫損毀/異常/極端價格幽靈資料校驗與修復")
+    parser.add_argument(
+        "-s", "--source",
+        choices=["all", "twse", "finmind"],
+        default="all",
+        help=(
+            "選擇要抓的資料來源。twse=證交所/期交所/集保；finmind=財報基本面；"
+            "all=兩者依序（預設）。twse 與 finmind 可在兩個終端機同時執行。"
+        ),
+    )
     
     args = parser.parse_args()
     
@@ -1417,62 +1769,80 @@ if __name__ == "__main__":
         check_data_integrity()
     else:
         # 預設執行標準資料增量抓取 (原 main.py 入口)
+        _SOURCE_LABEL = {
+            "all":     "TWSE + FinMind (完整)",
+            "twse":    "TWSE / TAIFEX / TDCC (官方免 Token)",
+            "finmind": "FinMind 基本面財報",
+        }[args.source]
         print("=" * 60)
-        print("  啟動資料增量下載流程...")
+        print(f"  啟動資料增量下載流程... [來源: {_SOURCE_LABEL}]")
         print("=" * 60)
         try:
             from config import START_DATE, FINMIND_FETCH_MODE
         except ImportError:
             START_DATE = datetime.date(2020, 1, 1)
-            FINMIND_FETCH_MODE = "limited"
-            
-        # 讀取股票清單 (從中央 config 中控制)
-        target_stocks = set()
-        
-        # 載入 Stocks.txt 自選股
-        try:
-            from scripts.utils import load_target_stocks
-            target_stocks.update(load_target_stocks("Stocks.txt"))
-        except ImportError:
-            try:
-                from utils import load_target_stocks
-                target_stocks.update(load_target_stocks("Stocks.txt"))
-            except Exception:
-                pass
-                
-        # 根據 FINMIND_FETCH_MODE 加載產業股票
-        if FINMIND_FETCH_MODE == "all":
-            cat_path = os.path.join(BASE_DIR, "stock_categories.json")
-            if os.path.exists(cat_path):
-                with open(cat_path, "r", encoding="utf-8") as f:
-                    categories = json.load(f)
-                for ind_name, stocks_dict in categories.items():
-                    target_stocks.update(stocks_dict.keys())
-        else:
-            # limited 模式: 載入 config.py 中設定為 True 的產業股票
-            try:
-                from config import TRAIN_INDUSTRIES
+            FINMIND_FETCH_MODE = "listed"
+
+        # 讀取股票清單 (從中央 config 的 FINMIND_FETCH_MODE 控制)
+        # 清單只有 FinMind 階段會用到；--source twse 時直接略過解析，
+        # 省下掃描價格檔 / 讀 stock_categories.json 的時間，也不印無關訊息。
+        stock_list = None
+        if args.source != "twse":
+            if FINMIND_FETCH_MODE == "listed":
+                # 由 data/raw_price 推導，詳見 resolve_target_stocks() 上方的說明
+                stock_list = resolve_target_stocks()
+            else:
+                target_stocks = set(_load_watchlist_stocks())
+
+                # 根據 FINMIND_FETCH_MODE 加載產業股票
                 cat_path = os.path.join(BASE_DIR, "stock_categories.json")
-                if os.path.exists(cat_path):
+                if not os.path.exists(cat_path):
+                    # 舊版在此靜默略過，清單會縮成只剩自選股卻毫無錯誤訊息
+                    print(f"[警告] 找不到 {cat_path}，清單將只剩 Stocks.txt 自選股。")
+                    print("       請先執行 python scripts/scraper.py -fc 產生產業對照表。")
+                    categories = {}
+                else:
                     with open(cat_path, "r", encoding="utf-8") as f:
                         categories = json.load(f)
-                    for ind_name, is_enabled in TRAIN_INDUSTRIES.items():
-                        if is_enabled and ind_name in categories:
-                            target_stocks.update(categories[ind_name].keys())
-            except Exception as e:
-                print(f"[警告] 無法載入 config 產業清單 ({e})")
-                
-        stock_list = sorted(list(target_stocks))
-        print(f"下載目標股票數量: {len(stock_list)} 檔 (模式: {FINMIND_FETCH_MODE})")
-        
-        import sys
+
+                if FINMIND_FETCH_MODE == "all":
+                    for ind_name, stocks_dict in categories.items():
+                        target_stocks.update(stocks_dict.keys())
+                else:
+                    # limited 模式: 載入 config.py 中設定為 True 的產業股票
+                    try:
+                        from config import TRAIN_INDUSTRIES
+                        for ind_name, is_enabled in TRAIN_INDUSTRIES.items():
+                            if is_enabled and ind_name in categories:
+                                target_stocks.update(categories[ind_name].keys())
+                    except Exception as e:
+                        print(f"[警告] 無法載入 config 產業清單 ({e})")
+
+                stock_list = sorted(target_stocks)
+
+            print(f"下載目標股票數量: {len(stock_list)} 檔 (模式: {FINMIND_FETCH_MODE})")
+
+        from contextlib import ExitStack
         try:
-            with _SingleInstanceLock(os.path.join(DATA_DIR, "scraper.lock")):
-                download_history_data(START_DATE, datetime.date.today(), target_stocks=stock_list)
+            with ExitStack() as _stack:
+                for _lock_path in _locks_for(args.source):
+                    _stack.enter_context(_SingleInstanceLock(_lock_path))
+                download_history_data(
+                    START_DATE, datetime.date.today(),
+                    target_stocks=stock_list,
+                    source=args.source,
+                )
+        except TwseAccessBlocked as e:
+            # 來源 IP 被證交所 WAF 擋下。已抓到的檔案都保留，未完成的日期也未被
+            # 記成失敗，等封鎖解除後重跑即可從中斷處續抓。
+            print(f"\n[中止] {e}")
+            print("       建議：等待數小時後重跑；若要更保守，可把 scraper.py 的")
+            print("       TWSE_REQUEST_GAP 調大 (例如 (1.5, 2.5)) 再執行。")
+            sys.exit(1)
         except RuntimeError as e:
             # 另一個 scraper 實例正在執行 (單一實例鎖被佔用)
             print(f"[中止] {e}")
             sys.exit(1)
         except FinMindLimitExceeded:
             # 退出碼 99 通知上層 Pipeline 可以跳過並繼續
-            sys.exit(99)
+            sys.exit(99)

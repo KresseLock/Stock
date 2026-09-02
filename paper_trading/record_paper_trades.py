@@ -20,11 +20,14 @@ import os
 import re
 import csv
 import glob
+import sys
 import argparse
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:          # 本檔在子目錄，需先把專案根目錄加進來才 import 得到 config
+    sys.path.insert(0, BASE_DIR)
 PRED_DIR = os.path.join(BASE_DIR, "predictions")
-PRICE_DIR = os.path.join(BASE_DIR, "data", "raw_price")
+from config import RAW_PRICE_DIR as PRICE_DIR   # 唯一來源：config.py § 0
 TRADES_CSV = os.path.join(BASE_DIR, "paper_trading", "trades.csv")
 
 FEE_RATE = 0.001425      # 單邊手續費

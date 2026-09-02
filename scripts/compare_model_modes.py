@@ -61,7 +61,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.py")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 REPORT_DIR = os.path.join(BASE_DIR, "reports")
 BEST_FACTORS_PATH = os.path.join(BASE_DIR, "configs", "best_factors.json")
-FEATURE_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
+from config import FEATURES_PARQUET as FEATURE_PATH   # 唯一來源：config.py § 0
 
 SELF_REL_PATH = os.path.relpath(os.path.abspath(__file__), BASE_DIR).replace(os.sep, "/")
 MODEL_FILES = ("lgbm_model_1.txt", "lgbm_model_2.txt", "lgbm_model_3.txt", "feature_cols.json")

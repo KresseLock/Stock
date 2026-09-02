@@ -91,7 +91,9 @@ python trading_sim.py --start 2025-08-02 --end 2026-06-18 -c 2000000  # OOS 驗�
 
 ### 🔁 重訓完後必做兩件事
 
-> ⚠️ **不要無腦部署 mode_b**——`run_workflow_experiment.py` 打開報告 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，先看「⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較」章節結尾的結論句。這是同模型、同（乾淨 OOS）區間下，本輪候選參數與目前部署參數的直接對決，**唯一目的就是防止把一組更差的參數部署上去**（已有實際案例：某輪候選在潔淨 OOS 明顯輸給現行參數，若無腦部署等於自砍報酬）。
+> ⚠️ **不要無腦部署 mode_b**——`run_workflow_experiment.py` 打開報告 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，先看「⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較」章節結尾的結論句。這是同模型、同（乾淨 OOS）區間下，本輪候選參數與目前部署參數的直接對決，**唯一目的就是防止把一組更差的參數部署上去**（已有實際案例：某輪候選在潔淨 OOS 明顯輸給現行參數，若無腦部署等於自砍報酬）。結論句的判準是**報酬與回撤雙贏**，只贏報酬不算。
+>
+> 該節的 OOS 視窗只對「模型」乾淨，對「風控參數」不乾淨（候選與現行的調參區間都涵蓋它），所以它比的是「兩組都看過這段資料時誰表現好」。想要參數層級的乾淨對照，另外跑零參數的 `python scripts/validate_candidate_params.py`，細節見文末「已知限制與下一步」一節。
 
 ```powershell
 # 1. 只有報告結論寫「建議部署」才執行；寫「不建議部署」就跳過，維持現行 best_trading_params.json 不動
@@ -244,8 +246,29 @@ flowchart LR
 
 - 使用 Optuna TPE 貝葉斯演算法搜尋模擬交易風控參數（大盤避險門檻 `panic_ma5`／`panic_breadth`、掛單溢價 `markup_pct`；加 `--regime` 則搜尋市況動態買入門檻與各市況持股檔數上限，取代靜態 `buy_threshold`）。
 - **Regime-Robust 加權評分**：把回測期間依大盤實際走勢自動切成 Bull／Sideways／Bear 三段，各段分別計算 Alpha、多空 Spread、Calmar 比率並依權重加總（權重見 `config.py § 2.4`），再依 √天數正規化平均——避免樣本數過少的市況段主導分數。全期最大回撤超過 `MDD_TOLERANCE` 時另扣分，防止「段內漂亮、跨段爆倉」的角落解。
+- **執行記錄自動落檔**：全程 tee 到 `reports/optimize_trading_params_<時間戳>.log`（utf-8），主控台同時即時顯示進度（每窗每 `WF_PROGRESS_EVERY` 輪一行心跳）。**不要自己加 `>` 重導向**——那會讓主控台整段空白，還得另開視窗 tail。`scripts/validate_candidate_params.py` 同樣內建，落檔到 `reports/validate_candidate_params_<時間戳>.log`。
 - **調參區間**：起訖日預設讀取 `config.py § 10.5` 的 `TRADING_OPT_START_DATE`／`TRADING_OPT_END_DATE`（預設 `2022-01-02 ~ 2025-12-31`，含 2022 完整熊市壓力樣本，終點刻意留白供裁判驗證），可用 `-s`/`-e` 覆寫。
-- **候選檔機制**：預設結果寫入 `configs/best_trading_params_candidate.json`（不影響部署），須先用候選未見過的區間跑 `trading_sim.py` 驗證優於現行參數，才手動複製為 `best_trading_params.json`，或加 `--deploy` 直接覆寫部署檔。
+- **候選向量評分守門（`-wf` 模式）**：Walk-Forward 逐維取各窗最佳值的中位數，會拼出「沒有任何窗口驗證過」的組合——某窗選的寬鬆 Bull 判定，可能跟另一窗選的曝險設定焊在一起。故在寫檔前把所有可交付向量（中位數、各窗最佳、以及「保守中位數」＝不穩定維度沿用現行部署值）放到**同一個區間**上各回測一次，取**部署判準**下最好的一組寫出，並把各向量的得分／報酬／回撤記進 `walk_forward_vector_scores`。`best_score`／`overall_metrics` 記錄真實績效（舊版硬寫 0.0，等於候選從未被評分）。
+- **排序區間＝整段調參區間（尾端 holdout 已停用）**：`config.py` 的 `WF_HOLDOUT_RATIO` 預設 `0.0`。曾試過把調參區間尾端切一段 holdout（四窗都不許看）在其上排序，以消除「向量在自己訓練期上分數高」的 in-sample 選美，但 **2026-08-31 實測否決**：換排序區間對「選誰」零作用（部署判準在兩個區間選出同一向量），而切 holdout 讓四窗少看最近 9.5 個月，整池的裁判區表現系統性退化，淨效果是純虧。數字見 [scripts/EXPERIMENTS_PENDING.md](scripts/EXPERIMENTS_PENDING.md)「已結案實驗：尾端 holdout 選向量」。機制保留在程式裡（設 `WF_HOLDOUT_RATIO > 0` 即啟用；區間太短則自動退回並警示），日後若要試非尾端／輪替式 holdout 可直接復用。排序區間與該區間績效記在候選檔的 `walk_forward_score_range`／`walk_forward_holdout`，`overall_metrics` 則固定是 `date_range` 全段，兩者不混用。
+- **排序依據＝部署判準，不是 Optuna 目標函式得分**（`config.py` 的 `WF_SELECT_RULE`，預設 `"deploy_gate"`）：先取 **Pareto 前緣**（沒有別的向量在報酬與回撤上同時勝過它），再於前緣內取 **Calmar 最高**者。動機：目標函式與部署判準是兩把不同的尺，實測會選到被雙面支配的向量（報酬與回撤同時輸給另一組）。前緣之所以要當硬門檻而不是只排 Calmar，是因為報酬為負時 `ret/mdd` 會**獎勵更大的回撤**，而排序區間上多數向量報酬為負是常態。**目標函式沒有被廢掉**——它仍照常驅動每個窗口內的 Optuna 搜尋，只是不再決定最後交付哪一組；兩把尺的分歧會印在 log 並記進 `walk_forward_selection`。設 `WF_SELECT_RULE = "objective"` 可退回舊行為做回溯對照。
+- **穩定度分級**：以變異係數 CV 分「穩定／需注意／不穩定」，門檻見 `config.py` 的 `WF_STABILITY_CV_WARN`／`WF_STABILITY_CV_BAD`。判為不穩定的維度，其窗口間中位數等於取在雜訊上，故另組一個「保守中位數」候選進場競爭，而非靜默覆蓋（靜默覆蓋只會再造出一個沒被驗證過的混搭向量）。
+- **搜尋空間只放「真的會生效」的維度**：`regime_bear_pos` 已移出——Bear 買入門檻固定 `99.0`（實質空倉不進場），而檔數上限只用於擋新進場，該維度沒有任何生效路徑，留著只會空耗搜尋預算並在穩定度報表產生假數字；部署時由 `config.REGIME_MAX_POSITIONS["Bear"]` 提供固定值。
+- **裁判區污染警示**：調參終點越過 `TRADING_OPT_END_DATE` 時會印警示，說明本輪參數已看過那段資料、該段不可再用於驗證它，並算出新的乾淨裁判區起點。**只警示不阻擋**——`run_workflow_experiment.py` 模式 B 設計上就以「最新資料日 + `--deploy`」產出實盤參數（實盤部署本來就該用全部可得資料），擋下會打死整條流水線。
+- **候選檔機制**：預設結果寫入 `configs/best_trading_params_candidate.json`（不影響部署），須先跑 `scripts/validate_candidate_params.py` 體檢通過，才手動複製為 `best_trading_params.json`，或加 `--deploy` 直接覆寫部署檔。
+
+</details>
+
+<details>
+<summary><b>🩹 候選風控參數體檢器 (scripts/validate_candidate_params.py)</b></summary>
+
+- **零參數執行**：`python scripts/validate_candidate_params.py`，不需要記任何旗標（只有可選的 `-c` 改資金）。三件事它自己決定：
+  - **裁判區**＝候選調參終點的次一交易日 ~ 資料最新交易日（交易日曆直接讀特徵檔，不寫死日期）。
+  - **對照組**＝現行部署檔；若現行部署檔的調參區間也涵蓋裁判區，會**自動換掉它**並印出理由——拿看過裁判區的參數當對照會系統性偏袒它，任何守紀律的候選都不可能贏。替代對照取 `configs/` 裡調參終點最晚、且早於裁判區起點的參數檔。
+  - **9 條路徑**＝起點各往後挪 0~16 個交易日、**終點固定**。
+- **為何是「挪起點」不是「切段」**：本策略最少持有天數 11~23 天且獲利靠肥尾，把區間切小段（尤其按月）會月初空手重建倉、月底截斷跨段贏家，系統性低估績效。評估一律用連續長區間。
+- **為何要 9 條**：單路徑差值可能被單筆極端交易主宰，同一策略換起點的報酬漂移幅度極大，故以中位數為準。輸出會印出逐路徑數字與報酬贏／回撤贏／雙贏三個計數，看得到離散度——只看彙總數字容易把雜訊擬合成「高原」。
+- **判準**：報酬與回撤**中位數雙贏**，且過半路徑雙贏，才算勝出。不接受「拉高回撤換報酬」。
+- **不會自動部署**：執行期間會暫時替換 `configs/best_trading_params.json`，結束時（含中途例外／Ctrl+C）一律從備份還原；要不要採用候選由使用者自行決定。
 
 </details>
 
@@ -302,6 +325,7 @@ Stock/
 │   ├── inference.py            # 多空分數預測排行榜 + 智慧限價掛單指引
 │   ├── optimize_factors.py     # Optuna 貝葉斯超參數最佳化器
 │   ├── optimize_trading_params.py # 交易策略與避險參數最佳化器 (Optuna TPE)
+│   ├── validate_candidate_params.py # 候選風控參數體檢 (自動挑乾淨對照組 + 多起點對打)
 │   ├── param_sensitivity.py    # 參數敏感度自動診斷器 (OFAT 掃描，解釋優化器選值)
 │   ├── backtest.py             # 時光機單日回測器 (樣本外評估)
 │   ├── utils.py                # 全系統共享股票解析與過濾工具
@@ -316,7 +340,8 @@ Stock/
 ├── config.py                   # 系統中央控制面板
 ├── 📂 configs/                  # 最佳化參數設定資料夾
 │   ├── best_factors.json       # 最佳化技術指標參數存檔
-│   ├── best_trading_params.json # 最佳化交易與風控策略參數存檔
+│   ├── best_trading_params.json # 最佳化交易與風控策略參數存檔 (實際部署中)
+│   ├── best_trading_params_candidate.json # 最新一輪調參候選 (未部署，待體檢)
 │   ├── best_factors_mode_a.json # 實驗模式 A 因子參數
 │   ├── best_trading_params_mode_a.json # 實驗模式 A 風控參數
 │   ├── best_trading_params_mode_b.json # 實驗模式 B 風控參數
@@ -412,7 +437,9 @@ python auto_pipeline.py -s i # 單獨輸出今日推理結果
 #### 方案丙：資料庫維護與補件 (scripts/scraper.py)
 
 ```powershell
-python scripts/scraper.py            # 增量下載今日最新資料
+python scripts/scraper.py            # 增量下載今日最新資料 (證交所 + FinMind)
+python scripts/scraper.py -s twse    # 只抓證交所/期交所/集保 (免 Token)
+python scripts/scraper.py -s finmind # 只抓 FinMind 基本面財報
 python scripts/scraper.py -p 2330    # 針對特定股票補足歷史財報
 python scripts/scraper.py -fc        # 重新更新全市場產業分類對照表
 python scripts/scraper.py -c         # 掃描並刪除損毀或異常的歷史資料
@@ -515,7 +542,7 @@ Copy-Item configs\best_trading_params_candidate.json configs\best_trading_params
 | `-c` | `--capital`| `int` | `1000000` | 模擬交易的起始資金。 |
 | `-m` | `--max_pos`| `int` | `config.py` 中的 `MAX_POSITIONS`（目前為 5） | 同時持股的最大檔數限制。 |
 | `-j` | `--jobs` | `int` | `1` | 並行線程數。 |
-| `-wf` | `--walk_forward` | flag | `False` | 啟用 Walk-Forward 參數穩定性檢驗（切 4 個滾動窗口分別優化，取中位數）。 |
+| `-wf` | `--walk_forward` | flag | `False` | 啟用 Walk-Forward 參數穩定性檢驗（切 4 個滾動窗口分別優化）。調參區間尾端會依 `WF_HOLDOUT_RATIO` 保留一段 holdout：四窗只在其前方搜尋，holdout 專門用來替候選向量排序。 |
 | ✕ | `--regime` | flag | `False` | 市況過濾器模式：搜尋 Bull/Sideways 動態買入門檻與各市況持股檔數上限，取代靜態 `buy_threshold`。 |
 | ✕ | `--recency_weight` | `float` | `1.0` | `-wf` 模式下的近期加權係數，`>1` 讓最新窗口主導中位數（例：`2` = 每窗口權重是前一窗的 2 倍）。 |
 | ✕ | `--deploy` | flag | `False` | 直接寫入 `best_trading_params.json`（立即部署生效）；不加則寫入候選檔。 |
@@ -594,7 +621,7 @@ python scripts/param_sensitivity.py -p ts_activation,ts_pullback,sell_threshold 
    - **目的**：在模型預測力固定下，搜尋最佳的實戰交易風控參數（大盤避險紅燈、市況動態買入門檻、各市況持股檔數上限），以最大化獲利率並抑制最大回撤 (MDD)。
    - **執行指令**：`python scripts/optimize_trading_params.py --regime`
    - **產出**：預設寫入候選檔 `configs/best_trading_params_candidate.json`，**不影響現行部署參數**。
-   - **後續步驟**：拿候選參數在「候選未見過」的區間（預設調參區間終點為 `2025-12-31`，故 2026-01 起可當裁判區）跑 `trading_sim.py` 與現行參數對比，確認更優後再手動複製為 `best_trading_params.json`（或加 `--deploy` 重跑直接部署）。`config.py` 會在初始化時自動偵測並動態覆寫預設常數，**全系統（回測、模擬、推理）立即套用新風控值**。
+   - **後續步驟**：跑 `python scripts/validate_candidate_params.py`（零參數）。它會自動把裁判區設在候選沒看過的區間、自動挑乾淨對照組、用 9 條多起點路徑對打，並依「報酬與回撤中位數雙贏」給結論。結論說勝出才手動複製為 `best_trading_params.json`（或加 `--deploy` 重跑直接部署）。`config.py` 會在初始化時自動偵測並動態覆寫預設常數，**全系統（回測、模擬、推理）立即套用新風控值**。
 
 ### Step 6 — 量化研發與實盤生產工作流 (模式 A 與 模式 B)
 
@@ -726,7 +753,9 @@ python run_workflow_experiment.py --fresh
 執行完畢後，系統會自動在 `reports/` 目錄生成一份詳細的 Markdown 對比報告 [reports/workflow_experiment_report.md](reports/workflow_experiment_report.md)，其中包含：
 *   **關鍵績效指標對比**：模式 A（樣本外超級牛市）與模式 B（全週期含牛市）的區間報酬、最大回撤 (MDD) 與 Calmar 比率對比。**注意：模式 B 這欄是樣本內（優化窗 = 回測窗）績效，且 `trading_sim.py` 用單一靜態模型全區間預測（無 walk-forward 重訓），訓練集又涵蓋回測期前約 70%，故封面數字含 lookahead 灌水，不能當實盤預期，也不能直接拿來判斷該不該部署——真正該看的是下面兩個獨立驗證章節。**
 *   **潔淨 OOS 風控泛化驗證 (Stage C)**：凍結風控參數於雙模型（Model A 下界／Model B 上界）回測未見區間，夾收真實前瞻泛化力，獨立章節呈現。回答的問題是：**「風控參數本身有沒有過擬合於優化窗？」**
-*   **⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較**：同一模型（本輪最新訓練的 Model B）、同一回測區間（Model B 的保留 OOS 視窗 `mode_a_oos_start ~ 最新資料日`，刻意避開樣本內前段以排除 lookahead 對「越激進越撈假錢」參數的系統性偏袒），唯一切換風控參數：**候選** = 本輪剛優化的 `best_trading_params_mode_b.json`；**現行** = 本次執行前已部署的 `best_trading_params.json`。回答的問題是：**「這輪優化出來的參數，實際上打不打得贏現在正在跑的參數？」**並自動產出「建議部署 / 不建議部署」結論句。**這是決定要不要覆蓋部署檔的唯一依據**——上面的 Stage C 驗證的是「過不過擬合」，這裡驗證的是「贏不贏現行」，兩者目的不同，缺一不可。
+*   **⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較**：同一模型（本輪最新訓練的 Model B）、同一回測區間（Model B 的保留 OOS 視窗 `mode_a_oos_start ~ 最新資料日`，刻意避開樣本內前段以排除 lookahead 對「越激進越撈假錢」參數的系統性偏袒），唯一切換風控參數：**候選** = 本輪剛優化的 `best_trading_params_mode_b.json`；**現行** = 本次執行前已部署的 `best_trading_params.json`。回答的問題是：**「這輪優化出來的參數，實際上打不打得贏現在正在跑的參數？」**並自動產出「建議部署 / 不建議部署」結論句。上面的 Stage C 驗證的是「過不過擬合」，這裡驗證的是「贏不贏現行」，兩者目的不同，缺一不可。
+    *   **判準是雙贏**：報酬與最大回撤同時不劣於現行才寫「建議部署」。（舊版只比報酬，會在「報酬贏、回撤爆掉」時照樣建議部署，與「不可拉高回撤換報酬」的策略不變量衝突。）MDD 解析失敗時會明確標示判準已降級、不可據以部署。
+    *   **⚠️ 本節只排除「模型」的 lookahead，沒排除「風控參數」的 lookahead**：模式 B 的風控調參區間為 `TRADING_OPT_START_DATE ~ 最新資料日`，**完整涵蓋**本節使用的 OOS 視窗；現行參數若同樣由模式 B 產出亦然。也就是說兩邊都在各自的樣本內被評分，上面說的「系統性偏袒越激進的寬鬆參數」在參數層級並未被排除。本節能回答的是「同樣看過這段資料的兩組參數誰表現好」，**不等同前瞻泛化力**。要取得參數層級的乾淨對照，請改用 `scripts/validate_candidate_params.py`（它會依參數檔的 `date_range` 自動檢查，重疊時拒絕給出部署建議）。
 *   **最佳化風控參數對比**：展示 Optuna 在兩模式下搜尋出的黃金參數差異（如大盤避險紅燈、個股停損線的漂移）。
 *   **獨立存檔參數與診斷**：
     *   模式 A 訊號診斷報告存檔於 [reports/mode_a_regime_stability_report.txt](reports/mode_a_regime_stability_report.txt)。
@@ -765,7 +794,7 @@ python run_workflow_experiment.py --fresh
 *   **🧪 潔淨 OOS 風控泛化驗證 (Stage C)**：雙模型 bracket——下界是 Model A（沒偷看未來、參數凍結），上界是 Model B（有看過那段行情）。回答「**風控參數本身有沒有過擬合**」。
     **怎麼判讀**：下界是「完全不偷看未來」的最保守底線，最值得信。**上界有時會是負的，這是方法本身的特性，不代表 Model B 變差了**——Stage C 的門檻是拿 Model A 的訊號校準出來的，可是 Model B 看過後來的牛市後，分數的高低標準已經整個位移，硬套舊門檻自然會挑錯股票。換個角度看，這其實說明本系統的超額報酬 **很大一部分來自「風控參數會跟著市況調整」**，而 Mode B 每天滾動重訓、定期重新優化參數，正是在維持這個能力。
 
-*   **⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較**：同模型、同（乾淨 OOS）區間，只換風控參數，直接對決「本輪候選」與「現在正在跑的參數」。回答「**這輪候選打不打得贏現行**」。報告結尾會直接寫出「建議部署 / 不建議部署」的結論句——**這是唯一該用來決定要不要覆蓋 `best_trading_params.json` 的依據**，不是報告封面數字，也不是 Stage C bracket（bracket 沒過擬合不代表贏得了現行參數，兩者是獨立問題）。
+*   **⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較**：同模型、同（乾淨 OOS）區間，只換風控參數，直接對決「本輪候選」與「現在正在跑的參數」。回答「**這輪候選打不打得贏現行**」。報告結尾會直接寫出「建議部署 / 不建議部署」的結論句（判準＝報酬與回撤雙贏）——**這是本報告內唯一該用來決定要不要覆蓋 `best_trading_params.json` 的依據**，不是報告封面數字，也不是 Stage C bracket（bracket 沒過擬合不代表贏得了現行參數，兩者是獨立問題）。但要注意本節的 OOS 視窗只對「模型」乾淨、對「風控參數」不乾淨（兩邊的調參區間都涵蓋它），參數層級的乾淨對照要另外跑 `scripts/validate_candidate_params.py`。
 
 ##### ② 部署 mode_b 風控（僅在報告結論寫「建議部署」時才做）
 > ⚠️ 候選不一定比現行好——已有實測案例是候選在潔淨 OOS 明顯輸給現行，若看到報告就無腦部署等於主動把報酬砍掉一大截。**先看上面「⚖️ 候選 vs 現行」章節的結論句，寫「不建議部署」就到此為止，維持現行 `best_trading_params.json` 不動即可。**
@@ -850,7 +879,12 @@ Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.js
 
 ```powershell
 # 1. 確認 Lambda 設定已更新到 config.py（workflow 會還原，需手動改回）
-# 2. 看報告「⚖️ 候選 vs 現行 潔淨 OOS 回測比較」結論句——寫「不建議部署」就跳過第 3 步，維持現行參數
+# 2. 看報告「⚖️ 候選 vs 現行 潔淨 OOS 回測比較」結論句（判準＝報酬與回撤雙贏）
+#    寫「不建議部署」就跳過第 3 步，維持現行參數
+# 2.5 該節只排除模型的 lookahead、沒排除風控參數的 lookahead；
+#     要參數層級的乾淨對照就跑（零參數，會自動挑乾淨對照組 + 9 條多起點）：
+python scripts/validate_candidate_params.py
+
 # 3. 只有結論寫「建議部署」才複製最新 Mode B 參數：
 Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.json -Force
 
@@ -939,9 +973,15 @@ python tests/test_pipeline.py
 | `PORTFOLIO_SPREAD_WEIGHT` | `0.2` | per-regime 多空 Spread 權重（輔助）|
 | `CALMAR_SCORE_WEIGHT` | `0.2` | per-regime Calmar 權重；想更重視回撤可調高 |
 | `MDD_TOLERANCE` | `20.0%` | 全期最大回撤容忍線，超過此值才開始扣分 |
-| `MDD_PENALTY_WEIGHT` | `0.05` | 每超出 1% 全期 MDD 的線性扣分權重（設 `0` 停用）|
+| `MDD_PENALTY_WEIGHT` | `0.30` | 每超出 1% 全期 MDD 的線性扣分權重（設 `0` 停用）|
+| `SCORE_TRADING_DAYS_PER_YEAR` | `252` | per-regime 報酬年化用的交易日數 |
+| `SCORE_ANN_FACTOR_MAX` | `4.0` | 年化倍率上限，防天數過少的 regime 年化後爆炸 |
 
 > **評分邏輯**：`combined_score = Σregime[ ALPHA·alpha + SPREAD·spread + CALMAR·calmar ] − MDD_PENALTY_WEIGHT · max(0, 全期MDD% − MDD_TOLERANCE)`。前半段是各市況分開加總，看不到「市況交界處（例如 Bull 直接轉崩盤）」那種跨段的大回撤，所以後半段再用一個全期 MDD 懲罰把它補回來。
+>
+> **calmar 的分子必須先年化**：舊版直接拿「該 regime 交易日連續複利」的累積報酬當分子，天數越多灌得越大，而分母只算這些日子自己的回撤（壞日子已被抽掉）。後果是天數最多的那一段單項就吃掉幾乎整個分數，其餘權重形同不存在，並系統性獎勵「全押單一市況」——其代價落在市況交界的全期回撤，per-regime 曲線看不到。年化之後三個 regime 的 calmar 才可比。
+>
+> **`MDD_PENALTY_WEIGHT` 2026-08-27 由 `0.05` 調為 `0.30`**：舊值下超標的全期回撤只被扣掉極小的分數，回撤實質不參與排序，於是優化器結構性地只送出高曝險候選、而部署判準又要求報酬與回撤雙贏，兩者互相矛盾。診斷過程與驗證結果見 [scripts/EXPERIMENTS_PENDING.md](scripts/EXPERIMENTS_PENDING.md)。
 
 ### 3. 機器學習樣本大跌懲罰 (MDD 避險機制) 參數
 | 參數 | 預設值 | 說明 |
@@ -981,6 +1021,37 @@ flowchart LR
 ```
 
 > **樣本外（Out-of-Sample）保證**：模型只用 `2025-08-01` 以前的資料訓練（由 `config.py` 的 `BACKTEST_DATE` 設定），這天之後的所有模擬與回測，模型都「沒看過」，所以不會有偷看未來（前視偏差）的問題。
+
+---
+
+## 🧭 已知限制與下一步
+
+> 這節記的是**目前還沒解掉的結構性問題**，不是修復紀錄——歷史變更看 git log，實驗結論與已否決方向看 [scripts/EXPERIMENTS_PENDING.md](scripts/EXPERIMENTS_PENDING.md)。
+
+### 現行部署參數已經看過裁判區
+`run_workflow_experiment.py` 模式 B 以「最新資料日 + `--deploy`」產出實盤參數。這是刻意設計（實盤部署本來就該用全部可得資料調參），代價是**部署檔沒有任何乾淨區間可以驗證它**。後果：
+
+- 不能拿部署檔當對照去判一個守紀律的候選——對照會系統性偏袒部署檔，任何調參終點守在 `TRADING_OPT_END_DATE` 的候選都不可能贏。`scripts/validate_candidate_params.py` 會自動偵測並改用乾淨基準，`run_workflow_experiment.py` 的 B7.5 報告也會標註這一層 lookahead 未被排除。
+- 要恢復「候選 vs 現行」的公平對照，只能等部署檔調參終點之後累積出夠長的區間（至少要能容納數個完整持有週期），或改以乾淨基準重新建立部署基準線。**這件事目前未解**，換基準會讓帳面數字明顯變差（因為原本的數字有相當比例是樣本內），需要先接受這個落差。
+
+### Walk-Forward 的四個窗口高度重疊
+窗口長度取擬合區間 65%、步進取剩餘的三分之一，相鄰窗口重疊比例極高，四窗還共享一大段共同區間。所以「四窗中位數」不是四個獨立樣本，穩定度統計（IQR／CV）會**低估**真實的不穩定程度——即使如此，多數維度仍被判為不穩定。窗口切法尚未重新設計。
+
+> 2026-08-31 試過用尾端 holdout 讓向量選擇離開四窗看過的區間，**實測否決**（代價大於病本身，見 [scripts/EXPERIMENTS_PENDING.md](scripts/EXPERIMENTS_PENDING.md)）。目前排序仍在四窗看過的區間上做，**這個問題仍未解**；同輪上線的「選向量改用部署判準」則被裁判區驗證有效並保留。
+
+### 多起點路徑同樣高度重疊
+`validate_candidate_params.py` 的 9 條路徑起點只差十幾個交易日，反映的是「起點敏感度」而非獨立抽樣。離散度大就代表結論脆弱，故輸出把逐路徑數字全印出來供判讀，不要只看中位數。
+
+### 每窗 Optuna 未固定亂數種子
+`-wf` 為每個窗口各建一個 `optuna.create_study()`，沒有指定 sampler seed，配 `-j` 多執行緒後更不具決定性，**同一條指令跑兩次會得到不同候選**。需要重現某一輪結果時目前沒有辦法。
+
+### 評估指標尚未納入「對大盤 alpha」
+方法論鐵律要求以「無 lookahead 下界 + 對大盤 alpha」評估，但 `trading_sim.py` 的終端摘要只輸出區間報酬與最大回撤，體檢器也只解析這兩項。候選對候選的相對比較不受影響（同一區間下報酬差即等於 alpha 差），但缺少「有沒有贏過大盤」的絕對判讀。
+
+> 2026-08-27 已用零路徑 event study 單獨量測過選股端的 alpha，結論**不樂觀且會改變投入方向**（重點：`RankIC` 健康不代表 alpha 吃得到，診斷基準必須用實際進場價而非收盤到收盤）。數字與完整推論見 [scripts/EXPERIMENTS_PENDING.md](scripts/EXPERIMENTS_PENDING.md) 的「已結案診斷：進場訊號的預測力全部落在隔日跳空」。工具化（把 alpha 納入常規輸出）仍未做。
+
+### MDD 容忍線是否過鬆未經驗證
+目標函式只在全期最大回撤超過 `MDD_TOLERANCE` 時才線性扣分。實際跑出來的候選回撤常已逼近甚至越過該線，代表這條線對本策略幾乎不構成約束，回撤實質上只靠權重裡的 Calmar 那一項在管。想真正壓低回撤，該調的是 `MDD_TOLERANCE`／`CALMAR_SCORE_WEIGHT` 的配置，**而不是多跑幾輪搜尋**——但這需要另做實驗，尚未進行。
 
 ---
 

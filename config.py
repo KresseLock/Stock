@@ -7,6 +7,7 @@ config.py — 台灣股市量化交易系統中央控制面板
 
 快速索引（哪個節影響哪支腳本）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  § 0    → 全系統（資料路徑；唯一來源，任何腳本都不得自行拼接 data 目錄）
   § 1    → scraper.py（limited 模式篩選）、train.py（訓練產業）
   § 2    → trading_sim.py、inference.py（核心買賣／停損／手續費）
   § 2.1  → trading_sim.py、inference.py（大盤避險紅燈 + 移動止盈）
@@ -35,6 +36,33 @@ import datetime
 import os
 import json
 import multiprocessing
+
+
+# ── 0. 資料路徑（全系統唯一來源）─────────────────────────────────
+# *** 所有腳本共用；嚴禁在個別腳本中另外拼接 "data" 目錄 ***
+#
+# 為什麼要集中：資料夾名稱一旦在多處各寫一次，就有機會出現大小寫不同的版本
+# （"data" vs "Data"）。Windows 檔名大小寫不敏感，兩者會恰好指向同一處而完全
+# 看不出問題；一旦搬到 Linux/macOS 就會分裂成兩個資料目錄，症狀是「明明抓過
+# 卻又整批重抓」，而且不會有任何錯誤訊息。集中在這裡，就只有一種拼法。
+#
+# 註：scripts/scraper.py 另有一份等價的 fallback 定義，讓它在沒有 config.py
+#     的環境也能單獨執行。修改此處的目錄名稱時，該處必須同步。
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR     = os.path.join(PROJECT_ROOT, "data")
+
+# 爬蟲原始資料
+RAW_PRICE_DIR        = os.path.join(DATA_DIR, "raw_price")
+RAW_CHIPS_DIR        = os.path.join(DATA_DIR, "raw_chips")
+RAW_MARGIN_DIR       = os.path.join(DATA_DIR, "raw_margin")
+RAW_TWSE_PER_DIR     = os.path.join(DATA_DIR, "raw_twse_per")
+RAW_TAIFEX_DIR       = os.path.join(DATA_DIR, "raw_taifex")
+RAW_SHAREHOLDING_DIR = os.path.join(DATA_DIR, "raw_shareholding")
+RAW_FINANCIAL_DIR    = os.path.join(DATA_DIR, "raw_financial")
+
+# 特徵工程產物
+FEATURES_DIR     = os.path.join(DATA_DIR, "features")
+FEATURES_PARQUET = os.path.join(FEATURES_DIR, "features_combined.parquet")
 
 
 # ── 1. 訓練產業篩選 ──────────────────────────────────────────────
@@ -170,12 +198,23 @@ REGIME_EXIT_PARAMS = {
 # *** optimize_trading_params.py 使用 ***
 # 評分邏輯：combined_score = Σregime[ALPHA·alpha + SPREAD·spread + CALMAR·calmar]
 #           − MDD_PENALTY_WEIGHT · max(0, 全期MDD% − MDD_TOLERANCE)
+# 其中 calmar 的分子為**年化**後的 per-regime 報酬，見 SCORE_TRADING_DAYS_PER_YEAR。
 # 修改後須重跑優化才生效（同時使風控 checkpoint 失效，見 run_workflow_experiment.py）
 PORTFOLIO_ALPHA_WEIGHT  = 0.6    # per-regime 組合 Alpha 權重（核心）
 PORTFOLIO_SPREAD_WEIGHT = 0.2    # per-regime 多空 Spread 權重（輔助）
 CALMAR_SCORE_WEIGHT     = 0.2    # per-regime Calmar 比率權重（想重視回撤可調高）
 MDD_TOLERANCE           = 20.0   # 全期 MDD 容忍線 (%)，超過才扣分
-MDD_PENALTY_WEIGHT      = 0.05   # 每超出 1% MDD 的線性扣分權重（設 0 停用）
+# 2026-08-27：0.05 → 0.30。舊值下「全期 MDD 26.26%」只被扣 0.31 分，而該向量總分 5.03，
+# 回撤形同不參與排序；連續兩輪候選都是「裁判區報酬全贏、回撤全輸」即此故（見
+# scripts/EXPERIMENTS_PENDING.md「2026-08-27 候選裁判區實測」）。與 calmar 年化修正同批生效。
+MDD_PENALTY_WEIGHT      = 0.30   # 每超出 1% MDD 的線性扣分權重（設 0 停用）
+# per-regime 報酬年化用的交易日數。動機：舊版 calmar 分子直接取「該 regime 交易日連續複利」的
+# 累積報酬，天數越多灌得越大（實例：487 個 Bull 日複利 +825.79%，而分母只算這些日子自己的
+# 回撤 8.46% → calmar 78.93），使 Bull 段單項佔總分 99.6%、alpha/spread 權重完全失去作用，
+# 並系統性獎勵「Bull 全押」——其代價落在 regime 交界的全期回撤，per-regime 曲線看不到。
+# 年化後三個 regime 的 calmar 才可比。ANN_FACTOR_MAX 防短 regime（天數少）年化爆炸。
+SCORE_TRADING_DAYS_PER_YEAR = 252
+SCORE_ANN_FACTOR_MAX        = 4.0
 
 
 # ── 2.5 限價掛單動態加價幅度 ─────────────────────────────────────
@@ -189,8 +228,13 @@ ORDER_MARKUP_LOW_PCT    = 1.5   # 標準加價幅度 (%)
 
 # ── 3. 數據爬蟲與時間區間 ────────────────────────────────────────
 # *** scraper.py、Auto_RUN.py 使用 ***
-FINMIND_FETCH_MODE = "limited"          # "limited" = 僅下載 TRAIN_INDUSTRIES=True 產業（省 Token）
-                                         # "all" = 全市場下載
+FINMIND_FETCH_MODE = "listed"           # "listed"  = 以 data/raw_price 全歷史推導的上市普通股為母體（推薦，含已下市）
+                                         #             清單快取於 data/universe_cache.json，僅增量掃描新增的價格檔
+                                         # "limited" = 僅下載 TRAIN_INDUSTRIES=True 產業（舊行為）
+                                         # "all"     = 依 stock_categories.json 全市場下載
+                                         # 註：limited/all 走產業對照表，會抓進上櫃股與特別股（無 TWSE 價量或無獨立
+                                         #     財報、生產流水線用不到），同時漏掉 TRAIN_INDUSTRIES=False 的上市普通股，
+                                         #     使其財報停止更新。listed 模式兩者一併解決且總檔數更少。
 START_DATE         = datetime.date(2020, 1, 1)  # 數據回溯起點（建議至少 5 年）
 FINMIND_CACHE_DAYS = 15                  # FinMind 基本面資料快取更新間隔天數
 GHOST_DATA_PCT_THRESHOLD = 0.15          # 幽靈資料/極端價格跳空判定門檻 (15%)
@@ -203,6 +247,41 @@ FINMIND_MAX_LIMIT_WAITS = 6              # 單次呼叫遇 429/402 限速時，�
 RUN_OPTIMIZATION      = False       # 是否在流水線執行時重新啟動 Optuna 調參
 OPTIMIZATION_TRIALS   = 600         # Optuna 最佳化最大輪數
 EARLY_STOPPING_ROUNDS = 200         # Optuna Early Stopping 輪數（None = 不提早結束）
+# Walk-Forward 參數穩定度分級門檻（變異係數 CV = 標準差 / |平均|），供 optimize_trading_params.py 使用。
+# CV < WARN 判「穩定」；WARN~BAD 判「需注意」；>= BAD 判「不穩定」。
+# 「不穩定」維度的窗口間中位數取在雜訊上（實例：regime_bull_trend 四窗 0.0015/0.0025/0.0015/0.0010），
+# 故 WF 另外提出一組「保守中位數」候選：不穩定維度沿用現行部署值，僅穩定維度更新，再與其他候選同場評分。
+WF_STABILITY_CV_WARN  = 0.15
+WF_STABILITY_CV_BAD   = 0.30
+# Walk-Forward 向量選擇的「尾端 holdout」：調參區間最後這個比例的時間切出來，四個子窗口都不許看，
+# 只用於替可交付向量排序（見 optimize_trading_params.py「候選向量評分守門」）。
+# 動機：四窗各佔調參總長 65%、step 約 5.5 個月，彼此高度重疊，而向量池先前是拿「整段調參區間」
+# 評分排序的——那段包含每個窗口自己的訓練期，等同 in-sample 選美。實測（2026-08-31）第 1 名與
+# 第 2 名得分只差 0.07，裁判區報酬中位數卻差 70pp 以上，排序等於建立在各窗自己的樣本內表現上。
+# 代價：最後這段資料不再參與參數擬合，只當裁判。設 0.0 停用（退回舊行為，在整段調參區間上排序）。
+#
+# ⛔ 2026-08-31 實測後停用（設 0.0），機制與數字見 scripts/EXPERIMENTS_PENDING.md
+#    「尾端 holdout 選向量」。三句話總結：
+#      (1) 排序區間換成 holdout 對「選誰」沒有作用——部署判準在 holdout 與整段調參區間選出同一個向量；
+#      (2) 但切 holdout 讓四窗少看最近 9.5 個月，整池的**裁判區**表現系統性退化
+#          （best-of-pool 報酬中位數 +61.44% → +15.62%、回撤 −11.08% → −17.43%）；
+#      (3) 淨效果是純虧，故停用。程式碼保留，日後若要試「非尾端／輪替式 holdout」可直接復用。
+WF_HOLDOUT_RATIO      = 0.0
+WF_HOLDOUT_MIN_DAYS   = 90          # holdout 最短日曆天數；不足（區間太短）則自動停用並警示
+# Walk-Forward 從候選向量池挑一組出來的排序依據：
+#   "deploy_gate"（預設）＝直接用部署判準：先取 Pareto 前緣（沒有別的向量在報酬與回撤上同時勝過它），
+#                          再於前緣內取 Calmar 最高者。與 §4.5 #4「雙贏才算勝出」同一把尺。
+#   "objective"        ＝舊行為，用 Optuna 目標函式得分排序（保留供回溯對照）。
+# 動機：目標函式與部署判準是兩把不同的尺，實測會選到「被雙面支配」的向量——2026-08-31 兩次獨立
+# 煙霧測試兩次都發生（詳見 scripts/EXPERIMENTS_PENDING.md 缺口#2）。目標函式仍照常驅動每個窗口
+# 內的 Optuna 搜尋，這個常數只決定「最後從 6 組可交付向量裡挑哪一組」。
+# 為何 Pareto 前緣要當硬門檻而不是只排 Calmar：報酬為負時 Calmar 會獎勵更大的回撤
+# （−2%/50% 算出來高於 −2%/10%），前緣過濾正好擋掉這個陷阱。
+WF_SELECT_RULE        = "deploy_gate"
+# Walk-Forward 每個窗口每跑幾輪印一次進度（純顯示，不影響搜尋結果，故不納入 checkpoint 指紋）。
+# 動機：每窗 150 輪期間 Optuna 的輸出被導去 devnull，原本從窗口開始到結束十幾分鐘完全沒消息，
+# 無從判斷是在跑還是卡住。設 0 可關閉。
+WF_PROGRESS_EVERY     = 25
 BACKTEST_DATE         = "20250801"  # 訓練／測試切分分界點（OOS 評估起點）
                                     # 設為 None → 模式 B（滾動重訓，用於實盤生產）
 TRAIN_SPLIT_RATIO     = 0.70        # train.py 日期分位切分：訓練集結束分位
@@ -351,8 +430,7 @@ TRADING_PARAM_BOUNDS = {
 # ── 11. 自動加載最佳化交易風控參數（啟動時自動執行，勿修改）────────
 # configs/best_trading_params.json 存在時，自動覆寫 § 2 ~ § 2.3 的預設值；
 # 任何模組 import config 即觸發此段，無須手動呼叫。
-_base_dir = os.path.dirname(os.path.abspath(__file__))
-_best_params_path = os.path.join(_base_dir, "configs", "best_trading_params.json")
+_best_params_path = os.path.join(PROJECT_ROOT, "configs", "best_trading_params.json")
 if os.path.exists(_best_params_path):
     try:
         with open(_best_params_path, "r", encoding="utf-8") as _f:

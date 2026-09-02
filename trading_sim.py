@@ -10,7 +10,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
+# 資料路徑唯一來源：config.py § 0
+try:
+    from config import FEATURES_PARQUET as DATA_PATH
+except ImportError:
+    # ↓ fallback 必須與 config.py § 0 一致（見該節說明）
+    DATA_PATH = os.path.join(BASE_DIR, "data", "features", "features_combined.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 
 # ── 載入中央控制面板接單加價幅度與回測預設値 (CLI 預設不在 run_simulation 內装載) ──
@@ -72,7 +77,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                    regime_buy_threshold=None, regime_bull_trend=None, regime_bear_trend=None,
                    regime_max_positions=None, regime_exit_params=None,
                    exit_regime_lag=None, entry_bull_confirm_days=None,
-                   downgrade_flash_trim=None, export_report=True):
+                   export_report=True):
     print("=" * 70)
     print(f"  啟動量化交易回測 (Out-of-Sample, T+1 限價搓合 + 雙風控防線版)")
     print(f"  期間: {start_date} 到 {end_date}")
@@ -466,23 +471,6 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                     elif triggered_trailing_stop:
                         sells_today.append((sid, open_T1, f"觸發移動止盈(高點 {pos['max_close_price']:.2f} 回撤{abs(eff_ts_pull)}%)"))
 
-        # 降級砍倉（實驗參數）：regime 非 Bull 且持倉超過檔數上限時，只砍「Bull 進場端買進、
-        # 買後 ≤N 個交易日即遇降級」的閃現部位（LIFO），以今日開盤價出場、不受最少持股天數限制。
-        # None＝停用，行為與原版完全相同。既有非閃現持股仍走自然汰換，維持吃肥尾能力。
-        if downgrade_flash_trim and entry_regime != 'Bull':
-            _selling = {s for s, _, _ in sells_today}
-            _remain = [s for s in positions if s not in _selling]
-            _excess = len(_remain) - eff_max_positions
-            if _excess > 0:
-                _flash = [s for s in _remain
-                          if positions[s].get('buy_entry_regime') == 'Bull'
-                          and (idx_today - positions[s].get('buy_idx', idx_today)) <= downgrade_flash_trim]
-                _flash.sort(key=lambda s: positions[s].get('buy_idx', 0), reverse=True)
-                for s in _flash[:_excess]:
-                    _o = today_data.loc[s, 'open'] if s in today_data.index else None
-                    _o = float(_o) if _o is not None and not pd.isna(_o) and _o > 0 else positions[s]['current_price']
-                    sells_today.append((s, _o, f"降級砍倉(持倉{len(_remain)} > 上限{eff_max_positions})"))
-
         today_sells_amount = 0
         for sid, sell_price, reason in sells_today:
             pos = positions.pop(sid)
@@ -635,7 +623,6 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                     'max_close_price': close_T1 if not pd.isna(close_T1) and close_T1 > 0 else fill_price,
                     'buy_idx': idx_today,
                     'atr_stop_pct': _atr_stop_pct,
-                    'buy_entry_regime': entry_regime,
                 }
                 cname = stock_names.get(sid, "")
                 
@@ -908,25 +895,25 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--max_pos", type=int, default=MAX_POSITIONS, help="最大持股檔數")
     parser.add_argument("--panic_ma5", type=float, default=None, help="大盤 5 日滾動平均報酬率避險門檻 (例如 -0.005)")
     parser.add_argument("--panic_breadth", type=float, default=None, help="全市場上漲家數比例避險門檻 (例如 0.35)")
-    parser.add_argument("--buy_threshold", type=float, default=None, help="買入多空淨分數門檻 (%)")
-    parser.add_argument("--sell_threshold", type=float, default=None, help="賣出多空淨分數門檻 (%)")
-    parser.add_argument("--stop_loss", type=float, default=None, help="固定的個股停損趴數 (%)")
-    parser.add_argument("--ts_activation", type=float, default=None, help="移動止盈啟動門檻 (%)")
-    parser.add_argument("--ts_pullback", type=float, default=None, help="移動止盈回撤門檻 (%)")
+    parser.add_argument("--buy_threshold", type=float, default=None, help="買入多空淨分數門檻 (%%)")
+    parser.add_argument("--sell_threshold", type=float, default=None, help="賣出多空淨分數門檻 (%%)")
+    parser.add_argument("--stop_loss", type=float, default=None, help="固定的個股停損趴數 (%%)")
+    parser.add_argument("--ts_activation", type=float, default=None, help="移動止盈啟動門檻 (%%)")
+    parser.add_argument("--ts_pullback", type=float, default=None, help="移動止盈回撤門檻 (%%)")
     parser.add_argument("--min_hold_days", type=int, default=None, help="最少持股天數 (防止頻繁交易)")
-    parser.add_argument("--markup_pct", type=float, default=None, help="掛單溢價幅度 (%)，負數為折價買進")
+    parser.add_argument("--markup_pct", type=float, default=None, help="掛單溢價幅度 (%%)，負數為折價買進")
     # 市況出場參數（逐 regime 覆蓋，不傳則沿用全域預設）
-    parser.add_argument("--bull_sell",   type=float, default=None, help="Bull regime 賣出門檻 (%)")
-    parser.add_argument("--bull_ts_act", type=float, default=None, help="Bull regime 移動止盈啟動 (%)")
-    parser.add_argument("--bull_ts_pull",type=float, default=None, help="Bull regime 移動止盈回撤 (%)")
+    parser.add_argument("--bull_sell",   type=float, default=None, help="Bull regime 賣出門檻 (%%)")
+    parser.add_argument("--bull_ts_act", type=float, default=None, help="Bull regime 移動止盈啟動 (%%)")
+    parser.add_argument("--bull_ts_pull",type=float, default=None, help="Bull regime 移動止盈回撤 (%%)")
     parser.add_argument("--bull_hold",   type=int,   default=None, help="Bull regime 最少持股天數")
-    parser.add_argument("--side_sell",   type=float, default=None, help="Sideways regime 賣出門檻 (%)")
-    parser.add_argument("--side_ts_act", type=float, default=None, help="Sideways regime 移動止盈啟動 (%)")
-    parser.add_argument("--side_ts_pull",type=float, default=None, help="Sideways regime 移動止盈回撤 (%)")
+    parser.add_argument("--side_sell",   type=float, default=None, help="Sideways regime 賣出門檻 (%%)")
+    parser.add_argument("--side_ts_act", type=float, default=None, help="Sideways regime 移動止盈啟動 (%%)")
+    parser.add_argument("--side_ts_pull",type=float, default=None, help="Sideways regime 移動止盈回撤 (%%)")
     parser.add_argument("--side_hold",   type=int,   default=None, help="Sideways regime 最少持股天數")
-    parser.add_argument("--bear_sell",   type=float, default=None, help="Bear regime 賣出門檻 (%)")
-    parser.add_argument("--bear_ts_act", type=float, default=None, help="Bear regime 移動止盈啟動 (%)")
-    parser.add_argument("--bear_ts_pull",type=float, default=None, help="Bear regime 移動止盈回撤 (%)")
+    parser.add_argument("--bear_sell",   type=float, default=None, help="Bear regime 賣出門檻 (%%)")
+    parser.add_argument("--bear_ts_act", type=float, default=None, help="Bear regime 移動止盈啟動 (%%)")
+    parser.add_argument("--bear_ts_pull",type=float, default=None, help="Bear regime 移動止盈回撤 (%%)")
     parser.add_argument("--bear_hold",   type=int,   default=None, help="Bear regime 最少持股天數")
     parser.add_argument("--exit_lag",    type=int,   default=None, help="切出 Bull 出場模式所需的連續非 Bull 天數 (不傳則沿用 config EXIT_REGIME_LAG)")
 

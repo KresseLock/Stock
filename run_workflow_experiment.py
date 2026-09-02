@@ -102,7 +102,7 @@ def format_val_for_config(val):
 def get_latest_data_date():
     """掃描 data/raw_price/ 目錄，自動偵測最新已下載的資料日期，回傳 YYYY-MM-DD 字串。"""
     import glob as _glob
-    price_dir = os.path.join(BASE_DIR, "data", "raw_price")
+    from config import RAW_PRICE_DIR as price_dir   # 唯一來源：config.py § 0
     if not os.path.isdir(price_dir):
         fallback = time.strftime("%Y-%m-%d")
         print(f"  [警告] 找不到 data/raw_price/，以今日 {fallback} 作為回測結束日")
@@ -251,13 +251,32 @@ def load_trading_params(filepath):
     return params
 
 
+# 「改了就必須重跑風控優化」的 config.py 常數清單（compute_opt_signature 用）。
+# 存在的理由：目標函式的權重、向量選擇規則、搜尋空間邊界全都住在 config.py，不在腳本裡。
+# 只雜湊腳本原始碼時，「只調 MDD_PENALTY_WEIGHT 而不動腳本」會讓指紋不變，於是靜默沿用
+# 舊權重下優化出來的參數——正是指紋機制本來要防的情況。新增同類常數時要一起加進來。
+OPT_SIGNATURE_CONFIG_KEYS = (
+    # § 2.4 Optuna 風控調參評分函式權重 → 改了等於換了目標函式
+    "PORTFOLIO_ALPHA_WEIGHT", "PORTFOLIO_SPREAD_WEIGHT", "CALMAR_SCORE_WEIGHT",
+    "MDD_TOLERANCE", "MDD_PENALTY_WEIGHT",
+    "SCORE_TRADING_DAYS_PER_YEAR", "SCORE_ANN_FACTOR_MAX",
+    # § 4 Walk-Forward 向量選擇 → 改了等於換了「從候選池選哪一個」的規則
+    "WF_STABILITY_CV_WARN", "WF_STABILITY_CV_BAD",
+    "WF_HOLDOUT_RATIO", "WF_HOLDOUT_MIN_DAYS", "WF_SELECT_RULE",
+    # § 10.5 搜尋空間邊界 → 改了等於換了搜得到的解集合
+    "TRADING_PARAM_BOUNDS",
+)
+
+
 def compute_opt_signature(opt_cmd):
     """為風控優化建立指紋，用於判定既有 checkpoint 是否仍然有效。
 
-    指紋涵蓋兩項「會讓既有風控參數失效」的來源：
-      1. scripts/optimize_trading_params.py 原始碼 → 捕捉目標函式 / 搜尋空間變動
+    指紋涵蓋三項「會讓既有風控參數失效」的來源：
+      1. scripts/optimize_trading_params.py 原始碼 → 捕捉目標函式 / 搜尋空間的**程式碼**變動
          （例如加入 regime_* 動態門檻）。
       2. 傳入優化器、會影響搜尋行為的 CLI 旗標（如 --regime、-wf）→ 捕捉旗標變動。
+      3. OPT_SIGNATURE_CONFIG_KEYS 列出的 config.py 常數值 → 捕捉目標函式權重、向量選擇規則、
+         搜尋空間邊界的**設定值**變動。第 1 項抓不到這些，因為它們不在腳本裡。
 
     日期 / 資金 / jobs 等執行環境參數不納入（屬模式定義或環境，不應觸發重優化）。
     任一來源變動都會讓指紋改變，使 run_workflow_experiment 拒絕沿用過時的
@@ -269,6 +288,11 @@ def compute_opt_signature(opt_cmd):
         h.update(f.read())
     flags = sorted(a for a in opt_cmd if a.startswith("--") or a in ("-wf",))
     h.update("|".join(flags).encode("utf-8"))
+    # sort_keys 確保 dict 型常數（TRADING_PARAM_BOUNDS）的雜湊不受宣告順序影響；
+    # default=repr 讓 tuple 以外的非 JSON 型別也能穩定序列化而不是拋例外。
+    for _k in OPT_SIGNATURE_CONFIG_KEYS:
+        _v = json.dumps(getattr(_cfg, _k, None), sort_keys=True, default=repr)
+        h.update(f"{_k}={_v}".encode("utf-8"))
     return h.hexdigest()
 
 
@@ -442,13 +466,32 @@ def write_experiment_report(res):
     inc_mdd = res["mode_b"].get("cmp_incumbent_oos_mdd")
     incumbent_section_md = ""
     if inc_ret is not None or inc_mdd is not None:
-        if cand_ret is not None and inc_ret is not None:
-            if cand_ret > inc_ret:
-                verdict = (f"潔淨 OOS 區間候選 (mode_b) 報酬 `{fmt_pct(cand_ret)}` 優於現行 `{fmt_pct(inc_ret)}`，"
+        # 部署判準對齊 CLAUDE.md §4.5 #4：報酬與回撤**雙贏**才算勝出。
+        # 舊版只判 cand_ret > inc_ret，會在「報酬贏、回撤爆掉」時照樣寫出「建議部署」，
+        # 與 §4.5 #2（不可用拉高回撤換報酬）及 scripts/validate_candidate_params.py 的判準衝突。
+        # 註：cmp_*_oos_mdd 由 parse_sim_output 取絕對值幅度（正值），故數字越小越好。
+        if None not in (cand_ret, inc_ret, cand_mdd, inc_mdd):
+            _win_ret = cand_ret > inc_ret
+            _win_mdd = cand_mdd <= inc_mdd
+            _cmp = (f"報酬 `{fmt_pct(cand_ret)}` vs 現行 `{fmt_pct(inc_ret)}`、"
+                    f"MDD `{fmt_mdd(cand_mdd)}` vs 現行 `{fmt_mdd(inc_mdd)}`")
+            if _win_ret and _win_mdd:
+                verdict = (f"潔淨 OOS 區間候選 (mode_b) {_cmp}，報酬與回撤**雙贏**，"
                            f"**建議部署**：將 `best_trading_params_mode_b.json` 複製覆蓋為 `best_trading_params.json`。")
-            else:
-                verdict = (f"潔淨 OOS 區間候選 (mode_b) 報酬 `{fmt_pct(cand_ret)}` 未優於現行 `{fmt_pct(inc_ret)}`，"
+            elif not _win_ret and not _win_mdd:
+                verdict = (f"潔淨 OOS 區間候選 (mode_b) {_cmp}，報酬與回撤**雙輸**，"
                            f"**不建議部署**，維持現行 `best_trading_params.json` 不變。")
+            else:
+                _side = "報酬贏但回撤劣化" if _win_ret else "回撤贏但報酬劣化"
+                verdict = (f"潔淨 OOS 區間候選 (mode_b) {_cmp}，{_side}，**未達雙贏**（CLAUDE.md §4.5 #4），"
+                           f"**不建議部署**，維持現行 `best_trading_params.json` 不變。"
+                           f"（參考 Calmar：候選 `{fmt_calmar(cand_ret, cand_mdd)}` vs 現行 "
+                           f"`{fmt_calmar(inc_ret, inc_mdd)}`；Calmar 較優不足以推翻雙贏判準，"
+                           f"要改判須先補多起點驗證，見 scripts/EXPERIMENTS_PENDING.md 方法論鐵律 #1）")
+        elif cand_ret is not None and inc_ret is not None:
+            verdict = (f"**MDD 解析失敗，判準降級為僅比報酬，不符 §4.5 #4 雙贏判準、不可據以部署**："
+                       f"候選 `{fmt_pct(cand_ret)}` vs 現行 `{fmt_pct(inc_ret)}`。"
+                       f"請檢查 trading_sim.py 輸出後重跑本節。")
         else:
             verdict = "資料不完整，無法判定。"
         incumbent_section_md = f"""
@@ -459,6 +502,8 @@ def write_experiment_report(res):
 > **為何用潔淨 OOS 而非全週期**：`trading_sim.py` 以單一靜態模型全區間預測（無 walk-forward 重訓），而 Model B 的訓練集涵蓋回測期前約 70%，全週期回測前段屬樣本內、報酬受 lookahead 灌水，且會**系統性偏袒「越激進越撈假錢」的寬鬆參數**，使部署比較失真。故本比較僅在 Model B 的保留 OOS 視窗 **{_oos_start} ~ {_latest}** 上跑，兩邊同用 Model B、同區間，唯一差異是風控參數：**候選**＝本輪剛優化的 `best_trading_params_mode_b.json`；**現行**＝執行前已部署的 `best_trading_params.json`。
 >
 > ⚠️ Model B 對此 OOS 段仍屬「上界」（含最新訓練），絕對數字偏樂觀；但兩邊共用同一模型，**相對排名可信**，足以作為部署決策依據。
+>
+> ⚠️ **本視窗只排除「模型」的 lookahead，未排除「風控參數」的 lookahead**（守門 3/3）：模式 B 的風控調參區間為 `TRADING_OPT_START_DATE ~ {_latest}`（見 B6，`-e` 帶最新資料日），**完整涵蓋本 OOS 視窗**；現行參數若同樣由模式 B 產出亦然。也就是說兩邊都在各自的樣本內被評分，上一段所說「系統性偏袒越激進越撈假錢的寬鬆參數」在參數層級並未被排除。本節能回答的是「同樣看過這段資料的兩組參數誰表現好」，**不等同前瞻泛化力**。要取得參數層級的乾淨對照，對照方的調參終點須早於本視窗起點（`scripts/validate_candidate_params.py` 會依參數檔的 `date_range` 自動檢查並在重疊時拒絕給出部署建議）。
 
 | 指標 (潔淨 OOS {_oos_start} ~ {_latest}) | 🆕 候選 (mode_b) | 🔵 現行 (incumbent，執行前已部署) |
 | :--- | :--- | :--- |
