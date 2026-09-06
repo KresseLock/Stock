@@ -1,290 +1,66 @@
 {
-  "2315": {
-    "status": "pending",
-    "first_seen": "2026-09-01"
-  },
-  "2336": {
-    "status": "pending",
-    "first_seen": "2026-09-01"
-  },
-  "2341": {
-    "status": "pending",
-    "first_seen": "2026-09-01"
-  },
-  "2350": {
-    "status": "pending",
-    "first_seen": "2026-09-01"
-  },
-  "2361": {
-    "status": "pending",
-    "first_seen": "2026-09-01"
-  },
-  "2381": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2396": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2403": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2411": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2437": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2446": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2452": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2463": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2469": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2473": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "2475": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3009": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3020": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3053": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3061": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3063": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3080": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3271": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3315": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3367": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3474": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3514": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3519": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3534": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3559": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3561": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3573": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3579": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3584": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3598": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3599": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3614": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3638": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "3697": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "5280": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "5304": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "5349": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "6119": {
-    "status": "confirmed",
-    "confirmed_date": "2026-05-31"
-  },
-  "6145": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-01"
-  },
-  "6255": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-01"
-  },
-  "6286": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-01"
-  },
-  "6422": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-01"
-  },
-  "7898": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-01"
-  },
-  "8008": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-01"
-  },
-  "8199": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-01"
-  },
-  "1107": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "1262": {
-    "status": "pending",
-    "first_seen": "2026-09-02"
-  },
-  "1311": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "1469": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "1520": {
-    "status": "pending",
-    "first_seen": "2026-06-03"
-  },
-  "1523": {
-    "status": "pending",
-    "first_seen": "2026-09-01"
-  },
-  "2391": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "2418": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "2447": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "2479": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "2494": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "3007": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "3142": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "3214": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-03"
-  },
-  "4984": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-04"
-  },
-  "6280": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-04"
-  },
-  "7735": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-04"
-  },
-  "8078": {
-    "status": "confirmed",
-    "confirmed_date": "2026-06-04"
-  },
   "9103": {
     "status": "confirmed",
-    "confirmed_date": "2026-08-16"
+    "confirmed_date": "2026-09-03"
   },
   "9110": {
     "status": "confirmed",
-    "confirmed_date": "2026-08-16"
+    "confirmed_date": "2026-09-03"
   },
   "9136": {
     "status": "confirmed",
-    "confirmed_date": "2026-08-16"
+    "confirmed_date": "2026-09-03"
   },
   "9188": {
     "status": "confirmed",
-    "confirmed_date": "2026-08-16"
+    "confirmed_date": "2026-09-03"
+  },
+  "1262": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "1469": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "1704": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "2475": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "3514": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "3519": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "3561": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "3579": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "4984": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "6145": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "6422": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
+  },
+  "9157": {
+    "status": "confirmed",
+    "confirmed_date": "2026-09-03"
   }
 }
