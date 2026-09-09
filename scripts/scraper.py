@@ -25,6 +25,7 @@ skip_dates.json 說明:
     "empty_response"    - API 有回應但資料為空
 """
 
+import atexit
 import csv
 import datetime
 import io
@@ -127,6 +128,12 @@ except ImportError:
     RAW_TAIFEX_DIR       = os.path.join(DATA_DIR, "raw_taifex")
     RAW_SHAREHOLDING_DIR = os.path.join(DATA_DIR, "raw_shareholding")
     RAW_FINANCIAL_DIR    = os.path.join(DATA_DIR, "raw_financial")
+
+try:
+    from config import SCRAPER_REQUIRED_COLS
+except ImportError:
+    # 脫離 config 獨立執行時停用完整性驗證（行為等同修改前）
+    SCRAPER_REQUIRED_COLS = {}
 
 # 逐日資料所在的資料夾（check_data_integrity 掃描、幽靈日清理都用這一份）
 TWSE_DAILY_DIRS = [
@@ -258,15 +265,20 @@ def _universe_from_raw_price() -> set:
     try:
         with open(_UNIVERSE_CACHE_PATH, "r", encoding="utf-8") as f:
             cached = json.load(f)
-        if cached.get("scanned_upto") in files:
+        upto = cached.get("scanned_upto")
+        # scanned_count 對不上 = 有檔案被插進 upto 之前（把 START_DATE 往前調後回補歷史
+        # 就是這種情形）。此時「新增檔一定排在最後」的增量前提不再成立，沿用快取會靜默
+        # 漏掉只存在於回補區間、之後就下市的代號——正是本函式開頭警告的倖存者偏誤，
+        # 而且數量看起來完全正常。因此一旦對不上就整個重掃。
+        if upto in files and cached.get("scanned_count") == files.index(upto) + 1:
             cached_stocks = set(cached.get("stocks", []))
-            scanned_upto = cached["scanned_upto"]
+            scanned_upto = upto
     except Exception:
         pass
 
     if scanned_upto is None:
         pending = files
-        print(f"  [母體] 首次建立清單，掃描 {len(pending)} 個價格檔（約需 1 分鐘，之後只掃新增檔）...")
+        print(f"  [母體] 建立清單，掃描 {len(pending)} 個價格檔（約需 1 分鐘，之後只掃新增檔）...")
     else:
         pending = files[files.index(scanned_upto) + 1:]
 
@@ -277,7 +289,9 @@ def _universe_from_raw_price() -> set:
         try:
             tmp = _UNIVERSE_CACHE_PATH + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
-                json.dump({"scanned_upto": files[-1], "stocks": sorted(out)}, f)
+                json.dump({"scanned_upto": files[-1],
+                           "scanned_count": len(files),
+                           "stocks": sorted(out)}, f)
             os.replace(tmp, _UNIVERSE_CACHE_PATH)
         except Exception:
             pass
@@ -500,12 +514,122 @@ def _clean_html(df: pd.DataFrame) -> pd.DataFrame:
     return df.replace(r"<[^>]+>", "", regex=True)
 
 
-def _already_exists(path: str) -> bool:
-    return os.path.exists(path) and os.path.getsize(path) > 0
+def _csv_missing_required(path: str, dataset: str) -> list:
+    """
+    回傳既有 CSV 缺少的必要欄位；未登記或解析失敗時回傳空 list。
+    只讀表頭 (nrows=0)，故對每日增量掃描的成本可忽略。
+    用 pandas 解析而非讀首行，是因 TWSE 殘缺表頭會把欄名折成跨行引號字串
+    （例：'"暫停現股賣出後
+現款買進當沖註記"'），讀首行會誤判。
+    """
+    required = SCRAPER_REQUIRED_COLS.get(dataset)
+    if not required:
+        return []
+    try:
+        cols = set(pd.read_csv(path, nrows=0, encoding="utf-8-sig").columns)
+    except Exception:
+        return []          # 解析失敗不誤判為殘缺，交由既有流程處理
+    return [c for c in required if c not in cols]
 
 
-def _save_csv(df: pd.DataFrame, path: str):
+# ── 表頭驗證快取 ──────────────────────────────────────
+#
+# 為什麼需要：_already_exists() 對每個既有檔都要用 pandas 解析一次表頭，而資料庫
+# 有約 1.3 萬個日檔，實測光這件事每次啟動就要 19 秒——但其中 99.9% 是上次已經驗過、
+# 內容一個位元組都沒變的舊檔。快取記錄「已驗過且通過」的檔案 (size, mtime_ns)，
+# 下次只要 os.stat 對得上就直接放行（全量 stat 約 0.5 秒）。
+#
+# 只快取「通過」的結果：沒通過代表該檔會被重新下載，記下來反而要另外處理失效。
+# 檔案被 -c 清掉或重新下載時 mtime/size 必然改變，快取自動失效，不需手動清。
+_HEADER_CACHE_PATH  = os.path.join(DATA_DIR, "header_ok_cache.json")
+_header_cache       = None    # {相對路徑: [size, mtime_ns]}；None = 尚未載入
+_header_cache_dirty = False
+
+
+def _header_cache_key(path: str) -> str:
+    """以相對 DATA_DIR 的路徑當 key，避免整台機器的絕對路徑寫進快取。"""
+    try:
+        return os.path.relpath(path, DATA_DIR).replace(os.sep, "/")
+    except ValueError:        # 跨磁碟機代號無法取相對路徑（Windows）
+        return os.path.abspath(path).replace(os.sep, "/")
+
+
+def _load_header_cache() -> dict:
+    global _header_cache
+    if _header_cache is None:
+        try:
+            with open(_HEADER_CACHE_PATH, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            _header_cache = loaded if isinstance(loaded, dict) else {}
+        except Exception:
+            _header_cache = {}
+    return _header_cache
+
+
+def _save_header_cache():
+    """原子寫入；沒有新增項目就不寫檔。由 atexit 呼叫，中途例外/Ctrl-C 也保得住。"""
+    global _header_cache_dirty
+    if not _header_cache_dirty or not _header_cache:
+        return
+    try:
+        tmp = _HEADER_CACHE_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(_header_cache, f)
+        os.replace(tmp, _HEADER_CACHE_PATH)
+        _header_cache_dirty = False
+    except Exception:
+        pass
+
+
+atexit.register(_save_header_cache)
+
+
+def _already_exists(path: str, dataset: str = None) -> bool:
+    """
+    檔案已存在且非空即視為完成；dataset 有登記必要欄位時一併驗表頭。
+    TWSE 盤後分階段發布會產出缺欄的殘缺檔，若逕視為已完成則永不修正
+    （見 config.py § 0.1）。表頭殘缺即回傳 False，交由既有補抓流程重下載。
+
+    表頭驗證走 _header_cache（見上）：同一份檔案只在首次或內容變動後解析一次。
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    if st.st_size <= 0:
+        return False
+    if not (dataset and SCRAPER_REQUIRED_COLS.get(dataset)):
+        return True
+
+    cache = _load_header_cache()
+    key   = _header_cache_key(path)
+    stamp = [st.st_size, st.st_mtime_ns]
+    if cache.get(key) == stamp:
+        return True
+
+    if _csv_missing_required(path, dataset):
+        return False
+
+    global _header_cache_dirty
+    cache[key] = stamp
+    _header_cache_dirty = True
+    return True
+
+
+def _save_csv(df: pd.DataFrame, path: str, dataset: str = None) -> bool:
+    """
+    存檔並回傳是否成功。dataset 有登記必要欄位而 df 缺欄時不寫檔並回傳 False，
+    使該日視為未完成、下次重抓，避免把分階段發布的早段版本固化下來。
+    """
+    required = SCRAPER_REQUIRED_COLS.get(dataset) if dataset else None
+    if required:
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            print(f"    [資料不完整] {os.path.basename(path)} 缺必要欄位 {missing}"
+                  f"（TWSE 可能尚未發布完整報表），不予存檔，下次重抓")
+            return False
     _clean_html(df).to_csv(path, index=False, encoding="utf-8-sig")
+    return True
 
 
 def _create_df_safely(rows: list, fields: list) -> pd.DataFrame:
@@ -565,8 +689,8 @@ TWSE_NETWORK_WAIT_SEC  = 5
 # 每次 TWSE 請求前的最小間隔。原本只在「日期迴圈」尾端 sleep 一次，但每個交易日
 # 會打 7 個 TWSE endpoint，實際速率是 3~5 req/s —— 這正是 IP 被封鎖的直接原因。
 # 改為對每次請求節流，把整體速率壓到約 1 req/s。
-TWSE_REQUEST_GAP = (0.7, 1.4)
-
+# TWSE_REQUEST_GAP = (0.7, 1.4)
+TWSE_REQUEST_GAP = (1.2, 1.9)
 
 class TwseAccessBlocked(Exception):
     """來源 IP 被證交所 WAF 封鎖，本輪抓取應立即中止（不記失敗、不寫 skip）。"""
@@ -689,7 +813,7 @@ def crawl_daily_price(date_str: str, skip: dict) -> str:
       "not_ready"     - 今日資料尚未上架，不計入 fail_log，待稍後重試
     """
     path = os.path.join(RAW_PRICE_DIR, f"{date_str}_price.csv")
-    if _already_exists(path):
+    if _already_exists(path, "price"):
         return "exists"
 
     if _is_skip_date(skip, "price", date_str):
@@ -728,13 +852,13 @@ def crawl_daily_price(date_str: str, skip: dict) -> str:
     if df is None or df.empty:
         return "error"
 
-    _save_csv(df, path)
-    return "ok"
+    ok = _save_csv(df, path, "price")
+    return "ok" if ok else "error"
 
 
 def crawl_daily_chips(date_str: str, skip: dict) -> bool:
     path = os.path.join(RAW_CHIPS_DIR, f"{date_str}_chips.csv")
-    if _already_exists(path): return True
+    if _already_exists(path, "chips"): return True
     if _is_skip_date(skip, "chips", date_str): return True
 
     url = f"https://www.twse.com.tw/fund/T86?response=json&date={date_str}&selectType=ALL"
@@ -753,13 +877,13 @@ def crawl_daily_chips(date_str: str, skip: dict) -> bool:
             return False
         _mark_skip_date(skip, "chips", date_str, reason="empty_response")
         return True
-    _save_csv(df, path)
-    return True
+    ok = _save_csv(df, path, "chips")
+    return ok
 
 
 def crawl_daily_margin(date_str: str, skip: dict) -> bool:
     path = os.path.join(RAW_MARGIN_DIR, f"{date_str}_margin.csv")
-    if _already_exists(path): return True
+    if _already_exists(path, "margin"): return True
     if _is_skip_date(skip, "margin", date_str): return True
 
     url = (
@@ -790,13 +914,13 @@ def crawl_daily_margin(date_str: str, skip: dict) -> bool:
             return False
         _mark_skip_date(skip, "margin", date_str, reason="unexpected_format")
         return True
-    _save_csv(df, path)
-    return True
+    ok = _save_csv(df, path, "margin")
+    return ok
 
 
 def crawl_daily_sbl(date_str: str, skip: dict) -> bool:
     path = os.path.join(RAW_MARGIN_DIR, f"{date_str}_sbl.csv")
-    if _already_exists(path): return True
+    if _already_exists(path, "sbl"): return True
     if _is_skip_date(skip, "sbl", date_str): return True
 
     url = (
@@ -818,13 +942,13 @@ def crawl_daily_sbl(date_str: str, skip: dict) -> bool:
             return False
         _mark_skip_date(skip, "sbl", date_str, reason="empty_response")
         return True
-    _save_csv(df, path)
-    return True
+    ok = _save_csv(df, path, "sbl")
+    return ok
 
 
 def crawl_daily_twse_per(date_str: str, skip: dict) -> bool:
     path = os.path.join(RAW_TWSE_PER_DIR, f"{date_str}_twse_per.csv")
-    if _already_exists(path): return True
+    if _already_exists(path, "twse_per"): return True
     if _is_skip_date(skip, "twse_per", date_str): return True
 
     url = (
@@ -854,13 +978,13 @@ def crawl_daily_twse_per(date_str: str, skip: dict) -> bool:
             return False
         _mark_skip_date(skip, "twse_per", date_str, reason="unexpected_format")
         return True
-    _save_csv(df, path)
-    return True
+    ok = _save_csv(df, path, "twse_per")
+    return ok
 
 
 def crawl_daily_daytrading(date_str: str, skip: dict) -> bool:
     path = os.path.join(RAW_CHIPS_DIR, f"{date_str}_daytrading.csv")
-    if _already_exists(path): return True
+    if _already_exists(path, "daytrading"): return True
     if _is_skip_date(skip, "daytrading", date_str): return True
 
     url = (
@@ -891,13 +1015,13 @@ def crawl_daily_daytrading(date_str: str, skip: dict) -> bool:
             return False
         _mark_skip_date(skip, "daytrading", date_str, reason="unexpected_format")
         return True
-    _save_csv(df, path)
-    return True
+    ok = _save_csv(df, path, "daytrading")
+    return ok
 
 
 def crawl_daily_fini_holding(date_str: str, skip: dict) -> bool:
     path = os.path.join(RAW_CHIPS_DIR, f"{date_str}_fini_holding.csv")
-    if _already_exists(path): return True
+    if _already_exists(path, "fini_holding"): return True
     if _is_skip_date(skip, "fini_holding", date_str): return True
 
     url = (
@@ -919,13 +1043,13 @@ def crawl_daily_fini_holding(date_str: str, skip: dict) -> bool:
             return False
         _mark_skip_date(skip, "fini_holding", date_str, reason="empty_response")
         return True
-    _save_csv(df, path)
-    return True
+    ok = _save_csv(df, path, "fini_holding")
+    return ok
 
 
 def crawl_daily_taifex_inst(date_str: str, skip: dict) -> bool:
     path = os.path.join(RAW_TAIFEX_DIR, f"{date_str}_taifex_inst.csv")
-    if _already_exists(path): return True
+    if _already_exists(path, "taifex_inst"): return True
     if _is_skip_date(skip, "taifex_inst", date_str): return True
 
     # 支援 20260531 / 2026-05-31 / 2026/05/31 三種格式輸入
@@ -981,8 +1105,8 @@ def crawl_daily_taifex_inst(date_str: str, skip: dict) -> bool:
                 return False
             _mark_skip_date(skip, "taifex_inst", date_str, reason="empty_response")
             return True
-        _save_csv(df, path)
-        return True
+        ok = _save_csv(df, path, "taifex_inst")
+        return ok
     except Exception as e:
         print(f"    [期交所] {date_str} 抓取失敗: {type(e).__name__} - {e}")
         return False
@@ -1005,8 +1129,9 @@ def crawl_weekly_shareholding() -> bool:
             return False
         date_str = str(dates[0])
         path = os.path.join(RAW_SHAREHOLDING_DIR, f"{date_str}_shareholding.csv")
-        if not _already_exists(path):
-            df.to_csv(path, index=False, encoding="utf-8-sig")
+        if not _already_exists(path, "shareholding"):
+            if not _save_csv(df, path, "shareholding"):
+                return False
             print(f"  [持股分級] {date_str} 下載成功 ({len(df)} 筆)")
         return True
     except KeyboardInterrupt:
@@ -1258,7 +1383,7 @@ def _run_twse_stage(
         ]
 
         def _done(ds, p):
-            return _already_exists(p) or _is_skip_date(skip_dates, ds, d_str)
+            return _already_exists(p, ds) or _is_skip_date(skip_dates, ds, d_str)
 
         if all(_done(ds, p) for ds, p in files_required):
             skipped_days += 1

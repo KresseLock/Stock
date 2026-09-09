@@ -1,14 +1,14 @@
 # 實驗與診斷記錄（Experiments & Diagnostics Log）
 
 > 記錄系統迭代過程中的診斷結論、已上線修復、以及已否決的實驗方向，供後續研究參考。
-> 日常操作與生產設定請見 [README.md](README.md)；策略層不變量見 [.claude/CLAUDE.md](../.claude/CLAUDE.md) §4.5。
+> 日常操作與生產設定請見 [README.md](../README.md)；策略層不變量見 [.claude/CLAUDE.md](../.claude/CLAUDE.md) §4.5。
 >
 > **怎麼讀這份文件**：接手時先看「當前狀態速覽」知道手上有什麼，再看文末「該避的坑」避免重犯，
 > 要動手才翻對應的實驗章節。「已否決的方向」是**不要重做**的清單，動工前務必掃一遍。
 
 ---
 
-## 當前狀態速覽（2026-08-31）
+## 當前狀態速覽（2026-09-09）
 
 ### 參數檔
 
@@ -22,14 +22,18 @@
 
 ### 工作區未 commit 的程式改動
 
+> 8/31 那批（`optimize_trading_params.py`／`utils.py`／`validate_candidate_params.py`／
+> `run_workflow_experiment.py`／`tests/test_markup_bound_gate.py`）**已 commit**，相關常數仍在
+> `config.py`：`MDD_PENALTY_WEIGHT=0.30`、`WF_HOLDOUT_RATIO=0.0`、`WF_SELECT_RULE="deploy_gate"`。
+
 | 檔案 | 改動 |
 | :--- | :--- |
-| `config.py` | §2.4 `MDD_PENALTY_WEIGHT` 0.05→**0.30**、新增 `SCORE_TRADING_DAYS_PER_YEAR`／`SCORE_ANN_FACTOR_MAX`；§4 新增 `WF_HOLDOUT_RATIO`（**已設 0.0 停用**）／`WF_HOLDOUT_MIN_DAYS`／`WF_SELECT_RULE="deploy_gate"`／`WF_PROGRESS_EVERY` |
-| `scripts/optimize_trading_params.py` | per-regime 報酬先年化再算 calmar；`select_by_deploy_gate()`；尾端 holdout（停用中）；三行歸因輸出；每窗進度心跳；內建 tee |
-| `scripts/utils.py` | 新增 `start_tee_log()`／`_Tee`（優化器與體檢器共用） |
-| `scripts/validate_candidate_params.py` | 新檔；`--baseline` 單向有效檢定；子行程輸出編碼釘死 cp950；內建 tee |
-| `run_workflow_experiment.py` | `OPT_SIGNATURE_CONFIG_KEYS`（指紋涵蓋 config 常數）；B7.5 判準改為雙贏並標註參數層 lookahead |
-| `tests/test_markup_bound_gate.py` | 新檔；`markup_pct` 搜尋下界咬住檢定（沙盒隔離） |
+| `.claude/CLAUDE.md` | §4.5 新增 #4 進場流動性門檻、#8 D3 進場門檻兩則否決紀錄 |
+| `config.py` | 新增 §0.1 `SCRAPER_REQUIRED_COLS`（爬蟲表頭必要欄位驗證）；新增 `INFERENCE_NA_WARN_PCT`／`INFERENCE_NA_WATCH_COLS` |
+| `scripts/inference.py` | 訊號日關鍵特徵缺值率警示（起因：2026-09-08 推論跑在 margin／fini_holding 發布前，缺值率 100% 卻無提示） |
+| `scripts/scraper.py` | 表頭驗證快取（啟動掃描 20.9s→0.7s）；母體快取加 `scanned_count` 對帳。**兩者都是回補至 2017-12-18 的前置**，詳見下方回補章節 |
+| `Stocks.txt` | 持倉異動 |
+| `tests/test_liquidity_gate.py`、`tests/test_d3_entry_gate.py` | 新檔；兩則進場端否決的把關測試 |
 
 ### ⚠️ `reports/` 曾被清空（2026-08-31 約 21:42）
 
@@ -49,7 +53,11 @@
 - **非 regime 判斷 bug**：「指數漲、策略賠」先查等權 `market_mean_pct` vs 加權指數即可解釋，勿假設誤判。
 - **訊號本身健康**：IS RankIC（D1→r1）+0.109（t=22.5），回撤段仍 +0.112 → 問題出在曝險結構，不是訊號失效。
   - ⚠️ **但「RankIC 健康」不等於「有可捕捉的 alpha」**：RankIC 是收盤到收盤算的，而那份預測力**幾乎全部落在隔日跳空**，以 T+1 開盤進場吃不到。詳見「已結案診斷：進場訊號的預測力全部落在隔日跳空」。看到這行就想去加強選股模型之前，先讀那一節。
-- 唯一正解方向＝擴大選股池納入權值股（訊號端），不能靠風控參數修補（已測試，見擴池實驗）。
+- ⚠️ **原記「唯一正解方向＝擴大選股池納入權值股（訊號端）」已作廢，勿再據此動訊號端。**
+  推翻它的是本文件自己後來的兩份實驗：擴池（2026-07-05）報酬分布與現池零重疊、MDD 反而更差；
+  跳空診斷（2026-08-27）進一步證明選股端在 T+1 開盤後根本沒有超額。與 CLAUDE.md §4.5 #1／#4 一致——
+  **進場端沒有正解可找**。此處保留原文只為留下當初的推論路徑，不代表結論仍成立。
+  窄牛市錯配目前無解方，處置是靠出場／曝險（`ENTRY_BULL_CONFIRM_DAYS`、`REGIME_MAX_POSITIONS`）限制傷害。
 
 ### 真正的損益病灶：Bull 第 1 天進場
 
@@ -165,6 +173,8 @@ B 場（vs 現行部署，單向有效檢定）：報酬 1/9、回撤 9/9、雙�
 | 窄牛市 breadth 偵測器 | Sideways×breadth<46% 淨賺 +23萬；最賺桶反而是 Bull×breadth 44-48%（+95萬），與直覺相反 |
 | 拉高買入門檻／收緊進場 | 任何切片都切不開停損與肥尾，三度實測皆失敗（見 CLAUDE.md §4.5 #1）。**機制**：門檻拉越高，選到的股票隔日跳空越大（門檻 21.5 時平均跳空 +4.43%），但**開盤後的超額反而遞減至轉負**（−0.0417%）——拉門檻只是買到跳空更大的股票，買不到更多 alpha |
 | 擴大選股池 548→2353 檔 | 報酬分布零重疊（現池下界 +69.79% > 擴池上界 +33.53%）、MDD 更差、alpha 下界貼地。詳見擴池實驗 |
+| **進場流動性門檻**（近 20 日均成交金額下限，2026-09-08，`tests/test_liquidity_gate.py`） | 6 起點 × 6 門檻：全 OOS 單窗報酬隨門檻單調升（+106%→+166%）**但多起點雙贏僅 0~2/6**、回撤幾乎全面惡化；門檻 1 億的逐起點報酬差 `+59/+7/−15/+183/−1/−24` pp。起點差一個月即翻轉。**單調不是穩健的證據**。詳見 CLAUDE.md §4.5 #4 |
+| **進場 D3 門檻**（訊號日 `Day3_net` 下限，2026-09-08，`tests/test_d3_entry_gate.py`） | 5 個門檻全 OOS 報酬差**全為負**（−24.9~−110.4 pp）、雙贏 0~1/6。最寬鬆的 `D3>=-15` 只擋掉 21.7% 樣本、曝險與均持倉幾乎沒變，報酬卻掉 25pp → 擋掉的是會賺的股。**D3 是出場訊號，挪到進場端即失效**，詳見 CLAUDE.md §4.5 #8 |
 
 ---
 
@@ -351,7 +361,216 @@ D10 各持有期超額都在 ±0.17pp 內，而 D1（最低分）在 N=10/20 反
 
 ---
 
+## 進行中：訓練資料回補至 2017-12-18（2026-09-09 起）
+
+### 目標
+
+`START_DATE` 由 `2020-01-01` 前推至 **`2017-12-18`**，訓練資料 +32%（1,625 → 約 2,143 個交易日）。
+
+**唯一的理由是多一個現行訓練集沒有的市況樣本**（2018 Q4 全球股災＋2019 多頭），不是「資料多比較好」。
+現行訓練集（2020-01 ~ 2023-11）只涵蓋 COVID 崩盤與 2022 熊市兩次回撤，樣本結構單一。
+若把它當成「資料越多模型越準」的改良，判準會設錯——見坑 #5。
+
+### 為何是 2017-12-18（2026-09-09 實測 TWSE 端點，非推測）
+
+| 資料集 | 現行 schema 最早可用 | 依據 |
+| :--- | :--- | :--- |
+| price／margin／sbl／twse_per／fini_holding | 2010 以前 | 2010-06-01 直接查得，必要欄位齊全 |
+| daytrading | 2014-01 | 現股當沖開放日；2010-06-01 查無此表 |
+| **chips（法人買賣超）** | **2017-12-18** | 12-15 仍為 `外資買賣超股數`；12-18 起改為 `外陸資買賣超股數(不含外資自營商)` ＋ `外資自營商…` |
+
+chips 是唯一的綁定條件，而它撐起 `models/feature_cols.json` 94 個特徵中的 20 個。
+再往前只能拿定義不同的舊欄位硬拼，**而 §4.5 #4 已證明法人淨額的量級語義一動就毀訊號**——
+不要為了多兩年去接舊格式。期交所法人本地只有 2023-05 起（保存期限），但特徵清單裡沒有 taifex 欄位，不影響。
+
+同樣重要的是：**2017-12-18 之後沒有制度斷點**。漲跌幅 ±10% 自 2015-06 實施（標籤的
+`LABEL_WEAK_MAX_RET=-0.02` 無漂移）、當沖 2014 開放且 2017-04 已降稅。這正是它與「回補到 2010」的本質差別。
+
+### 前置修復（已完成，2026-09-09，在 `scripts/scraper.py`）
+
+| 項目 | 內容 |
+| :--- | :--- |
+| 表頭驗證快取 | `_already_exists()` 原本每次啟動用 pandas 重新解析全庫約 1.3 萬個檔的表頭（實測 18.6 秒）。改為快取通過結果的 `(size, mtime_ns)`，啟動掃描 20.9s → 0.7s |
+| **母體快取增量假設**（必要修復，不做會靜默出錯） | `_universe_from_raw_price()` 原本假設「新增檔一定排在最後」，只掃 `scanned_upto` 之後的檔。**回補會把舊檔插在它之前而整段被跳過**，於是只存在於 2018-2019、之後下市的代號永遠進不了 FinMind 母體＝倖存者偏誤，且不會有任何錯誤訊息。已加 `scanned_count` 對帳，對不上即全掃 |
+
+### 回補完成後的步驟
+
+> 每一步都有驗收，**上一步沒過就不要往下走**——這條流水線的失敗模式全是靜默的。
+
+**Step 0：備份（不做就回不去）**
+
+重建特徵檔會覆寫 `data/features/features_combined.parquet`，重訓會覆寫 `models/`。先備份三樣：
+`models/`、`configs/best_factors.json`、`data/features/features_combined.parquet`。
+
+**不要用 `scripts/compare_model_modes.py` 當本次實驗的載體**——它的 `finally` 會把特徵檔還原回舊版，
+而特徵檔正是本次的變更點；它的 `--restore-latest` 也只認它自己建立的備份，救不了手動流程。
+
+**Step 1：驗收原始檔逐年覆蓋**
+
+逐年統計七個日資料集的檔數並列成表（路徑一律取自 `config.py` 的 `RAW_*_DIR`，勿自行拼 `data` 目錄）：
+
+```python
+import os, sys; sys.path.insert(0, '.')
+from config import RAW_PRICE_DIR, RAW_CHIPS_DIR, RAW_MARGIN_DIR, RAW_TWSE_PER_DIR
+dirs = {'price':        (RAW_PRICE_DIR,    '_price.csv'),
+        'chips':        (RAW_CHIPS_DIR,    '_chips.csv'),
+        'daytrading':   (RAW_CHIPS_DIR,    '_daytrading.csv'),
+        'fini_holding': (RAW_CHIPS_DIR,    '_fini_holding.csv'),
+        'margin':       (RAW_MARGIN_DIR,   '_margin.csv'),
+        'sbl':          (RAW_MARGIN_DIR,   '_sbl.csv'),
+        'twse_per':     (RAW_TWSE_PER_DIR, '_twse_per.csv')}
+years = sorted({f[:4] for f in os.listdir(RAW_PRICE_DIR) if f.endswith('_price.csv')})
+print('年度  ' + '  '.join(f'{k:>12s}' for k in dirs))
+for y in years:
+    counts = [sum(1 for f in os.listdir(d) if f.startswith(y) and f.endswith(sfx))
+              for d, sfx in dirs.values()]
+    print(f'{y}  ' + '  '.join(f'{n:>12d}' for n in counts))
+```
+
+**驗收**：同一列七個數字要一致。預期 `2017 ≈ 10`（12-18~12-29，只有 10 個交易日是正常的）、
+`2018 ≈ 247`、`2019 ≈ 241`。某年 chips 明顯少於 price 就是有日期沒抓到，重跑 `scraper.py -s twse` 會補
+（八個 dataset 全齊才會跳過該日）。最新一天 `fini_holding`／`margin`／`sbl` 少 1 是正常的
+（該三份報表約 23:06 才發布）。
+
+順帶檢查有沒有日期被燒掉（`SKIP_AFTER_FAILS = 3`）：
+
+```powershell
+python -c "import json;d=json.load(open('data/failed_dates.json'));print({k:v for k,v in d.items() if v>=3})"
+```
+
+**Step 2：調整切分比例（否則會同時動兩個變因）**
+
+`train.py:81-88` 按**日期分位**切，資料量變多會讓訓練終點自動前移。以估計的 500 個回補交易日推算：
+維持 `TRAIN_SPLIT_RATIO=0.70` 的話，訓練終點會從 **2023-11-24 退到約 2023-04-19**。
+要維持在 2023-11-24（＝與現行模型同一個訓練終點、單一變因）需設約 `TRAIN_SPLIT_RATIO=0.781`、
+`VALID_SPLIT_RATIO=0.880`。**精確值用 Step 4 的指令以實際日數重算，不要沿用這裡的估計值。**
+
+**Step 3：重建特徵檔**
+
+```powershell
+python auto_pipeline.py -s feature
+```
+
+**Step 4：驗收特徵檔區間與切點**
+
+複算一次切點（與 `train.py:81-88` 同一套算法：對 `BACKTEST_DATE` 截斷後的 unique dates 取分位）：
+
+```python
+import pandas as pd, sys; sys.path.insert(0, '.')
+from config import BACKTEST_DATE, TRAIN_SPLIT_RATIO, VALID_SPLIT_RATIO, FEATURES_PARQUET
+d = pd.read_parquet(FEATURES_PARQUET, columns=['date']); d['date'] = pd.to_datetime(d['date'])
+print(f'特徵檔全區間 : {d.date.min().date()} ~ {d.date.max().date()}'
+      f'  ({d.date.nunique()} 個交易日, {len(d):,} 列)')
+if BACKTEST_DATE:
+    d = d[d.date < pd.to_datetime(BACKTEST_DATE)]
+    print(f'截斷後 : {d.date.min().date()} ~ {d.date.max().date()}  ({d.date.nunique()} 個交易日)')
+u = sorted(d.date.unique()); n = len(u)
+te = u[int(n * TRAIN_SPLIT_RATIO)]; ve = u[int(n * VALID_SPLIT_RATIO)]
+print(f'  訓練集(實際 fit) : {u[0].date()} ~ {pd.Timestamp(te).date()}')
+print(f'  驗證集           : {pd.Timestamp(te).date()} ~ {pd.Timestamp(ve).date()}')
+print(f'  測試集           : {pd.Timestamp(ve).date()} ~ {u[-1].date()}')
+```
+
+**驗收**：起點 2017-12-18；訓練終點應落在 2023-11-24 附近（不是就回 Step 2 微調 ratio）。
+回補前跑同一段算法會印出 `2020-01-02 ~ 2023-11-24`，與 §4.5 #6 記載的現行訓練終點吻合——
+這是確認算法正確的對照點。
+
+再驗關鍵特徵的逐年缺值率：
+
+```python
+import pandas as pd, sys; sys.path.insert(0, '.')
+from config import FEATURES_PARQUET
+c = ['date', 'fini_net', 'inst_net_total', 'daytrading_pct', 'revenue', 'EPS_yoy']
+d = pd.read_parquet(FEATURES_PARQUET, columns=c)
+d['yr'] = pd.to_datetime(d.date).dt.year
+print(d.groupby('yr')[c[1:]].apply(lambda g: (g.isna().mean() * 100).round(1)))
+```
+
+**驗收**：`fini_net`／`inst_net_total` 在 2018-2019 要與 2020 之後同量級（現行 2~5%）。
+若那兩年是 100%，代表 chips 抓到舊格式或沒存進去 → 回 Step 1。
+`revenue`／`EPS_yoy` 在 2018-2019 會是 100%，那是預期內的（坑 #1）。
+
+**Step 5：重訓**
+
+```powershell
+python auto_pipeline.py -s train
+```
+
+`train.py:147-149` 會印出訓練／驗證／測試集的實際起訖日，這是最終確認——
+Step 4 算的是預估，這裡印的是模型真正吃到的。
+
+**Step 6：多起點對照（單一變因＝模型）**
+
+風控參數固定用同一份 `configs/best_trading_params.json`，兩組模型（現行備份 vs 回補候選）各跑一次，
+**終點固定、只挪起點的 9 條路徑**（鐵律 #4；禁止切段，§4.5 #5）。共同 OOS 取 `2025-08-04` 起——
+兩組模型都截斷於 `BACKTEST_DATE=20250801`，該區間對雙方都乾淨。
+
+**判準**（§4.5 #4）：報酬與回撤中位數雙贏，且逐路徑雙贏 ≥ 5/9。
+
+**單向有效性**：`best_trading_params.json` 是拿現行模型的預測調出來的，天然偏袒現行。
+故**候選勝出＝強證據**；候選落敗則無法區分「候選較差」與「參數為現行模型量身訂做」，
+不可據此判死回補這個方向（同鐵律 #4 的 `--baseline` 邏輯）。
+
+### 該避的坑（本次特有）
+
+1. **FinMind 不會被回補，改 `START_DATE` 對它完全無效。**
+   `_crawl_fm_dataset` 在檔案已存在時，起點是取檔案內最後一筆日期往後推（`scripts/scraper.py:1286`），
+   傳入的 `START_DATE` 被無視。現有財報檔都是 2020-01-01 起，所以放著跑多久都不會有 2018-2019。
+   受影響的只有 5/94 個特徵（`revenue`／`Revenue_mom`／`Revenue_yoy`／`EPS_qoq`／`EPS_yoy`）——
+   `dividend_yield`／`PER_zscore`／`PBR_zscore` 來自 TWSE 本益比報表（`feature_engineering.py:577`），不是財報。
+   **建議不補**：要補得刪光 `data/raw_financial/*.csv` 重抓約 5,900 次 API，
+   為 5 個特徵付這個代價不划算（且 `*_yoy` 用 `pct_change(252)`，2018 那年照樣是 NaN）。
+   ⚠️ **但要記住這個副作用**：那 5 欄在 2018-2019 系統性全空，LightGBM 對 NaN 有專屬分支，
+   模型可能把「這幾欄是 NaN」學成年代標記。**若回補後結果好得可疑，拿掉這 5 個特徵重跑一次確認。**
+
+2. **母體快取若回退到舊版程式碼會靜默漏抓。** 見上方前置修復。症狀是 FinMind 母體數量看起來很正常
+   （活到今天的公司都在），但少了只存在於 2018-2019 的已下市標的＝倖存者偏誤。
+   確認方式：`data/universe_cache.json` 要有 `scanned_count` 欄位。
+
+3. **不調 split ratio 就是一輪動兩個變因**（鐵律 #6）。資料量與訓練終點同時改變，
+   結果無論好壞都無法歸因。Step 2 存在的唯一理由就是這個。
+
+4. **不要把 2018-2019 當成「第二個裁判區」**（中期問題 #2 的誘惑）。
+   回補後模型的訓練集起點就是 2018，那兩年直接進訓練集，拿它當裁判區＝樣本內。
+   就算另訓一個「只用 2020 以後」的模型往回測，測的也不是同一個模型；
+   而風控參數是在 2022-2025 上調出來的，對 2018-2019 屬於**用未來調的參數測過去**——
+   時間上不重疊，因果順序上顛倒。**它可以當壓力測試（策略在不同市況會不會崩），
+   不能當泛化力證據。** 中期問題 #2 要的是後者，這條路解不了它。
+
+5. **不要拿 §4.5 #6 預判本次結果，正反都不行。** 那條的範圍限制寫得很清楚：
+   只重跑 `train.py`、只變動訓練集**終點**，`best_factors.json` 與特徵檔固定。
+   本次變動的是訓練資料的**起點與總量**，不在其涵蓋範圍。同理鐵律 #5——
+   訓練期／調參區的表現對 OOS 沒有預測力，一律等 Step 6 的數字。
+
+6. **不要同時跑「下一步」的風控優化輪。** 那一輪（全長四窗 × 部署判準）會改變風控參數，
+   而本輪要求風控參數固定。兩件事撞在一起就回到鐵律 #6 的老問題。**先做完一件，再做另一件。**
+
+7. **`big_holder_pct`／`small_holder_pct`／`holder_hhi` 本來就是死特徵，不是回補造成的。**
+   實測 2020~2025 缺值率 **100.0%**、2026 為 57.1%——集保 TDCC opendata 只提供最新一週，
+   本地 `data/raw_shareholding` 只有 15 個檔（2026-05-29 起）。
+   Step 4 驗收缺值率時一定會看到，別誤判為回補失敗。
+   ⚠️ 這三欄「訓練期全空、上線後才有值」的形態與已移除的 `credit_limit` 同類，
+   **值得單獨開一輪處理**（移除或補資料），但不要混進本輪。
+
+8. **回補後第一次跑 scraper 會慢一次，是正常的。**
+   母體快取重建（約 50 秒）＋新檔的表頭驗證（約 20 秒）。第二次起回到 0.7 秒。
+
+9. **抓取中斷的處置**：被證交所 WAF 擋下會 `exit 1`，已抓的檔案都保留、未完成日期不計失敗，重跑即續抓。
+   無人看管時把 `TWSE_REQUEST_GAP` 調寬到 `(1.5, 2.5)`——半夜被擋一次就是整晚白費。
+
+### 回退
+
+Step 6 落敗（且排除掉單向有效性的疑慮後）就把 Step 0 的三份備份蓋回去，並把
+`START_DATE`／`TRAIN_SPLIT_RATIO`／`VALID_SPLIT_RATIO` 改回 `2020-01-01`／`0.70`／`0.80`。
+**已抓下來的 2018-2019 原始檔不必刪**——留著不影響任何流程（`START_DATE` 決定讀取範圍），
+日後要重試也不必再抓一次。
+
+---
+
 ## 下一步（2026-08-31 之後）
+
+> ⏸ **本節暫緩**：2026-09-09 起手上有回補實驗在跑（見上一節），而本節這一輪會改變風控參數、
+> 回補那輪要求風控參數固定。兩件事同時跑就回到鐵律 #6 無法歸因的老問題。**先做完一件再做另一件。**
 
 ### 立即可做：全長四窗 × 部署判準，重跑一輪
 
@@ -382,6 +601,7 @@ python scripts/validate_candidate_params.py --baseline best_trading_params.json 
 
 1. **in-sample 選美未解**（尾端 holdout 已判死）。可試的方向：**輪替式／非尾端 holdout**——切多段 holdout、取跨段平均排名，兼顧「不吃掉最新資料」與「不被單一市況主導」。機制已在 `optimize_trading_params.py` 內（設 `WF_HOLDOUT_RATIO > 0` 即啟用尾端版），可改造復用。**動工前先想清楚怎麼歸因**（鐵律 #6）。
 2. **裁判區只有一個**（2026-01-02 ~ 最新資料日）。9 條路徑起點只差 16 個交易日、高度重疊，反映的是起點敏感度而非 9 個獨立樣本。所有「候選勝出／落敗」的結論都只是一個樣本上的結論。要真正提升信心，需要第二個時間上不重疊的裁判區——目前資料量還不夠。
+   - ⚠️ 回補到 2017-12-18 之後**不要順手把 2018-2019 當成那個裁判區**，理由見回補章節的坑 #4：它在時間上不重疊，但在因果順序上是顛倒的。它能當壓力測試，不能當泛化力證據。
 3. **Optuna 未固定種子**（README 已知限制）。同一條指令跑兩次會得到不同候選，任何「兩輪之間的差異」都混著搜尋軌跡的隨機性。若要做嚴謹的流程 A/B，得先固定種子。
 
 ### 長期：資源該投在出場／曝險，不是選股
@@ -401,11 +621,12 @@ python scripts/validate_candidate_params.py --baseline best_trading_params.json 
 5. **不要拿現行部署檔當乾淨對照**。它的調參區間涵蓋裁判區，屬樣本內，會系統性偏袒它。體檢器會自動換掉；要跟它比只能用 `--baseline`，且落敗不可判死。
 6. **不要因為「候選在裁判區贏了」就直接部署**。先確認贏的那半邊不是單格噪音峰（用 OFAT 掃鄰格），也不是靠回測的樂觀搓合假設（看盤中觸價撮合佔比）。
 7. **新增 `config.py` 常數若會影響優化結果，記得加進 `OPT_SIGNATURE_CONFIG_KEYS`**（`run_workflow_experiment.py`），否則 checkpoint 指紋不變，會靜默沿用舊設定下優化出來的參數。
+8. **不要把某一端的訊號挪到另一端用**（CLAUDE.md §4.5 #8）。`Day1_net` 管進場、`Day3_net` 管出場是設計不是疏漏；D3 進場門檻已實測全面落敗。看到「模型說 D3 弱卻照買」這種像 bug 的現象，先問「這個訊號在現行架構裡負責什麼」，別把分工誤讀成矛盾。
 
 ### 操作面
 
-8. **主控台凍結**：Windows QuickEdit／標記模式下，在視窗裡點一下或選取到文字會把 process 暫停。症狀是 CPU 幾乎 0、記憶體停在 10MB 上下、log 完全不長。按 **Esc** 解凍。看到「跑很久沒動靜」先用 `Get-Process python | Select-Object Id,CPU,WorkingSet` 確認，再懷疑程式。
-9. **不要對優化器／體檢器加 `>` 重導向**。兩支都已內建 tee（`utils.start_tee_log`），跑起來主控台看得到進度、同時落檔到 `reports/<腳本名>_<時間戳>.log`（utf-8）。加重導向反而讓主控台整段空白，還要另開視窗 tail。
-10. **不要在跑體檢器前設 `PYTHONIOENCODING=utf-8`**。它會傳給子行程 `trading_sim.py`，而體檢器是硬解 cp950，整段會變亂碼並誤報「無法解析回測輸出」。（`run_backtest()` 已釘死子行程編碼，但別再從外面覆蓋同類環境變數。）
-11. **跑優化器前先確認候選檔要不要留**。它會直接覆寫 `configs/best_trading_params_candidate.json`。要留的話先複製一份；**若要讓它成為體檢器的自動對照組，檔名必須符合 `best_trading_params*.json`；若不想讓它被選成對照組，檔名就要避開該 glob**（如 `_archive_` 開頭）。
-12. **記錄檔要留**。2026-08-28 那輪體檢因為只印主控台、關機後整輪數字全丟，只能重跑；2026-08-31 `reports/` 又被清空一次，原始 log 已不可考（結論靠本文件的表格保住）。
+9. **主控台凍結**：Windows QuickEdit／標記模式下，在視窗裡點一下或選取到文字會把 process 暫停。症狀是 CPU 幾乎 0、記憶體停在 10MB 上下、log 完全不長。按 **Esc** 解凍。看到「跑很久沒動靜」先用 `Get-Process python | Select-Object Id,CPU,WorkingSet` 確認，再懷疑程式。
+10. **不要對優化器／體檢器加 `>` 重導向**。兩支都已內建 tee（`utils.start_tee_log`），跑起來主控台看得到進度、同時落檔到 `reports/<腳本名>_<時間戳>.log`（utf-8）。加重導向反而讓主控台整段空白，還要另開視窗 tail。
+11. **不要在跑體檢器前設 `PYTHONIOENCODING=utf-8`**。它會傳給子行程 `trading_sim.py`，而體檢器是硬解 cp950，整段會變亂碼並誤報「無法解析回測輸出」。（`run_backtest()` 已釘死子行程編碼，但別再從外面覆蓋同類環境變數。）
+12. **跑優化器前先確認候選檔要不要留**。它會直接覆寫 `configs/best_trading_params_candidate.json`。要留的話先複製一份；**若要讓它成為體檢器的自動對照組，檔名必須符合 `best_trading_params*.json`；若不想讓它被選成對照組，檔名就要避開該 glob**（如 `_archive_` 開頭）。
+13. **記錄檔要留**。2026-08-28 那輪體檢因為只印主控台、關機後整輪數字全丟，只能重跑；2026-08-31 `reports/` 又被清空一次，原始 log 已不可考（結論靠本文件的表格保住）。

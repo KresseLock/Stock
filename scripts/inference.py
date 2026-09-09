@@ -39,6 +39,7 @@ try:
         ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
         REGIME_EXIT_PARAMS, TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS,
         MKT_PANIC_MA5, MKT_PANIC_BREADTH, ENTRY_BULL_CONFIRM_DAYS,
+        INFERENCE_NA_WARN_PCT, INFERENCE_NA_WATCH_COLS,
     )
 except ImportError:
     BUY_THRESHOLD   = 10.0
@@ -55,6 +56,8 @@ except ImportError:
     REGIME_TREND_WINDOW = 20; REGIME_TREND_MIN_PERIODS = 5
     ATR_STOP_ENABLED = False; ATR_STOP_MULTIPLIER = 1.5
     ATR_STOP_FLOOR_PCT = -15.0; ATR_STOP_CEILING_PCT = -5.0
+    # 空清單 = 停用缺值警示（脫離 config 獨立執行時行為等同修改前）
+    INFERENCE_NA_WARN_PCT = 50.0; INFERENCE_NA_WATCH_COLS = []
     REGIME_EXIT_PARAMS = {}; TS_ACTIVATION_PCT = 10.0; TS_PULLBACK_PCT = -6.0; MIN_HOLD_DAYS = 1
     MKT_PANIC_MA5 = -0.010; MKT_PANIC_BREADTH = 0.30
     ENTRY_BULL_CONFIRM_DAYS = None
@@ -192,6 +195,27 @@ def main(target_date_str=None):
     elif is_backfill:
         quality_notices.append("   [⚠ 前視偏差] 此為 -d 補跑之歷史日期，模型以全量資料訓練（含該日之後），"
                                "帶有 lookahead，不等於當日系統實際會給的建議，請勿用於績效驗證。")
+    # 訊號日關鍵特徵缺值檢查：TWSE/FinMind 部分報表盤後分階段發布，推論若跑在
+    # 資料齊備之前，特徵會整欄缺值，而模型仍照常輸出分數、不會有任何提示。
+    # （2026-09-08 實例：20:04 抓資料、20:07 出預測，但 margin/fini_holding 約 23:06
+    #   才發布，fini_holding_pct 與 offset 缺值率 100%。見 config.py § 0.1）
+    try:
+        _sig_rows = df[df["date"] == latest_date]
+        if len(_sig_rows) and INFERENCE_NA_WATCH_COLS:
+            _na_hits = []
+            for _c in INFERENCE_NA_WATCH_COLS:
+                if _c in _sig_rows.columns:
+                    _pct = float(_sig_rows[_c].isna().mean()) * 100.0
+                    if _pct >= INFERENCE_NA_WARN_PCT:
+                        _na_hits.append(f"{_c} {_pct:.0f}%")
+            if _na_hits:
+                quality_notices.append(
+                    f"   [⚠ 訊號日資料不齊] 缺值率超標: {'、'.join(_na_hits)}。"
+                    f"推論可能跑在該報表發布之前；分數仍會輸出但可靠度下降，"
+                    f"建議待資料補齊後重跑本日推論。")
+    except Exception as _e:
+        print(f"  [提示] 缺值率檢查略過: {_e}")
+
     for _n in quality_notices:
         print(_n)
 

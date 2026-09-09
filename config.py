@@ -64,6 +64,52 @@ RAW_FINANCIAL_DIR    = os.path.join(DATA_DIR, "raw_financial")
 FEATURES_DIR     = os.path.join(DATA_DIR, "features")
 FEATURES_PARQUET = os.path.join(FEATURES_DIR, "features_combined.parquet")
 
+# ── 0.1 爬蟲資料完整性驗證 ────────────────────────────────────────
+# *** scraper.py 使用 ***
+# TWSE 部分報表盤後「分階段發布」：早段只給部分欄位，晚段才補上成交數據。
+# 例：當沖 TWTB4U 於 17:44 抓取時只有「暫停現股當沖註記」3 欄，
+#     缺當日沖銷成交股數/買進金額/賣出金額。
+# 殘缺檔案若照樣存檔，會因增量邏輯「檔案已存在就跳過」而永遠不再修正
+# （已實際發生：2026-09-02、2026-09-04 的 daytrading 缺 3 欄，
+#   導致該兩日 daytrading_vol / daytrading_pct 缺值率 100%）。
+#
+# 本表定義各資料源的必要欄位，於兩處生效：
+#   1. 存檔前驗證：缺任一欄即不寫檔、回報未完成，交由下次重抓。
+#   2. 既有檔驗證：_already_exists() 一併檢查表頭，殘缺檔視為未下載而自動補抓。
+#
+# 欄名取自全庫歷史表頭掃描（2026-09-08：各源 1,623~1,624 檔，表頭 100% 一致）。
+# ⚠ 新增資料源前務必先掃描該源全歷史表頭再填；欄名填錯會使該源全歷史被判殘缺而整批重抓。
+SCRAPER_REQUIRED_COLS = {
+    "price":        ["成交金額", "開盤價", "收盤價"],
+    "chips":        ["外陸資買賣超股數(不含外資自營商)"],
+    "daytrading":   ["當日沖銷交易成交股數", "當日沖銷交易買進成交金額", "當日沖銷交易賣出成交金額"],
+    "fini_holding": ["全體外資及陸資持有股數"],
+    "margin":       ["今日餘額"],
+    "sbl":          ["今日餘額"],
+    "twse_per":     ["本益比"],
+    # 期交所三大法人（799 檔表頭一致）。歷史多數日期在 skip_dates 內（期交所保存期限），
+    # 驗證只作用於保存期內仍可重抓的日期。
+    "taifex_inst":  ["身份別", "多空未平倉口數淨額"],
+    # 集保持股分級（週更，非逐日；由 crawl_weekly_shareholding 單獨下載）
+    "shareholding": ["證券代號", "持股分級", "股數", "占集保庫存數比例%"],
+}
+# ⚠ 刻意不納入 FinMind 財報（monthly_revenue / financial_stmt / balance_sheet /
+#   cashflow / dividend）：雖然實測表頭亦 100% 一致，但 FinMind 有 API 額度限制，
+#   誤判殘缺觸發的整批重抓會直接撞上額度上限、卡住每日流程；且該段已有
+#   no_finmind_data.json（90 天 recheck）與 missing_fm_datasets.json 兩套缺項機制。
+#   邊際效益低而風險高，故維持現狀。
+
+# 推論資料完整度警示（scripts/inference.py 使用）
+# 訊號日關鍵特徵的缺值率超過此比例時，於預測報表標註警示。
+# 背景：2026-09-08 的推論在 20:04 抓資料、20:07 出預測，但 margin/fini_holding
+#       約 23:06 才發布，導致 fini_holding_pct 與 offset 缺值率 100% 卻無任何提示。
+#       既有的 RUN_DATA_INCOMPLETE 只涵蓋 FinMind 額度不足，不涵蓋此情形。
+INFERENCE_NA_WARN_PCT = 50.0
+INFERENCE_NA_WATCH_COLS = [
+    "daytrading_vol", "daytrading_pct", "fini_holding_pct",
+    "offset", "sbl_sell", "fini_net", "sitc_net", "dealer_net", "inst_net_total",
+]
+
 
 # ── 1. 訓練產業篩選 ──────────────────────────────────────────────
 # *** scraper.py（limited 模式）、train.py（訓練集篩選）使用 ***
@@ -235,7 +281,7 @@ FINMIND_FETCH_MODE = "listed"           # "listed"  = 以 data/raw_price 全歷�
                                          # 註：limited/all 走產業對照表，會抓進上櫃股與特別股（無 TWSE 價量或無獨立
                                          #     財報、生產流水線用不到），同時漏掉 TRAIN_INDUSTRIES=False 的上市普通股，
                                          #     使其財報停止更新。listed 模式兩者一併解決且總檔數更少。
-START_DATE         = datetime.date(2020, 1, 1)  # 數據回溯起點（建議至少 5 年）
+START_DATE         = datetime.date(2017, 12, 18)  # 數據回溯起點（建議至少 5 年）
 FINMIND_CACHE_DAYS = 15                  # FinMind 基本面資料快取更新間隔天數
 GHOST_DATA_PCT_THRESHOLD = 0.15          # 幽靈資料/極端價格跳空判定門檻 (15%)
 FINMIND_MAX_LIMIT_WAITS = 6              # 單次呼叫遇 429/402 限速時，最多等待重置幾次（每次約 1 小時）；超過視為額度耗盡放棄，避免無人值守時無限卡住
