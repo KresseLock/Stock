@@ -94,7 +94,7 @@ def test_kd_column_naming():
     import json
     import pandas as pd
     from scripts.feature_engineering import KD_PERIOD
-    path = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
+    from config import FEATURES_PARQUET as path   # 資料路徑唯一來源：config.py § 0
     if not os.path.exists(path):
         return "Skip (no parquet)"
     df = pd.read_parquet(path)
@@ -305,7 +305,7 @@ check("持股分級 reindex 對齊", test_shareholding_reindex)
 
 def test_parquet_integrity():
     import pandas as pd
-    path = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
+    from config import FEATURES_PARQUET as path   # 資料路徑唯一來源：config.py § 0
     if not os.path.exists(path):
         raise AssertionError("features_combined.parquet 不存在，請先執行 run_feature_engineering.py")
     df = pd.read_parquet(path)

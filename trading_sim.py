@@ -224,6 +224,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
             BUY_THRESHOLD, SELL_THRESHOLD, STOP_LOSS_PCT, MAX_POSITIONS,
             FEE_RATE, TAX_RATE, MKT_PANIC_MA5, MKT_PANIC_BREADTH,
             TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS, ORDER_MARKUP_PCT,
+            FILL_REQUIRE_TRADE_THROUGH,
             REGIME_ADAPTIVE_ENABLED, REGIME_BUY_THRESHOLD, REGIME_MAX_POSITIONS,
             ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
             MOMENTUM_BULL_CONFIRM_DAYS, LOT_SIZE, ODD_LOT_ENABLED,
@@ -242,6 +243,7 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
         TS_PULLBACK_PCT   = -6.0
         MIN_HOLD_DAYS     = 1
         ORDER_MARKUP_PCT  = None
+        FILL_REQUIRE_TRADE_THROUGH = False
         REGIME_ADAPTIVE_ENABLED = False
         REGIME_BUY_THRESHOLD = {}
         REGIME_MAX_POSITIONS = {}
@@ -568,8 +570,10 @@ def run_simulation(start_date, end_date, initial_capital, max_positions,
                 # 1. 隔天開盤價未高於加價限價 ➔ 買進，成交價為開盤價
                 buy_price = open_T1
                 reason_detail = f"D1分數強勢 ({day1_score:.1f}%) | 開盤撮合 (限價:{limit_price:.2f} >= 開盤:{open_T1:.2f})"
-            elif low_T1 <= limit_price:
+            elif (low_T1 < limit_price - 1e-6) if FILL_REQUIRE_TRADE_THROUGH else (low_T1 <= limit_price):
                 # 2. 隔天開盤跳空高於限價，但盤中有回檔跌破限價 ➔ 買進，成交價為限價
+                #    FILL_REQUIRE_TRADE_THROUGH：只碰到限價不算，須穿價（low < 限價，即低至少一個 tick）；
+                #    1e-6 容忍 round_to_tick 的浮點誤差，避免「low == 限價」被誤判為穿價
                 buy_price = limit_price
                 reason_detail = f"D1分數強勢 ({day1_score:.1f}%) | 盤中回檔撮合 (開盤:{open_T1:.2f} > 限價:{limit_price:.2f} >= 最低:{low_T1:.2f})"
             else:

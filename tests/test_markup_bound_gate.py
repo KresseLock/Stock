@@ -12,7 +12,7 @@ test_markup_bound_gate.py — markup_pct 搜尋下界是否咬住（假最佳檢
     (B) 假最佳  —— 目標函式在 -3.0 以下仍持續上升，只是被邊界截斷 → 邊界該放寬；
                    且需警覺優化器正往「更依賴回測搓合假設」的方向挖分數（見下）。
 
-  為何 (B) 特別危險：trading_sim.py:566-570 的限價搓合規則是
+  為何 (B) 特別危險：trading_sim.py:567-581 的限價搓合規則是
   「當日 low <= 限價 → 一定以限價成交」。markup_pct 越負（掛越深的折價單），
   成交就越依賴這條樂觀假設。實測路徑 1（2026-01-02~08-27）：
       現行部署 markup=-1.0 → 盤中觸價撮合佔 80%（41/51 筆）
@@ -215,9 +215,24 @@ def main():
     ap.add_argument("-t", "--trials", type=int, default=150, help="Stage 2 每場 trial 數")
     ap.add_argument("--seed", type=int, default=42, help="Stage 2 兩場共用的 TPESampler seed")
     ap.add_argument("--low", type=float, default=-5.0, help="Stage 2 放寬後的下界")
+    # 受測向量可指定：2026-09-10 回補實驗要掃的是 oldselect_20260828（配回補候選模型後
+    # 最佳的那一格），而非當下的 candidate.json。給路徑或 configs/ 底下的檔名皆可。
+    ap.add_argument("--base", type=str, default=CANDIDATE,
+                    help="受測參數檔（路徑或 configs/ 底下的檔名），預設為候選檔")
+    ap.add_argument("--trade-through", action="store_true",
+                    help="盤中成交須穿價（僅在本行程記憶體設 config.FILL_REQUIRE_TRADE_THROUGH=True）")
     args = ap.parse_args()
+    if args.trade_through:
+        # trading_sim.run_simulation 每次呼叫才 from config import，故記憶體 patch 即對評分與撮合統計同時生效
+        import config
+        config.FILL_REQUIRE_TRADE_THROUGH = True
 
-    base = json.load(open(CANDIDATE, encoding="utf-8"))
+    base_path = next((c for c in (args.base, os.path.join(ROOT_DIR, "configs", args.base))
+                      if os.path.exists(c)), None)
+    if base_path is None:
+        print(f"[錯誤] 找不到受測參數檔：{args.base}")
+        return 1
+    base = json.load(open(base_path, encoding="utf-8"))
     params0 = base["best_params"]
     tune_s, tune_e = TRADING_OPT_START_DATE, TRADING_OPT_END_DATE
     days = trading_days()
@@ -226,7 +241,7 @@ def main():
     print("=" * 86)
     print("  markup_pct 搜尋下界咬住檢定（tests/ 隔離沙盒，不動 config.py / configs/ / reports/）")
     print("=" * 86)
-    print(f"  受測向量   : {os.path.basename(CANDIDATE)}"
+    print(f"  受測向量   : {os.path.basename(base_path)}"
           f"（{base.get('walk_forward_selected', '?')}，best_score={base.get('best_score', 0):.4f}）")
     print(f"  固定維度   : " + ", ".join(f"{k}={v}" for k, v in params0.items() if k != "markup_pct"))
     print(f"  調參區間   : {tune_s} ~ {tune_e}（目標函式得分的計算區間）")

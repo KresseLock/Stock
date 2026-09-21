@@ -53,7 +53,7 @@ def test_stop_loss_formula():
     return "6 個 atr 值停損公式 inference==trading_sim"
 
 
-# ── Test 2: panic 紅燈契約 (trading_sim:355-369 / inference 須一致) ──
+# ── Test 2: panic 紅燈契約 (trading_sim:389-397 / inference 須一致) ──
 def _panic_threshold(ma5, breadth, regime, base):
     """兩邊都須遵守的 panic 契約。panic 時返回 99.0 (暫停進場)。"""
     from config import MKT_PANIC_MA5, MKT_PANIC_BREADTH
@@ -95,7 +95,7 @@ def test_shared_constants():
 
 # ── Test 4: 資料回歸 — 全期買入門檻 0 脫節 (若 parquet 存在) ──────────
 def test_data_regression():
-    parquet = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
+    from config import FEATURES_PARQUET as parquet   # 資料路徑唯一來源：config.py § 0
     if not os.path.exists(parquet):
         return "SKIP (無 features_combined.parquet)"
     import pandas as pd

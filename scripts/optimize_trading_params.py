@@ -178,7 +178,7 @@ def search_space_names(regime_mode):
     regime_sideways_pos。調整此清單順序前請一併檢查該處。
 
     regime_bear_pos 不在此清單：Bear 的買入門檻固定 99.0（實質空倉、不在搜尋空間），
-    而 eff_max_positions 只用於擋新進場（trading_sim.py:523），故 Bear 檔數上限沒有任何
+    而 eff_max_positions 只用於擋新進場（trading_sim.py:530），故 Bear 檔數上限沒有任何
     生效路徑，是死維度——留著只會空耗搜尋預算並在穩定度報表產生假數字。
     部署時由 config.REGIME_MAX_POSITIONS["Bear"] 提供固定值。
     若日後 Bear 改為可進場，須同時把它加回本清單與單調約束。"""

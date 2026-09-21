@@ -14,11 +14,12 @@
 ---
 
 ## 每日流程（已自動化，一鍵無腦）
-收盤後（約 15:30 三大法人更新完）執行一鍵腳本：
+收盤後（約 15:30 三大法人更新完）依序執行（原 `run_daily.ps1` 已於 2026-09-02 刪除）：
 ```
-.\run_daily.ps1
+python Auto_RUN.py -s all
+python paper_trading\record_paper_trades.py
 ```
-它會自動：① `Auto_RUN.py -s all`（下載→重訓→推理→備份 Drive）→ ② `record_paper_trades.py`
+① `Auto_RUN.py -s all`（下載→重建特徵→推理→備份 Drive，**不重訓**）→ ② `record_paper_trades.py`
 自動把當日預測的買/賣掛單寫進 `trades.csv`，並回補先前 pending 掛單的成交判定。
 
 **`record_paper_trades.py` 自動做掉的事（無前視偏差）：**

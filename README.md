@@ -21,8 +21,12 @@
 
 | 頻率 | 做什麼 | 指令 |
 | :--- | :--- | :--- |
-| **每天** 收盤後（約 15:40） | 下載資料 → 重訓模型 → 產生明日掛單建議 → 備份 | `python Auto_RUN.py` |
-| **每週** | 全流程更新（跳過 Optuna 重新調參，僅重算特徵/模型/模擬） | `python run_workflow_experiment.py --skip_optuna` |
+| **每天** 收盤後（約 15:40） | 下載資料 → 重建特徵 → 產生明日掛單建議 → 備份（**不重訓模型**，見下方說明） | `python Auto_RUN.py` |
+| **每週** | 實驗巡檢：重算特徵/模型/模擬出報告（跳過 Optuna）。**不會更換生產模型與參數**，看完報告再決定 | `python run_workflow_experiment.py --skip_optuna` |
+
+> **為何每天不重訓**：模型的訓練資料被 `BACKTEST_DATE` 截斷而固定，每天重訓學不到新資料；反而會因為補抓到舊資料、`Stocks.txt` 持倉變動、產業表更新，悄悄換成一個沒驗證過的模型。要換模型請手動 `python auto_pipeline.py -s train`，並先走把關（見 `.claude/CLAUDE.md` §4.5 #9）。
+>
+> **`Auto_RUN.py` 與 `run_workflow_experiment.py` 不可同時執行**：實驗流程會在執行中改寫 `config.py`、切換模型，兩者共用同一把執行鎖，後啟動的會直接中止並印出正在執行的是誰。
 | **每季**（3 個月） | 跳過因子調參，重跑含風控調參的全流程 | `python run_workflow_experiment.py --skip_factor_opt --fresh` |
 | **每年 / 重大事件後** | 完整重訓（含重新搜尋最佳技術指標） | `python run_workflow_experiment.py --fresh` |
 
@@ -411,9 +415,9 @@ pip install -r requirements.txt
 #### 方案甲：一鍵主控執行（生產流程）
 
 ```powershell
-python Auto_RUN.py           # 完整生產流程：下載 → 特徵/訓練 → 推理 → 備份
+python Auto_RUN.py           # 完整生產流程：下載 → 重建特徵 → 推理 → 備份（不重訓）
 python Auto_RUN.py -s d      # 僅增量下載今日資料
-python Auto_RUN.py -s p      # 僅重建特徵、訓練與推理
+python Auto_RUN.py -s p      # 僅重建特徵與推理（不重訓；要換模型請手動 auto_pipeline.py -s train 並先把關）
 python Auto_RUN.py -s b      # 僅執行雲端備份
 ```
 
@@ -725,8 +729,9 @@ python run_workflow_experiment.py
 # 2. 自訂調參輪數與資金 (模式 A 因子調參 50 輪，風控調參 150 輪，初始資金 300 萬)
 python run_workflow_experiment.py -f 50 -t 150 -c 3000000
 
-# 3. 每週例行更新（跳過所有 Optuna 貝葉斯最佳化，沿用既有因子與風控參數，僅重算特徵/模型/模擬/推理）
+# 3. 每週例行巡檢（跳過所有 Optuna 貝葉斯最佳化，沿用既有因子與風控參數，僅重算特徵/模型/模擬/推理）
 #    ▶ 每週推薦指令：一週新資料對 Optuna 搜尋影響極小，沿用既有參數可大幅縮短執行時間
+#    ※ 只產出報告：結束時 models/、特徵檔、參數檔全部還原，實驗預測移到 reports/，不會更換生產系統
 python run_workflow_experiment.py --skip_optuna
 
 # 4. 沿用現有 best_factors.json（跳過因子優化），但仍執行 Optuna 風控調參（每季適用）
@@ -746,7 +751,7 @@ python run_workflow_experiment.py --fresh
 | `-te` | `--trading_early_stopping` | `str` | `"150"` | 風控調參早停輪數 |
 | `-c` | `--capital` | `int` | `2000000` | 回測與優化的初始資金 |
 | ✕ | `--skip_factor_opt` | flag | `False` | 跳過模式 A 因子調參，沿用現有 `best_factors.json` |
-| ✕ | `--skip_optuna` | flag | `False` | **跳過所有 Optuna 最佳化**（因子調參 + 模式 A/B 風控調參），但強制重算特徵、模型、Time Decay、診斷、模擬、推理。**每週例行更新推薦**：一週新資料對 Optuna 搜尋影響極小，沿用既有參數即可大幅縮短執行時間。首次執行需先有完整結果（`best_factors_mode_a.json`、`best_trading_params_mode_a/b.json` 必須存在）。|
+| ✕ | `--skip_optuna` | flag | `False` | **跳過所有 Optuna 最佳化**（因子調參 + 模式 A/B 風控調參），但強制重算特徵、模型、Time Decay、診斷、模擬、推理（結束時生產 `models/`、特徵檔、參數檔全數還原，實驗預測移至 `reports/`）。**每週例行巡檢推薦**：一週新資料對 Optuna 搜尋影響極小，沿用既有參數即可大幅縮短執行時間。首次執行需先有完整結果（`best_factors_mode_a.json`、`best_trading_params_mode_a/b.json` 必須存在）。|
 | ✕ | `--fresh` | flag | `False` | 忽略所有 Checkpoint，強制全部重跑（含所有 Optuna 步驟）|
 
 ##### ③ 實驗產出報告與備份存檔
@@ -808,9 +813,10 @@ Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.js
 ##### ③ 每日一鍵（已自動化，無腦使用）
 收盤後（約 15:40 三大法人更新完）：
 ```powershell
-.\run_daily.ps1
+python Auto_RUN.py -s all
+python paper_trading\record_paper_trades.py
 ```
-此腳本依序執行：(1) `python Auto_RUN.py -s all`（下載→重訓→推理→備份 Drive）→ (2) `python paper_trading\record_paper_trades.py`（自動記錄掛單簿）。
+依序執行：(1) `Auto_RUN.py -s all`（下載→重建特徵→推理→備份 Drive，**不重訓**）→ (2) `record_paper_trades.py`（自動記錄掛單簿）。原本包裝這兩步的 `run_daily.ps1` 已於 2026-09-02 刪除。
 
 ##### ④ 掛單簿自動記錄器 `paper_trading/record_paper_trades.py`
 **完全無前視偏差**地把每日預測轉成可驗證的交易紀錄：
@@ -840,7 +846,7 @@ Copy-Item configs\best_trading_params_mode_b.json configs\best_trading_params.js
 
 | 頻率 | 動作 | 指令 |
 | :--- | :--- | :--- |
-| **每週** | 訊號健康巡檢 + 全流程更新（跳過 Optuna 重調） | `python run_workflow_experiment.py --skip_optuna` |
+| **每週** | 訊號健康巡檢 + 實驗全流程（跳過 Optuna 重調；只出報告，不更換生產模型與參數） | `python run_workflow_experiment.py --skip_optuna` |
 | **每季**（3 個月）| 輕量全流程更新（跳過因子調參，含 Optuna 風控調參） | `python run_workflow_experiment.py --skip_factor_opt --fresh` |
 | **每年**（或大事件後）| 完整重跑含因子重搜 | `python run_workflow_experiment.py --fresh` |
 
@@ -1005,6 +1011,7 @@ python tests/test_pipeline.py
 | `ORDER_MARKUP_HIGH_PCT` | `+2.5%` | 高溢價幅度比例，用於開盤搶進強勢股 |
 | `ORDER_MARKUP_MID_PCT` | `+2.0%` | 中溢價幅度比例 |
 | `ORDER_MARKUP_LOW_PCT` | `+1.5%` | 標準買入加價限價幅度比例 |
+| `FILL_REQUIRE_TRADE_THROUGH` | `False` | 回測盤中成交判定。`False`＝當日最低價 ≤ 限價即成交；`True`＝須穿價（最低價 < 限價，即低至少一個 tick），只碰到限價視為排不到隊。開盤價 ≤ 限價的開盤成交不受影響 |
 
 ---
 

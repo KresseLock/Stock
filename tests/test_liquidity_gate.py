@@ -20,9 +20,9 @@ test_liquidity_gate.py — 進場流動性門檻 潔淨 OOS 部署把關（完�
   階段剔除標的。故本測試**不需重訓模型**，唯一變因乾淨。
   實作上以 monkeypatch 包裝 day-1 模型，把被擋標的的 (prob_strong, prob_weak)
   壓成 (0, 1) → Day1_net = -100，遠低於任何 buy_threshold，等價於在
-  trading_sim.py:531 的買進迴圈加一行 `continue`，但不必改動生產程式碼。
+  trading_sim.py:535 的買進迴圈加一行 `continue`，但不必改動生產程式碼。
 
-  ※ 副作用（已知、不影響判定）：trading_sim.py:699 的 bottom-5% 對照組
+  ※ 副作用（已知、不影響判定）：trading_sim.py:702 的 bottom-5% 對照組
     （portfolio_spread 診斷欄）會被壓低分數污染。該欄不參與交易決策，
     亦不影響報酬／MDD／曝險，故不予校正。Day2/Day3 模型完全不動，
     出場端（D3 轉弱／移動止盈／停損）行為與現行一致。
@@ -105,8 +105,7 @@ except Exception:
 import trading_sim
 from trading_sim import run_simulation
 from config import BACKTEST_DATE, MAX_POSITIONS, SIM_DEFAULT_CAPITAL
-
-DATA_PATH = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
+from config import FEATURES_PARQUET as DATA_PATH   # 資料路徑唯一來源：config.py § 0
 TURNOVER_COL = "成交金額"          # TWSE 原始欄位，單位：元（字串含千分位逗號）
 
 # 候選門檻定義（單位：億元／日）。0 = 現行（不過濾）。
@@ -411,7 +410,7 @@ def main():
         print(f"  結論：門檻 {passed} 億元／日 在潔淨 OOS 通過雙贏＋多數起點穩健。")
         print("  ⚠ 移植前仍須確認：曲線是否單調、通過的門檻是否只由少數起點驅動。")
         print("    若通過，移植方式為在 config.py 新增 MIN_TURNOVER_YI 常數，")
-        print("    並於 trading_sim.py:531 買進迴圈與 scripts/inference.py 候選挑選處共用。")
+        print("    並於 trading_sim.py:535 買進迴圈與 scripts/inference.py 候選挑選處共用。")
     else:
         print("  結論：無門檻能同時滿足全 OOS 雙贏與多數起點穩健 → 不移植，維持現行。")
         print("  註：即使績效判定未通過，本次事件暴露的『回測不模擬衝擊成本』問題依然存在；")

@@ -52,8 +52,8 @@ except Exception:
 SANDBOX = os.path.join(tempfile.gettempdir(), "stock_chipflow_sandbox")
 os.makedirs(SANDBOX, exist_ok=True)
 
-PROD_PARQUET = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
-RAW_CHIPS_DIR = os.path.join(ROOT_DIR, "data", "raw_chips")
+# 資料路徑唯一來源：config.py § 0（CLAUDE.md §4 #1，勿自行拼接 data 目錄）
+from config import FEATURES_PARQUET as PROD_PARQUET, RAW_CHIPS_DIR
 CAPITAL = 1_000_000
 
 INSTS = ["fini_net", "sitc_net", "dealer_net", "inst_net_total"]

@@ -4,14 +4,18 @@ Auto_RUN.py — 一鍵執行全流程主控腳本 (CLI 步驟路由版)
 ==================================================
 本腳本負責將整個量化交易系統的各個步驟進行「完全解耦」的一鍵順序執行：
   1. 增量下載最新資料: scripts/scraper.py
-  2. 因子加載、重建特徵、訓練與推理: auto_pipeline.py
+  2. 重建特徵與推理（不重訓）: auto_pipeline.py -s feature、-s inference
   3. 雲端備份: scripts/StockSync.py
 
 用法:
-  python Auto_RUN.py                 # 一鍵跑完下載 ➔ 預測/訓練 ➔ 雲端備份
+  python Auto_RUN.py                 # 一鍵跑完下載 ➔ 特徵/推理 ➔ 雲端備份
   python Auto_RUN.py --step download # 僅下載今日最新資料 (scraper)
-  python Auto_RUN.py --step predict  # 僅重建特徵、訓練模型並推理預測 (pipeline)
+  python Auto_RUN.py --step predict  # 僅重建特徵並推理預測 (pipeline，不重訓)
   python Auto_RUN.py --step backup   # 僅執行雲端備份 (StockSync)
+
+為何每日不重訓（CLAUDE.md §4.5 #9）：訓練資料被 BACKTEST_DATE 截斷而固定，每日重訓學不到新資料，
+卻會因歷史資料補抓、Stocks.txt 持倉變動、產業表更新而悄悄換掉已把關的模型。
+要換模型請手動執行 python auto_pipeline.py -s train，並先走把關。
 """
 import os
 import subprocess
@@ -21,39 +25,8 @@ import argparse
 import atexit
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-from config import DATA_DIR   # 唯一來源：config.py § 0
-LOCK_PATH = os.path.join(DATA_DIR, "auto_run.lock")
-LOCK_STALE_SECONDS = 6 * 3600  # 逾此時間視為前次崩潰殘留的死鎖，可安全接管
-
-
-def acquire_lock() -> bool:
-    """取得單例執行鎖，避免排程與手動同時執行而互相覆寫特徵/模型/預測檔。"""
-    os.makedirs(os.path.dirname(LOCK_PATH), exist_ok=True)
-    if os.path.exists(LOCK_PATH):
-        age = time.time() - os.path.getmtime(LOCK_PATH)
-        if age < LOCK_STALE_SECONDS:
-            print("\n" + "!" * 75)
-            print(f"  [已在執行中] 偵測到鎖檔 {LOCK_PATH}")
-            print(f"  另一個 Auto_RUN 可能正在執行 (鎖檔建立於 {age/60:.0f} 分鐘前)。")
-            print(f"  若確定無其他行程執行，請手動刪除該鎖檔後重試。")
-            print("!" * 75)
-            return False
-        print(f"[提示] 偵測到逾時鎖檔 (已 {age/3600:.1f} 小時)，視為前次殘留並接管。")
-    try:
-        with open(LOCK_PATH, "w", encoding="utf-8") as f:
-            f.write(f"pid={os.getpid()} started={time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-        return True
-    except OSError as e:
-        print(f"[錯誤] 無法建立鎖檔: {e}")
-        return False
-
-
-def release_lock():
-    try:
-        if os.path.exists(LOCK_PATH):
-            os.remove(LOCK_PATH)
-    except OSError:
-        pass
+# 執行鎖與 run_workflow_experiment.py 共用（路徑／逾時門檻在 config.py § 0），兩者互斥
+from scripts.utils import model_fingerprint, acquire_run_lock, release_run_lock
 
 
 def run_script(script_path: str, is_scraper: bool = False, skip_on_limit: str = None, extra_args: list = None) -> bool:
@@ -133,10 +106,11 @@ def main():
     }
     target_step = step_map[args.step]
 
-    # 單例執行鎖：防止排程與手動同時執行造成 features/models/predictions 併發覆寫
-    if not acquire_lock():
+    # 單例執行鎖（與 run_workflow_experiment.py 共用）：防止併發覆寫 features/models/predictions，
+    # 也防止在實驗流程改寫 config.py、切換模型的期間產出正式預測
+    if not acquire_run_lock("Auto_RUN"):
         sys.exit(1)
-    atexit.register(release_lock)  # 涵蓋正常結束、sys.exit 與 KeyboardInterrupt 各出口
+    atexit.register(release_run_lock)  # 涵蓋正常結束、sys.exit 與 KeyboardInterrupt 各出口
 
     t_total_start = time.time()
     
@@ -145,6 +119,8 @@ def main():
     print("=" * 75)
     print(f"  啟動時間: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  目標步驟: {target_step.upper()}")
+    if target_step in ("predict", "all"):
+        print(f"  模型指紋: {model_fingerprint()}（每日不重訓，指紋應維持不變；變了代表 models/ 被動過）")
 
     extra_args = []
     if args.date:
@@ -157,10 +133,10 @@ def main():
             sys.exit(1)
 
     elif target_step == "predict":
-        # 執行 auto_pipeline.py
-        success = run_script("auto_pipeline.py", extra_args=extra_args)
-        if not success:
-            sys.exit(1)
+        # 只重建特徵＋推論，不重訓（見檔頭說明）；--date 只對推論生效
+        for step_args in (["-s", "feature"], ["-s", "inference"] + extra_args):
+            if not run_script("auto_pipeline.py", extra_args=step_args):
+                sys.exit(1)
 
     elif target_step == "backup":
         success = run_script(os.path.join("scripts", "StockSync.py"), extra_args=extra_args)
@@ -169,9 +145,11 @@ def main():
 
     else:
         # 執行完整流程
+        # 特徵與推論分兩步呼叫，刻意不跑 auto_pipeline 的 all（all 會重訓，見檔頭說明）
         steps = [
             (os.path.join("scripts", "scraper.py"), True, None),
-            ("auto_pipeline.py", False, extra_args),
+            ("auto_pipeline.py", False, ["-s", "feature"]),
+            ("auto_pipeline.py", False, ["-s", "inference"] + extra_args),
             (os.path.join("scripts", "StockSync.py"), False, extra_args)
         ]
         

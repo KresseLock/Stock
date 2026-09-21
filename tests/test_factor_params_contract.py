@@ -35,7 +35,7 @@ try:
 except Exception:
     pass
 
-PROD_PARQUET = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
+from config import FEATURES_PARQUET as PROD_PARQUET   # 資料路徑唯一來源：config.py § 0
 BEST_FACTORS = os.path.join(ROOT_DIR, "configs", "best_factors.json")
 
 

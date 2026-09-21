@@ -14,11 +14,11 @@ test_regime_window_gate.py — REGIME_TREND_WINDOW 潔淨 OOS 部署把關
 為何不能直接跑 run_workflow_experiment.py 的 B7.5：
   B7.5 比較的是 best_trading_params.json（候選 mode_b vs 現行）。而
   REGIME_TREND_WINDOW 並不在該檔的搜尋空間內（優化器只調 regime_bull_trend /
-  regime_bear_trend 兩個門檻值），它是 config.py:139 的寫死常數。
+  regime_bear_trend 兩個門檻值），它是 config.py:224 的寫死常數。
   直接跑 B7.5，候選與現行的 REGIME_TREND_WINDOW 都會是 10，測不到本候選。
   故在此沿用其方法論、改以本參數為唯一變因。
 
-方法論（對齊 B7.5，run_workflow_experiment.py:1005-1013）：
+方法論（對齊 B7.5，run_workflow_experiment.py:1115-1123）：
   * 只在潔淨 OOS 視窗比較。全週期回測前段屬樣本內、報酬受 lookahead 灌水，
     會系統性偏袒越激進的參數，使比較淪為誤導性訊號。
   * 兩邊同模型、同區間、同風控參數，唯一差異為 REGIME_TREND_WINDOW。
@@ -64,8 +64,7 @@ import trading_sim
 from trading_sim import run_simulation
 from config import (BACKTEST_DATE, MAX_POSITIONS, SIM_DEFAULT_CAPITAL,
                     REGIME_TREND_WINDOW as PROD_WINDOW)
-
-DATA_PATH = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
+from config import FEATURES_PARQUET as DATA_PATH   # 資料路徑唯一來源：config.py § 0
 
 
 def run_quiet(**kwargs):

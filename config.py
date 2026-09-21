@@ -46,8 +46,12 @@ import multiprocessing
 # 看不出問題；一旦搬到 Linux/macOS 就會分裂成兩個資料目錄，症狀是「明明抓過
 # 卻又整批重抓」，而且不會有任何錯誤訊息。集中在這裡，就只有一種拼法。
 #
-# 註：scripts/scraper.py 另有一份等價的 fallback 定義，讓它在沒有 config.py
-#     的環境也能單獨執行。修改此處的目錄名稱時，該處必須同步。
+# 註：以下檔案在 except ImportError 內另有等價的 fallback 定義，讓它們在沒有 config.py
+#     的環境也能單獨執行。修改此處的目錄名稱時，這些 fallback 必須同步：
+#       scripts/scraper.py、scripts/feature_engineering.py、scripts/train.py、scripts/inference.py、
+#       scripts/backtest.py、scripts/analyze_regime_stability.py、scripts/optimize_factors.py、
+#       trading_sim.py、tests/test_short_backtest.py
+#     找法：grep 'os.path.join(.*"data"'——本檔以外的命中都必須位於 except ImportError 內。
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR     = os.path.join(PROJECT_ROOT, "data")
 
@@ -63,6 +67,11 @@ RAW_FINANCIAL_DIR    = os.path.join(DATA_DIR, "raw_financial")
 # 特徵工程產物
 FEATURES_DIR     = os.path.join(DATA_DIR, "features")
 FEATURES_PARQUET = os.path.join(FEATURES_DIR, "features_combined.parquet")
+
+# 生產／實驗共用執行鎖（Auto_RUN.py 與 run_workflow_experiment.py 互斥，見 scripts/utils.acquire_run_lock）
+RUN_LOCK_PATH              = os.path.join(DATA_DIR, "auto_run.lock")
+RUN_LOCK_STALE_SECONDS     = 6 * 3600   # 鎖檔逾此時間未更新 → 視為崩潰殘留，可接管
+RUN_LOCK_HEARTBEAT_SECONDS = 600        # 長流程每隔此秒數更新鎖檔時間（實驗一輪 7~14 小時，會超過上面的門檻）
 
 # ── 0.1 爬蟲資料完整性驗證 ────────────────────────────────────────
 # *** scraper.py 使用 ***
@@ -143,6 +152,13 @@ STOP_LOSS_PCT    = -8.0      # 固定個股停損 (%)；ATR_STOP_ENABLED=True �
 MAX_POSITIONS    = 5         # 最大持倉上限檔數
 MIN_HOLD_DAYS    = 20        # 最少持股天數（防止頻繁交易）
 ORDER_MARKUP_PCT = -2.0      # 預設掛單溢價 (%)，負數 = 折價逢低買進；None = 改用 D1 信心動態加價
+# 回測限價買單的盤中成交判定（trading_sim.py 撮合用；開盤撮合 open <= 限價 不受影響）
+#   False → 當日 low <= 限價即以限價成交（2026-09-11 以前所有回測結論的前提）
+#   True  → 須穿價：low < 限價才成交。價格都落在 tick 格上，故等價於「低於限價至少一個 tick」；
+#           只碰到限價的盤中觸價視為排不到隊。見 EXPERIMENTS_PENDING.md「穿價才成交」檢定。
+#   ⚠️ 尚未正式採用（tests/test_trade_through_deploy_gate.py 把關未通過）。
+#      已列入 run_workflow_experiment.py 的 OPT_SIGNATURE_CONFIG_KEYS，改值會使風控優化 checkpoint 失效。
+FILL_REQUIRE_TRADE_THROUGH = False
 
 # ★ 交易摩擦成本唯一定義處 ★ 全系統手續費以此為準（trading_sim.py 買賣兩端皆引用）。
 #   未來若券商手續費調降／談到折讓（如 6 折），只改這一行即可，無須動任何腳本。
@@ -330,8 +346,16 @@ WF_SELECT_RULE        = "deploy_gate"
 WF_PROGRESS_EVERY     = 25
 BACKTEST_DATE         = "20250801"  # 訓練／測試切分分界點（OOS 評估起點）
                                     # 設為 None → 模式 B（滾動重訓，用於實盤生產）
-TRAIN_SPLIT_RATIO     = 0.70        # train.py 日期分位切分：訓練集結束分位
-VALID_SPLIT_RATIO     = 0.80        # 驗證集（early stopping 用）結束分位；其後為測試集，僅評估不參與訓練
+TRAIN_SPLIT_RATIO     = 0.780508    # train.py 日期分位切分：訓練集結束分位
+VALID_SPLIT_RATIO     = 0.853942    # 驗證集（early stopping 用）結束分位；其後為測試集，僅評估不參與訓練
+                                    # 註：這兩個怪數字是刻意的——START_DATE 於 2026-09-10 前推至 2017-12-18
+                                    #     （截斷後 1355 → 1852 個交易日），若維持 0.70/0.80，訓練終點會從
+                                    #     2023-11-24 自動退到 2023-04 附近，等於一輪同時改「資料量」與
+                                    #     「訓練終點」兩個變因（EXPERIMENTS_PENDING.md 坑 #3、鐵律 #6）。
+                                    #     此處反算出讓訓練終點固定在 2023-11-24、驗證終點固定在 2024-06-20
+                                    #     的分位，使唯一變因是「訓練集往前多了 497 個交易日」。
+                                    #     回退（回補實驗落敗）時連同 START_DATE 一起改回 2020-01-01/0.70/0.80。
+                                    #     ⚠️ 分位是對「交易日數」取的，資料量再變動就必須重算，勿沿用此值。
                                     # 註：BACKTEST_DATE 只決定「資料截斷點」，真正 fit 的訓練集終點由
                                     #     TRAIN_SPLIT_RATIO 決定。要讓模型吃到接近截斷點的近期資料，
                                     #     必須同時調高這兩個比例（例如 0.95 / 0.98）。
@@ -384,7 +408,11 @@ DECAY_LAMBDA_GRID    = [0.0, 0.001, 0.002, 0.003, 0.005]  # optimize_factors.py 
 # IC 反轉因子排除：填入欄位名稱後下次訓練生效；實驗確認效果前保持空列表
 # atr_pct 是給風控引擎（trading_sim / inference）查停損用的期間無關別名，
 # 內容與 atr<N>_pct 完全相同。若放進訓練特徵會產生完全共線的重複欄，故排除。
-EXCLUDE_FEATURES = ["atr_pct"]
+# big_holder_pct／small_holder_pct／holder_hhi：集保 TDCC opendata 只提供最新一週，本地資料
+# 2026-05-29 起才有，訓練期 100% 缺值、三支模型 split 皆為 0。排除它們對現行模型是 no-op
+# （2026-09-11 實測預測逐值相同），但可防止 BACKTEST_DATE 後移時變成「只有近期有值」的
+# 年代標記（與已移除的 credit_limit 同型）。爬蟲照常累積；歷史夠涵蓋訓練集再考慮移出並走把關。
+EXCLUDE_FEATURES = ["atr_pct", "big_holder_pct", "small_holder_pct", "holder_hhi"]
 
 # 動能特徵週期：同時計算 ret{w}（多週期報酬率）與 RS_{w}d（相對大盤強弱）
 # 修改後需重跑 auto_pipeline.py -s f 重建 parquet，再重新訓練

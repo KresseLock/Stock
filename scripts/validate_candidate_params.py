@@ -197,7 +197,7 @@ def main():
     offset_str = "/".join(str(o) for o in OFFSETS)
 
     # 全程 tee：8/28 那輪就是因為結果只印在主控台，關機後整輪數字全丟（見 utils.start_tee_log）
-    from scripts.utils import start_tee_log
+    from scripts.utils import start_tee_log, model_fingerprint
     _log_path = start_tee_log("validate_candidate_params")
 
     print("=" * 78)
@@ -214,6 +214,7 @@ def main():
     print(f"  路徑     : {len(OFFSETS)} 條，起點各往後挪 {offset_str} 個交易日，終點固定")
     print(f"  資金     : {args.capital:,}")
     print(f"  執行記錄 : {os.path.relpath(_log_path, BASE_DIR)}")
+    print(f"  模型指紋 : {model_fingerprint()}（models/；部署前與生產 models/ 對帳，見 EXPERIMENTS_PENDING.md 鐵律 #8）")
     if len(zone_days) - max(OFFSETS) < MIN_ZONE_DAYS:
         print(f"  [注意] 最短路徑僅 {len(zone_days) - max(OFFSETS)} 個交易日，低於建議的 {MIN_ZONE_DAYS} 天；")
         print("         MIN_HOLD_DAYS 為 11~23 天，區間太短會被單一持有週期主宰，結論僅供參考。")

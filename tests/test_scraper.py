@@ -23,7 +23,7 @@ def test_scrape():
     
     # 載入 skip_dates 快取以進行防禦性檢查
     skip_dates = {}
-    skip_path = os.path.join(ROOT_DIR, "data", "skip_dates.json")
+    from scripts.scraper import SKIP_DATES_PATH as skip_path   # 與爬蟲同一個定義處，勿自行拼接 data 目錄
     if os.path.exists(skip_path):
         try:
             with open(skip_path, "r", encoding="utf-8") as f:

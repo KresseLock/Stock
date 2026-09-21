@@ -273,7 +273,7 @@ def main(target_date_str=None):
             entry_regime = 'Sideways'
         eff_buy_threshold = REGIME_BUY_THRESHOLD.get(entry_regime, BUY_THRESHOLD)
 
-        # 大盤避險紅燈 (鏡像 trading_sim.py:355-369；無前視，用最新日 D 的 ma5/breadth 決定隔日進場)。
+        # 大盤避險紅燈 (鏡像 trading_sim.py:389-397；無前視，用最新日 D 的 ma5/breadth 決定隔日進場)。
         # 修正前 inference 缺此邏輯，導致 panic 日仍推薦買入、與 trading_sim 回測脫節 (約 16.7% 交易日)。
         _mkt_ma5 = df.groupby("date")["market_mean_pct"].first().sort_index().rolling(5, min_periods=1).mean().get(latest_date, 0.0)
         _mkt_breadth = (df_latest_market["market_breadth_pct"].iloc[0]
@@ -305,6 +305,14 @@ def main(target_date_str=None):
     if os.path.exists(feature_cols_path):
         with open(feature_cols_path, "r", encoding="utf-8") as f:
             feature_cols = json.load(f)
+        # 生產不每日重訓（CLAUDE.md §4.5 #9），模型的 feature_cols 不會再跟著特徵程式自動更新；
+        # 特徵檔若缺模型要的欄位，下方 reindex 會靜默補成 NaN、預測失真卻不報錯 → 直接中止。
+        _missing_cols = [c for c in feature_cols if c not in df_latest_market.columns]
+        if _missing_cols:
+            print(f"\n[錯誤] 特徵檔缺少模型需要的 {len(_missing_cols)} 個欄位：{_missing_cols[:10]}")
+            print("       特徵程式／特徵檔與 models/ 不一致（常見原因：改了特徵程式的欄名）。")
+            print("       確定要換模型時，手動執行 python auto_pipeline.py -s train，並先走把關（CLAUDE.md §4.5 #9）。")
+            sys.exit(1)
     else:
         numeric_cols = df_latest_market.select_dtypes(include=[np.number, bool]).columns
         feature_cols = [c for c in numeric_cols if c not in ignore_cols]

@@ -4878,5 +4878,2665 @@
   "fini_holding_20260710": {
     "reason": "market_closed",
     "confirmed_at": "2026-09-02"
+  },
+  "taifex_inst_20171218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20171219": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20171220": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20171221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20171222": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20171225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20171226": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20171227": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20171228": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20171229": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180101": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180101": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180101": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180101": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180101": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180101": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180101": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180101": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180102": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180103": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180104": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180105": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180109": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180110": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180111": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180112": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180116": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180117": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180118": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180119": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180122": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180123": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180124": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180125": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180126": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180129": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180130": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180131": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180201": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180202": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180205": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180206": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180207": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180208": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180209": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180212": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180213": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180213": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180213": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180213": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180213": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180213": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180213": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180213": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180214": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180214": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180214": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180214": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180214": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180214": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180214": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180214": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180215": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180215": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180215": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180215": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180215": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180215": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180215": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180215": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180216": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180216": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180216": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180216": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180216": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180216": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180216": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180216": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180219": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180219": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180219": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180219": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180219": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180219": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180219": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180219": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180220": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180220": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180220": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180220": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180220": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180220": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180220": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180220": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180222": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180223": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180226": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180227": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180228": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180228": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180228": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180228": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180228": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180228": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180228": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180228": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180301": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180302": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180305": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180306": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180307": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180308": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180309": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180312": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180313": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180314": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180315": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180316": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180319": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180320": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180321": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180322": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180323": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180326": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180327": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180328": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180329": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180330": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180402": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180403": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180404": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180404": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180404": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180404": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180404": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180404": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180404": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180404": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180405": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180405": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180405": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180405": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180405": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180405": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180405": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180405": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180406": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180406": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180406": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180406": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180406": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180406": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180406": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180406": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180409": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180410": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180411": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180412": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180413": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180416": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180417": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180418": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180419": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180420": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180423": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180424": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180425": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180426": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180427": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180430": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180502": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180503": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180504": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180507": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180508": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180509": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180510": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180511": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180514": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180515": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180516": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180517": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180518": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180521": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180522": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180523": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180524": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180525": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180528": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180529": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180530": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180531": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180601": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180604": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180605": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180606": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180607": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180608": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180611": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180612": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180613": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180614": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180615": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180618": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180618": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180618": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180618": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180618": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180618": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180618": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180618": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180619": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180620": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180621": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180622": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180625": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180626": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180627": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180628": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180629": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180702": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180703": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180704": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180705": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180706": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180709": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180710": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180711": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180712": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180713": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180716": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180717": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180718": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180719": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180720": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180723": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180724": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180725": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180726": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180727": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180730": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180731": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180801": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180802": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180803": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180806": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180807": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180808": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180809": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180810": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180813": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180814": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180815": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180816": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180817": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180820": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180821": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180822": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180823": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180824": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180827": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180828": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180829": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180830": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180831": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180903": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180904": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180905": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180906": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180907": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180910": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180911": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180912": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180913": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180914": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180917": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180918": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180919": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180920": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180921": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20180924": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20180924": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20180924": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180924": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20180924": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20180924": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20180924": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20180924": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180925": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180926": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180927": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20180928": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181001": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181002": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181003": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181004": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181005": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181008": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181009": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20181010": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20181010": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20181010": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181010": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20181010": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20181010": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20181010": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20181010": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181011": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181012": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181015": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181016": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181017": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181018": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181019": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181022": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181023": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181024": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181025": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181026": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181029": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181030": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181031": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181101": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181102": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181105": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181107": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181109": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181112": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181114": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181116": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181119": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181121": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181122": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181123": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181126": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181127": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181128": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181129": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181130": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181203": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181204": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181205": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181206": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181207": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181210": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181211": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181212": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181213": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181214": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181217": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181219": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181220": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181224": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181226": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181227": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181228": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20181231": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20181231": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20181231": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20181231": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20181231": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20181231": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20181231": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20181231": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190102": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190103": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190104": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190107": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190109": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190110": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190111": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190114": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190116": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190117": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190118": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190121": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190122": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190123": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190124": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190125": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190128": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190129": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190130": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20190131": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20190131": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20190131": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190131": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20190131": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20190131": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20190131": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20190131": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20190201": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20190201": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20190201": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190201": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20190201": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20190201": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20190201": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20190201": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190211": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190212": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190213": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190214": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190215": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190219": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190220": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190221": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190222": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190226": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190227": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190304": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190305": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190306": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190307": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190308": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190311": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190312": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190313": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190314": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190315": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190318": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190319": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190320": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190321": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190322": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190325": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190326": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190327": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190328": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190329": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190401": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190402": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190403": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190408": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190409": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190410": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190411": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190412": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190415": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190416": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190417": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190418": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190419": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190422": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190423": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190424": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190425": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190426": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190429": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190430": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20190501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20190501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20190501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20190501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20190501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20190501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20190501": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190502": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190503": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190506": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190507": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190508": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190509": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190510": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190513": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190514": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190515": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190516": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190517": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190520": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190521": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190522": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190523": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190524": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190527": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190528": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190529": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190530": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190531": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190603": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190604": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190605": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190606": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190610": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190611": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190612": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190613": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190614": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190617": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190618": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190619": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190620": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190621": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190624": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190625": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190626": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190627": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190628": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190701": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190702": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190703": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190704": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190705": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190708": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190709": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190710": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190711": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190712": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190715": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190716": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190717": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190718": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190719": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190722": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190723": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190724": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190725": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190726": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190729": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190730": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190731": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190801": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190802": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190805": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190806": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190807": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190808": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "price_20190809": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "chips_20190809": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "twse_per_20190809": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190809": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "margin_20190809": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "sbl_20190809": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "daytrading_20190809": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "fini_holding_20190809": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190812": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190813": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190814": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190815": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190816": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190819": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190820": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190821": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190822": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190823": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190826": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190827": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-09"
+  },
+  "taifex_inst_20190828": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190829": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190830": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190902": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190903": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190904": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190905": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190906": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190909": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190910": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190911": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190912": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190916": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190917": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190918": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190919": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190920": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190923": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190924": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190925": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190926": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190927": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "price_20190930": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-10"
+  },
+  "chips_20190930": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-10"
+  },
+  "twse_per_20190930": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20190930": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-10"
+  },
+  "margin_20190930": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-10"
+  },
+  "sbl_20190930": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-10"
+  },
+  "daytrading_20190930": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-10"
+  },
+  "fini_holding_20190930": {
+    "reason": "market_closed",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191001": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191002": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191003": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191004": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191007": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191008": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191009": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191014": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191015": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191016": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191017": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191018": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191021": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191022": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191023": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191024": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191025": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191028": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191029": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191030": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191031": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191101": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191104": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191105": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191106": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191107": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191108": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191111": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191112": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191113": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191114": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191115": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191118": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191119": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191120": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191121": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191122": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191125": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191126": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191127": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191128": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191129": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191202": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191203": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191204": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191205": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191206": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191209": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191210": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191211": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191212": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191213": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191216": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191217": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191218": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191219": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191220": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191223": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191224": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191225": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191226": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191227": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191230": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
+  },
+  "taifex_inst_20191231": {
+    "reason": "no_data",
+    "confirmed_at": "2026-09-10"
   }
 }

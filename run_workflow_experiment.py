@@ -265,6 +265,17 @@ OPT_SIGNATURE_CONFIG_KEYS = (
     "WF_HOLDOUT_RATIO", "WF_HOLDOUT_MIN_DAYS", "WF_SELECT_RULE",
     # § 10.5 搜尋空間邊界 → 改了等於換了搜得到的解集合
     "TRADING_PARAM_BOUNDS",
+    # § 2 ~ § 2.3 模擬器行為：trading_sim.run_simulation 讀取、且「不會」被 best_trading_params.json 覆寫的常數
+    # → 改了等於換了評分所在的回測世界，既有參數應視為過時。
+    # ⚠️ 刻意排除被 config.py § 11 依部署檔覆寫的常數（BUY/SELL_THRESHOLD、STOP_LOSS_PCT、MKT_PANIC_*、
+    #    TS_*、MIN_HOLD_DAYS、ORDER_MARKUP_PCT、REGIME_BUY_THRESHOLD、REGIME_BULL/BEAR_TREND、
+    #    REGIME_MAX_POSITIONS）：它們的值跟著部署檔變，放進來會讓每次部署新參數都誤判 checkpoint 失效。
+    "MAX_POSITIONS", "FEE_RATE", "TAX_RATE", "LOT_SIZE", "ODD_LOT_ENABLED", "FILL_REQUIRE_TRADE_THROUGH",
+    "REGIME_ADAPTIVE_ENABLED", "REGIME_TREND_WINDOW", "REGIME_TREND_MIN_PERIODS",
+    "REGIME_EXIT_PARAMS", "EXIT_REGIME_LAG", "ENTRY_BULL_CONFIRM_DAYS", "MOMENTUM_BULL_CONFIRM_DAYS",
+    "ATR_STOP_ENABLED", "ATR_STOP_MULTIPLIER", "ATR_STOP_FLOOR_PCT", "ATR_STOP_CEILING_PCT",
+    # 回測股票母體（scripts/utils.filter_stocks_by_train_industries）
+    "TRAIN_INDUSTRIES",
 )
 
 
@@ -330,6 +341,49 @@ def restore_models(suffix):
             restored_any = True
             print(f"  [模型還原] 還原 {name}{suffix} -> {name}")
     return restored_any
+
+
+# ── 執行前狀態快照（生產模型 + 特徵檔）──────────────────────────────────────
+# 為什麼要有：流程中途會重訓 Model A/B，並以實驗因子重建特徵檔。舊版結束時 models/ 停在新訓練的
+# Model B，但 config.py／best_factors.json／best_trading_params.json 卻還原成執行前 → 生產環境變成
+# 「沒把關過的新模型 + 舊參數」（EXPERIMENTS_PENDING.md 鐵律 #7／#8）。
+# 故結束時（含例外）一律把 models/ 與特徵檔還原成執行前狀態；兩者必須一起還原——
+# 只還原模型，舊模型的 feature_cols 可能對不上實驗重建的特徵檔，推論時缺欄會靜默變 NaN。
+# 實驗產出的 Model B 仍保留在 models/*.mode_b，是否採用由使用者看完報告後自行決定。
+PRE_RUN_SNAPSHOT_DIR = os.path.join(BASE_DIR, "models", "_workflow_pre_run")
+_SNAPSHOT_MODEL_FILES = ("lgbm_model_1.txt", "lgbm_model_2.txt", "lgbm_model_3.txt", "feature_cols.json")
+
+
+def snapshot_pre_run_state():
+    """把執行前的 models/ 與特徵檔存進 PRE_RUN_SNAPSHOT_DIR。"""
+    os.makedirs(PRE_RUN_SNAPSHOT_DIR, exist_ok=True)
+    for name in _SNAPSHOT_MODEL_FILES:
+        src = os.path.join(BASE_DIR, "models", name)
+        if os.path.exists(src):
+            _atomic_copy(src, os.path.join(PRE_RUN_SNAPSHOT_DIR, name))
+    if os.path.exists(_cfg.FEATURES_PARQUET):
+        _atomic_copy(_cfg.FEATURES_PARQUET,
+                     os.path.join(PRE_RUN_SNAPSHOT_DIR, os.path.basename(_cfg.FEATURES_PARQUET)))
+
+
+def restore_pre_run_state():
+    """把 PRE_RUN_SNAPSHOT_DIR 還原回 models/ 與特徵檔；沒有快照時回傳 False。"""
+    if not os.path.isdir(PRE_RUN_SNAPSHOT_DIR):
+        return False
+    for name in _SNAPSHOT_MODEL_FILES:
+        src = os.path.join(PRE_RUN_SNAPSHOT_DIR, name)
+        if os.path.exists(src):
+            _atomic_copy(src, os.path.join(BASE_DIR, "models", name))
+    parquet_bak = os.path.join(PRE_RUN_SNAPSHOT_DIR, os.path.basename(_cfg.FEATURES_PARQUET))
+    if os.path.exists(parquet_bak):
+        _atomic_copy(parquet_bak, _cfg.FEATURES_PARQUET)
+    return True
+
+
+def models_fingerprint(suffix=""):
+    """models/ 的短指紋（見 scripts/utils.model_fingerprint）；suffix=".mode_b" 取 Model B 備份檔。"""
+    from scripts.utils import model_fingerprint
+    return model_fingerprint(os.path.join(BASE_DIR, "models"), suffix)
 
 
 def fmt_pct(val):
@@ -465,7 +519,15 @@ def write_experiment_report(res):
     inc_ret = res["mode_b"].get("cmp_incumbent_oos_return")
     inc_mdd = res["mode_b"].get("cmp_incumbent_oos_mdd")
     incumbent_section_md = ""
-    if inc_ret is not None or inc_mdd is not None:
+    if res["mode_b"].get("cmp_identical"):
+        incumbent_section_md = """
+---
+
+## ⚖️ 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較
+
+**結論：本輪沒有候選可比，不給部署建議。** 候選 `best_trading_params_mode_b.json` 與執行前已部署的 `best_trading_params.json` 的 `best_params` 完全相同（常見於 `--skip_optuna` 沿用既有參數），兩邊回測必然一模一樣，故本輪跳過此比較。要評估新的候選參數，須不加 `--skip_optuna` 重新優化，或用 `scripts/validate_candidate_params.py` 對乾淨對照組做多起點檢定。
+"""
+    elif inc_ret is not None or inc_mdd is not None:
         # 部署判準對齊 CLAUDE.md §4.5 #4：報酬與回撤**雙贏**才算勝出。
         # 舊版只判 cand_ret > inc_ret，會在「報酬贏、回撤爆掉」時照樣寫出「建議部署」，
         # 與 §4.5 #2（不可用拉高回撤換報酬）及 scripts/validate_candidate_params.py 的判準衝突。
@@ -668,6 +730,16 @@ def main():
     print(f"  * 續傳 / 復原機制啟動           : {'否 (強制重新執行)' if args.fresh else '是 (優先讀取 Checkpoints)'}")
     print("=" * 80)
     
+    # ── 0.5 執行鎖：與 Auto_RUN.py 互斥（見 scripts/utils.acquire_run_lock）──────────
+    # 本流程會在執行中改寫 config.py、切換 models/、重建特徵檔；Auto_RUN 若同時執行，會拿實驗中途的
+    # 設定與模型產出正式預測。取鎖必須在任何改寫之前；atexit 涵蓋正常結束、例外與 Ctrl+C。
+    import atexit
+    from scripts.utils import acquire_run_lock, release_run_lock, start_run_lock_heartbeat
+    if not acquire_run_lock("run_workflow_experiment"):
+        sys.exit(1)
+    atexit.register(release_run_lock)
+    start_run_lock_heartbeat()   # 一輪可達 7~14 小時，超過鎖的殘留判定門檻，須定期更新鎖檔時間
+
     # ── 1. 安全備份 ────────────────────────────────────────────────────────
     print("\n[步驟 1/4] 安全備份設定與資料檔...")
     
@@ -703,6 +775,14 @@ def main():
         _atomic_copy(BEST_TRADING_PARAMS_PATH, BEST_TRADING_PARAMS_BAK)
         backup_trading_exists = True
         print(f"  已備份 best_trading_params.json -> best_trading_params.json.workflow.bak")
+
+    # 生產模型與特徵檔快照（見 snapshot_pre_run_state）。與上方 .workflow.bak 同一慣例：
+    # 殘留快照代表上次被強制中止、finally 沒跑到，models/ 可能停在實驗中途 → 先還原再重新快照。
+    if restore_pre_run_state():
+        print("  [還原] 偵測到上次中斷留下的執行前快照，已還原 models/ 與特徵檔...")
+    snapshot_pre_run_state()
+    print(f"  已快照 models/ 與特徵檔 -> {os.path.relpath(PRE_RUN_SNAPSHOT_DIR, BASE_DIR)}"
+          f"（模型指紋 {models_fingerprint()}）")
 
     # 用於收集報告的字典
     results = {
@@ -1114,18 +1194,31 @@ def main():
 
         # B7.5 候選 (mode_b) vs 現行 (incumbent) 潔淨 OOS 回測比較 ─────────────────
         # 部署決策必須排除 lookahead。trading_sim.py 以單一靜態模型「全區間預測」(無 walk-forward
-        # 重訓，見 trading_sim.py:176)，而 Model B 的訓練集 (train.py 70/10/20 日期切割，BACKTEST_DATE
+        # 重訓，見 trading_sim.py:184)，而 Model B 的訓練集 (train.py 70/10/20 日期切割，BACKTEST_DATE
         # =None 不截斷) 涵蓋回測期前約 70%，故全週期回測前段屬樣本內、報酬受 lookahead 灌水，並會
         # 系統性偏袒「越激進越撈假錢」的寬鬆參數，使「候選 vs 現行」淪為誤導性訊號。因此本比較只在
         # Model B 的保留 OOS 視窗 (mode_a_oos_start ~ latest) 上跑，兩邊同用 Model B、同區間，唯一差異
         # 是風控參數：
         #   • 候選 = 本輪 optimize 產出的 best_trading_params_mode_b.json (此刻已在 best_trading_params.json)
         #   • 現行 = 本次執行前已部署的參數 (best_trading_params.json.workflow.bak)
+        # 候選與現行的 best_params 完全相同時（--skip_optuna 沿用既有 mode_b，而部署檔往往就是 mode_b 的複本），
+        # 兩次回測必然一模一樣，比較只會產出一個假的「平手」→ 直接跳過，報告寫明「本輪沒有候選可比」。
+        def _best_params(path):
+            try:
+                with open(path, "r", encoding="utf-8") as _fh:
+                    return json.load(_fh).get("best_params")
+            except (OSError, ValueError):
+                return None
+        _cand_bp = _best_params(trading_mode_b_saved)
+        cmp_identical = bool(backup_trading_exists and _cand_bp is not None
+                             and _cand_bp == _best_params(BEST_TRADING_PARAMS_BAK))
+        results["mode_b"]["cmp_identical"] = cmp_identical
+
         has_checkpoint_cmp = ("cmp_candidate_oos_return" in results["mode_b"]) \
                              and ("cmp_incumbent_oos_return" in results["mode_b"]) and not args.fresh and not args.skip_optuna
-        # 現行結果為 None 有兩種情況：首次執行無現行參數可比 (維持跳過) vs 先前解析失敗 (需重跑)。
-        # 前者 backup_trading_exists=False，後者為 True，以此區分。
-        if has_checkpoint_cmp and backup_trading_exists \
+        # 現行結果為 None 有三種情況：首次執行無現行參數可比 (維持跳過)、候選與現行相同 (維持跳過)、
+        # 先前解析失敗 (需重跑)。前兩者以 backup_trading_exists／cmp_identical 區分。
+        if has_checkpoint_cmp and backup_trading_exists and not cmp_identical \
            and (results["mode_b"].get("cmp_candidate_oos_return") is None
                 or results["mode_b"].get("cmp_incumbent_oos_return") is None):
             print("  [提示] 偵測到候選 vs 現行比較結果為 None (可能為先前解析錯誤的無效數據)，將重新執行模擬...")
@@ -1137,6 +1230,14 @@ def main():
             results["mode_b"]["cmp_candidate_oos_mdd"] = None
             results["mode_b"]["cmp_incumbent_oos_return"] = None
             results["mode_b"]["cmp_incumbent_oos_mdd"] = None
+        elif cmp_identical:
+            print("\n[候選 vs 現行] 候選 best_trading_params_mode_b.json 與執行前已部署的 best_trading_params.json "
+                  "參數完全相同（--skip_optuna 沿用既有參數時的常態），本輪沒有候選可比，跳過此驗證。")
+            results["mode_b"]["cmp_candidate_oos_return"] = None
+            results["mode_b"]["cmp_candidate_oos_mdd"] = None
+            results["mode_b"]["cmp_incumbent_oos_return"] = None
+            results["mode_b"]["cmp_incumbent_oos_mdd"] = None
+            save_progress(results)
         elif has_checkpoint_cmp:
             print(f"\n[續傳/復原] 偵測到已存在的候選 vs 現行潔淨 OOS 比較結果，跳過重跑...")
         else:
@@ -1182,7 +1283,37 @@ def main():
             # 確保 config 變數為 Mode B
             update_config_var("BACKTEST_DATE", "None")
             
-            run_cmd([sys.executable, "auto_pipeline.py", "-s", "i"], "模式 B：模型推理預測，產生明日實盤下單建議")
+            # 實驗推論與每日生產共用 predictions/prediction_<date>.txt：直接寫會覆蓋當日生產預測，並被
+            # record_paper_trades.py（紙上交易掛單簿）與 StockSync.py（Drive）當成正式掛單——但 Model B 未把關、
+            # 未上線。故推論前記下 predictions/ 原內容，推論後把變動的檔移到 reports/，再放回生產預測。
+            pred_dir = os.path.join(BASE_DIR, "predictions")
+            pred_before = {}
+            if os.path.isdir(pred_dir):
+                for _f in os.listdir(pred_dir):
+                    if os.path.isfile(os.path.join(pred_dir, _f)):
+                        with open(os.path.join(pred_dir, _f), "rb") as _fh:
+                            pred_before[_f] = _fh.read()
+            try:
+                run_cmd([sys.executable, "auto_pipeline.py", "-s", "i"], "模式 B：模型推理預測（實驗輸出，不覆蓋生產預測）")
+            finally:
+                for _f in (os.listdir(pred_dir) if os.path.isdir(pred_dir) else []):
+                    _path = os.path.join(pred_dir, _f)
+                    if not os.path.isfile(_path):
+                        continue
+                    with open(_path, "rb") as _fh:
+                        _content = _fh.read()
+                    if pred_before.get(_f) == _content:
+                        continue
+                    _exp = os.path.join(BASE_DIR, "reports", f"workflow_mode_b_{_f}")
+                    os.makedirs(os.path.dirname(_exp), exist_ok=True)
+                    with open(_exp, "wb") as _fh:
+                        _fh.write(_content)
+                    if _f in pred_before:
+                        with open(_path, "wb") as _fh:
+                            _fh.write(pred_before[_f])
+                    else:
+                        os.remove(_path)
+                    print(f"  [隔離] 實驗預測已移至 {os.path.relpath(_exp, BASE_DIR)}，predictions/{_f} 維持生產版本")
             results["mode_b"]["inference_completed"] = True
             save_progress(results)
 
@@ -1260,7 +1391,7 @@ def main():
             results["mode_b"]["oos_val_mdd_modelB"] = mdd_oos_b
             save_progress(results)
 
-        # 確保實驗結束時 models/ 還原為 Model B (實盤生產大腦)，避免續傳路徑停在 Model A
+        # 實驗內部收尾於 Model B（與報告數字一致）；生產 models/ 由 finally 還原為執行前狀態，Model B 不自動上線
         restore_models(".mode_b")
         update_config_var("BACKTEST_DATE", "None")
 
@@ -1315,6 +1446,19 @@ def main():
                 print("  已刪除實驗中新增的 best_trading_params.json 以還原原始狀態")
             if os.path.exists(BEST_TRADING_PARAMS_BAK):
                 os.remove(BEST_TRADING_PARAMS_BAK)
+
+        # 生產模型與特徵檔還原為執行前狀態（見 snapshot_pre_run_state）。放在最後：大檔複製最可能失敗，
+        # 放前面會連帶讓上方設定檔的還原被跳過。失敗時保留快照，下次執行開頭會自動還原。
+        try:
+            if restore_pre_run_state():
+                shutil.rmtree(PRE_RUN_SNAPSHOT_DIR, ignore_errors=True)
+                print(f"  已還原 models/ 與特徵檔為執行前狀態（模型指紋 {models_fingerprint()}）")
+                print(f"  本次實驗的 Model B 未上線，保留於 models/*.mode_b（模型指紋 {models_fingerprint('.mode_b')}）")
+                print("  ※ 要採用 Model B：把 config.py 的訓練設定改成與本次 Model B 相同（BACKTEST_DATE、DEFAULT_DECAY_LAMBDA 等），")
+                print("    手動 python auto_pipeline.py -s train，並先走模型×參數把關（鐵律 #7／#8）；只複製 *.mode_b 會與特徵檔／設定不一致。")
+        except Exception as _e:
+            print(f"  [警告] 還原 models/ 與特徵檔失敗：{_e}")
+            print(f"         快照保留於 {PRE_RUN_SNAPSHOT_DIR}，下次執行開頭會自動還原；也可手動複製回去。")
 
 
 if __name__ == "__main__":

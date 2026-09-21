@@ -53,6 +53,91 @@ def start_tee_log(script_name: str) -> str:
     sys.stdout = _Tee(sys.stdout, open(path, "w", encoding="utf-8"))
     return path
 
+
+def model_fingerprint(model_dir: str = None, suffix: str = "") -> str:
+    """回傳模型目錄的短指紋：三支模型＋feature_cols.json 內容的 md5 前 12 碼；缺檔回傳「缺檔」。
+    suffix 供 run_workflow_experiment.py 的備份檔使用（例：lgbm_model_1.txt.mode_b → suffix=".mode_b"）。
+
+    存在的理由（EXPERIMENTS_PENDING.md 鐵律 #8「把關的是檔案，不是設定」）：2026-09-10 生產
+    models/ 在把關跑完後被重訓，檔案已經換掉卻沒人察覺，直到手動比 md5 才發現。把關工具把指紋
+    印進 log，事後就能與生產 models/ 對帳。
+    """
+    import hashlib
+    model_dir = model_dir or os.path.join(BASE_DIR, "models")
+    h = hashlib.md5()
+    for name in ("lgbm_model_1.txt", "lgbm_model_2.txt", "lgbm_model_3.txt", "feature_cols.json"):
+        path = os.path.join(model_dir, name + suffix)
+        if not os.path.exists(path):
+            return "缺檔"
+        with open(path, "rb") as f:
+            h.update(f.read())
+    return h.hexdigest()[:12]
+
+
+def acquire_run_lock(owner: str) -> bool:
+    """取得生產／實驗共用的單例執行鎖（config.RUN_LOCK_PATH）；已被佔用時印出持有者並回傳 False。
+
+    為何共用：Auto_RUN.py 與 run_workflow_experiment.py 都會改寫特徵檔／models／predictions，後者還會在
+    執行中改寫 config.py、切換 Model A/B。兩者同時跑，Auto_RUN 會拿實驗中途的設定與模型產出正式預測。
+    鎖檔逾 RUN_LOCK_STALE_SECONDS 未更新即視為崩潰殘留並接管；可能跑超過該時間的流程必須呼叫
+    start_run_lock_heartbeat()，否則會被誤判為殘留而遭接管。
+    """
+    import time
+    from config import RUN_LOCK_PATH, RUN_LOCK_STALE_SECONDS
+    os.makedirs(os.path.dirname(RUN_LOCK_PATH), exist_ok=True)
+    if os.path.exists(RUN_LOCK_PATH):
+        age = time.time() - os.path.getmtime(RUN_LOCK_PATH)
+        if age < RUN_LOCK_STALE_SECONDS:
+            try:
+                with open(RUN_LOCK_PATH, encoding="utf-8") as f:
+                    holder = f.read().strip()
+            except OSError:
+                holder = "（無法讀取）"
+            print("\n" + "!" * 75)
+            print(f"  [已在執行中] 偵測到執行鎖 {RUN_LOCK_PATH}（{age / 60:.0f} 分鐘前更新）")
+            print(f"  持有者：{holder}")
+            print("  Auto_RUN.py 與 run_workflow_experiment.py 不可同時執行。")
+            print("  若確定沒有其他行程在跑，請手動刪除鎖檔後重試。")
+            print("!" * 75)
+            return False
+        print(f"[提示] 偵測到逾時鎖檔（已 {age / 3600:.1f} 小時未更新），視為前次殘留並接管。")
+    try:
+        with open(RUN_LOCK_PATH, "w", encoding="utf-8") as f:
+            f.write(f"owner={owner} pid={os.getpid()} started={datetime.datetime.now():%Y-%m-%d %H:%M:%S}\n")
+        return True
+    except OSError as e:
+        print(f"[錯誤] 無法建立執行鎖: {e}")
+        return False
+
+
+def release_run_lock():
+    """釋放執行鎖；只刪除本行程持有的那一把（避免誤刪接管者的鎖）。"""
+    from config import RUN_LOCK_PATH
+    try:
+        with open(RUN_LOCK_PATH, encoding="utf-8") as f:
+            if f"pid={os.getpid()} " not in f.read():
+                return
+        os.remove(RUN_LOCK_PATH)
+    except OSError:
+        pass
+
+
+def start_run_lock_heartbeat():
+    """背景 daemon 執行緒每 RUN_LOCK_HEARTBEAT_SECONDS 更新一次鎖檔時間，行程結束即停。"""
+    import threading
+    import time
+    from config import RUN_LOCK_PATH, RUN_LOCK_HEARTBEAT_SECONDS
+
+    def _beat():
+        while True:
+            time.sleep(RUN_LOCK_HEARTBEAT_SECONDS)
+            try:
+                os.utime(RUN_LOCK_PATH, None)
+            except OSError:
+                pass
+
+    threading.Thread(target=_beat, daemon=True).start()
+
 def parse_stocks_file(file_path: str = "Stocks.txt") -> dict:
     """
     解析 Stocks.txt。

@@ -19,9 +19,9 @@
 | `scripts/inference.py` | 推論未來3天多空分數，提供含 Tick Size 對齊的掛單建議 |
 | `scripts/optimize_trading_params.py` | Optuna 最佳化風控參數 → `configs/best_trading_params.json` |
 | `trading_sim.py` | OOS 回測，含 T+2 交割模擬、限價溢價搓合、Excel 輸出 |
-| `Auto_RUN.py` | 生產主控：`-s download/predict/backup/all`（預設 all），`-d YYYYMMDD` 指定推理日；download 模式額度不足會等待而非跳過 |
-| `auto_pipeline.py` | 研發流水線：`-s optimize/feature/train/inference` |
-| `run_workflow_experiment.py` | 雙模式實驗（模式A研究期截至2025-08-01／模式B生產期），含 Checkpoint 斷點續傳 |
+| `Auto_RUN.py` | 生產主控：`-s download/predict/backup/all`（預設 all），`-d YYYYMMDD` 指定推理日；download 模式額度不足會等待而非跳過。**predict／all 只重建特徵＋推論、不重訓**（§4.5 #9），並印出模型指紋。與 `run_workflow_experiment.py` 共用執行鎖（`config.RUN_LOCK_PATH`），不可同時執行 |
+| `auto_pipeline.py` | 研發流水線：`-s optimize/feature/train/inference`；不帶 `-s`（all）**會重訓**，生產請改走 `Auto_RUN.py` |
+| `run_workflow_experiment.py` | 雙模式實驗（模式A研究期截至2025-08-01／模式B生產期），含 Checkpoint 斷點續傳。結束時（含例外）還原執行前的 `models/`＋特徵檔，Model B 只留在 `models/*.mode_b`；B8 實驗預測移至 `reports/workflow_mode_b_*`，不覆蓋 `predictions/` |
 | `scripts/analyze_regime_stability.py` | OOS 訊號健康診斷：RankIC / Alpha / PSI 漂移 |
 | `scripts/param_sensitivity.py` | 參數敏感度診斷（OFAT）：跨市況掃單一風控參數，解釋優化器為何選某值 → `reports/param_sensitivity_report.md` |
 | `scripts/compare_model_modes.py` | 模型時效性三方對照（現行／解除截斷／訓練集涵蓋近期）：自動備份→重訓→同區間回測→出報告→還原環境，候選模型保留供 `--promote` 採用 |
@@ -82,11 +82,17 @@
    - **為何必然失敗（機制層面，這才是重點）**：該規則觸發 16 次中有 **13 次砍的是獲利部位**，而 §4.5 #1 已確立本策略獲利完全來自出場端吃肥尾。它砍的正是「短期暴漲」的部位——那恰恰是肥尾贏家的早期特徵。一旦砍到就是數十 pp 的損失，這不是可調參數能修好的，是**規則定義與獲利來源直接對立**。
    - **當初為何誤判為「有效」**：取值依據只看單一全窗（2025-08-02~2026-08-25）的雙贏，而該窗的優勢**全部由 2025 下半年 5 個月產生並被複利放大**（前段抬高期末資金再吃後段），2026 那 8 個月其實大幅為負。呼應 #4 判準：**單看全窗改善不算數**。且掃描曲線根本不單調（trim=3 反而大輸 trim=0 達 38pp），當時卻被描述成「單調遞增後轉平的高原」——16 個觸發樣本撐不起任何「高原」結論。
    - **教訓（可推廣）**：(a) 任何新出場規則都必須先問「它會不會砍到肥尾贏家」，若觸發樣本多數為獲利部位就該直接懷疑；(b) 參數掃描必須看**多起點**而非單一窗，且非單調曲線＝雜訊擬合，不可解釋成高原——反過來也不成立：#4 的流動性門檻全窗曲線近乎完全單調（轉折 1 次）仍是雜訊，**單調不是穩健的證據，多起點一致才是**；(c) 提防與 `REGIME_MAX_POSITIONS` 的隱性耦合——當 Sideways 上限等於 `MAX_POSITIONS` 時該規則實質只在 Bear 生效，換一組風控參數它的作用面就完全改變，這種「參數依賴的觸發率」本身就使結論不可移植。
-8. **訊號有專屬作用位置，跨端挪用即失效——D3 是出場訊號，不可拿來當進場過濾**：`Day1_net`／`Day3_net` 在本系統有明確分工：**進場吃 D1 動能，出場靠 D3 轉弱＋移動止盈＋ATR 停損**（`scripts/inference.py:481` 的 D3 轉弱判定即為此而設）。進場端只看 D1、完全不看 D3（`trading_sim.py:531`、`scripts/inference.py:569`），這是**設計，不是疏漏**。
+8. **訊號有專屬作用位置，跨端挪用即失效——D3 是出場訊號，不可拿來當進場過濾**：`Day1_net`／`Day3_net` 在本系統有明確分工：**進場吃 D1 動能，出場靠 D3 轉弱＋移動止盈＋ATR 停損**（`scripts/inference.py:504` 的 D3 轉弱判定即為此而設）。進場端只看 D1、完全不看 D3（`trading_sim.py:535`、`scripts/inference.py:592`），這是**設計，不是疏漏**。
    - **已驗證否決**（`tests/test_d3_entry_gate.py`，2026-09-08）：加一道「訊號日 `Day3_net >= 門檻` 才准進場」，掃 6 起點 × 5 門檻（-15／-10／-5／0／+5）：**全 OOS 報酬差全為負**（−24.9／−63.7／−103.0／−68.5／−110.4 pp），多起點雙贏 0～1/6，曲線非單調（轉折 2 次）。**無任何門檻在任何指標上贏過現行。**
    - **決定性證據**：最寬鬆的 `D3>=-15` 只擋掉 21.7% 樣本，曝險 84.7%→84.4%、均持倉 4.32→4.32 **幾乎沒變**，報酬卻掉 25pp。部位數與曝險都沒降、只是換了一批標的進來，報酬就崩 → 被擋掉的不是「會虧的股」，而是**會賺的股**。且過濾越多回撤越糟（`D3>=-5` 的 MDD 33.6% vs 現行 22.2%），完全不是「避開弱勢股」該有的樣子。
    - **機制（為何必然失敗）**：D3 負值不是「別買」，而是「進場後準備要跑」。D1 強／D3 弱的標的正是「短線爆發、隨後回落」型，恰恰是 #1 所說的肥尾贏家來源——系統本來就靠出場端在它們衝高時鎖利。把 D3 搬到進場端＝把出場工具挪去做它不該做的事，同時砍掉獲利來源本身。
    - **推廣**：任何「把某端訊號拿去另一端用」的構想（D3 當進場過濾、D1 當出場條件等），都必須先問「這個訊號在現行架構中負責什麼」。本例正是由「模型說 D3 弱卻照買＝自相矛盾」的誤讀出發，實測證明那是**分工而非矛盾**——別把分工誤讀成 bug。
+9. **生產模型不每日重訓——換模型是一次部署，必須手動＋把關**（2026-09-12 起）：`Auto_RUN.py` 的 predict／all 只跑 `auto_pipeline.py -s feature` 與 `-s inference`，不再跑 `-s train`。
+   - **為何重訓沒有好處**：`train.py` 以 `BACKTEST_DATE` 截斷資料，訓練／驗證集是固定的，每天重訓學不到任何新資料；`train.py` 又可逐位元重現（`random_state` 固定），輸入不變時產出完全相同。
+   - **為何重訓有害**：只要截斷日以前的輸入有任何變動，就會產生一個新的、沒把關過的模型實現——FinMind／TWSE 補抓舊資料、`Stocks.txt` 持倉變動（`filter_stocks_by_train_industries` 會把持倉股強制併入訓練母體）、`scraper.py -fc` 更新產業表。實例：2026-09-10 補抓到 5 支已下市股 2017-2019 的財報（僅佔該兩年 0.16% 列），當晚的每日重訓就把通過把關的模型換掉，裁判區報酬中位數差 +15~25pp，事後手動比 md5 才發現（`scripts/EXPERIMENTS_PENDING.md` 鐵律 #8）。
+   - **要換模型時**：手動 `python auto_pipeline.py -s train` → 模型×參數 2×2 把關（鐵律 #7）→ 通過才留用，否則還原。以 `scripts/utils.py` 的 `model_fingerprint()` 對帳；`Auto_RUN.py` 每次執行會印出當前指紋，**指紋變了卻沒人手動重訓＝有東西動了 `models/`**。
+   - **連帶防呆**：`inference.py` 在特徵檔缺少 `feature_cols.json` 任一欄時直接中止（不再每日重訓後，改特徵程式的欄名會讓 reindex 靜默補 NaN）；`run_workflow_experiment.py` 結束時還原執行前的 `models/`＋特徵檔，B8 實驗預測不覆蓋 `predictions/`。
+   - **勿誤用**：`auto_pipeline.py` 不帶 `-s`（all）仍會重訓，那是研發用途，別拿來當每日生產指令。
 
 ---
 

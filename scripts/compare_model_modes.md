@@ -98,7 +98,7 @@ if cfg_backtest_date is not None and max_data_date > bt_date:
 
 ### 4.3 判讀陷阱：`b2full` 的因子可能根本沒變
 
-`optimize_factors.py:453` 有**暖啟動**機制：會把上一輪 `best_factors.json` 的參數排入第一個 trial，讓 TPE 從已知好解展開。後果是 —— **若這次搜尋沒找到比現行更好的解，輸出的因子參數會與現行完全相同**，那 `b2full` 就退化成 `b2`，數小時等於白跑。
+`optimize_factors.py:457` 有**暖啟動**機制：會把上一輪 `best_factors.json` 的參數排入第一個 trial，讓 TPE 從已知好解展開。後果是 —— **若這次搜尋沒找到比現行更好的解，輸出的因子參數會與現行完全相同**，那 `b2full` 就退化成 `b2`，數小時等於白跑。
 
 **看報告時先確認因子到底變了沒**：
 

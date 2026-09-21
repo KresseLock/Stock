@@ -38,12 +38,21 @@ try:
     import sys as _sys
     if PARENT_DIR not in _sys.path:
         _sys.path.insert(0, PARENT_DIR)
-    from config import DATA_DIR, FEATURES_DIR as FEAT_DIR, FEATURES_PARQUET
+    from config import (DATA_DIR, FEATURES_DIR as FEAT_DIR, FEATURES_PARQUET,
+                        RAW_PRICE_DIR, RAW_CHIPS_DIR, RAW_MARGIN_DIR, RAW_TWSE_PER_DIR,
+                        RAW_TAIFEX_DIR, RAW_SHAREHOLDING_DIR, RAW_FINANCIAL_DIR)
 except ImportError:
     # ↓ fallback 必須與 config.py § 0 一致
     DATA_DIR = os.path.normpath(os.path.join(PARENT_DIR, "data"))
     FEAT_DIR = os.path.join(DATA_DIR, "features")
     FEATURES_PARQUET = os.path.join(FEAT_DIR, "features_combined.parquet")
+    RAW_PRICE_DIR        = os.path.join(DATA_DIR, "raw_price")
+    RAW_CHIPS_DIR        = os.path.join(DATA_DIR, "raw_chips")
+    RAW_MARGIN_DIR       = os.path.join(DATA_DIR, "raw_margin")
+    RAW_TWSE_PER_DIR     = os.path.join(DATA_DIR, "raw_twse_per")
+    RAW_TAIFEX_DIR       = os.path.join(DATA_DIR, "raw_taifex")
+    RAW_SHAREHOLDING_DIR = os.path.join(DATA_DIR, "raw_shareholding")
+    RAW_FINANCIAL_DIR    = os.path.join(DATA_DIR, "raw_financial")
 os.makedirs(FEAT_DIR, exist_ok=True)
 
 # ── 載入中央控制面板標籤設計參數 ──────────────────────────
@@ -287,7 +296,7 @@ def _compute_ta(g: pd.DataFrame, p: dict = None) -> pd.DataFrame:
 # B. 法人籌碼特徵
 # ══════════════════════════════════════════════════════
 def _load_chips_one_day(date_str: str, target_stocks: list) -> pd.DataFrame:
-    path = os.path.join(DATA_DIR, "raw_chips", f"{date_str}_chips.csv")
+    path = os.path.join(RAW_CHIPS_DIR,f"{date_str}_chips.csv")
     df = _read_csv(path)
     if df.empty: return pd.DataFrame()
     df["證券代號"] = df["證券代號"].astype(str).str.strip()
@@ -322,7 +331,7 @@ def _compute_chips_features(df_chips: pd.DataFrame) -> pd.DataFrame:
 # C. 信用交易特徵
 # ══════════════════════════════════════════════════════
 def _load_margin_one_day(date_str: str, target_stocks: list) -> pd.DataFrame:
-    df_m = _read_csv(os.path.join(DATA_DIR, "raw_margin", f"{date_str}_margin.csv"))
+    df_m = _read_csv(os.path.join(RAW_MARGIN_DIR,f"{date_str}_margin.csv"))
     if not df_m.empty:
         df_m["代號"] = df_m["代號"].astype(str).str.strip()
         df_m = df_m[df_m["代號"].isin(target_stocks)].copy()
@@ -333,7 +342,7 @@ def _load_margin_one_day(date_str: str, target_stocks: list) -> pd.DataFrame:
             for col in ["margin_bal", "short_bal", "offset"]:
                 if col in df_m.columns: df_m[col] = _to_float(df_m[col])
             df_m = df_m[["stock_id"] + [c for c in ["margin_bal", "short_bal", "offset"] if c in df_m.columns]]
-    df_s = _read_csv(os.path.join(DATA_DIR, "raw_margin", f"{date_str}_sbl.csv"))
+    df_s = _read_csv(os.path.join(RAW_MARGIN_DIR,f"{date_str}_sbl.csv"))
     if not df_s.empty:
         df_s["代號"] = df_s["代號"].astype(str).str.strip()
         df_s = df_s[df_s["代號"].isin(target_stocks)].copy()
@@ -357,7 +366,7 @@ def _load_margin_one_day(date_str: str, target_stocks: list) -> pd.DataFrame:
 # D. 持股分級特徵
 # ══════════════════════════════════════════════════════
 def _load_shareholding_all() -> pd.DataFrame:
-    paths = sorted(glob.glob(os.path.join(DATA_DIR, "raw_shareholding", "*_shareholding.csv")))
+    paths = sorted(glob.glob(os.path.join(RAW_SHAREHOLDING_DIR,"*_shareholding.csv")))
     if not paths: return pd.DataFrame()
     dfs = []
     for p in paths:
@@ -411,7 +420,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
     merge_dfs = []
 
     # 1. 月營收
-    rev_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_monthly_revenue.csv")
+    rev_path = os.path.join(RAW_FINANCIAL_DIR,f"{stock_id}_monthly_revenue.csv")
     df_rev = _read_csv(rev_path)
     if not df_rev.empty:
         df_rev["date"]    = pd.to_datetime(df_rev["date"]).apply(lambda x: _shift_finmind_date(x, "rev"))
@@ -419,7 +428,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
         merge_dfs.append(df_rev[["date", "revenue"]].drop_duplicates("date"))
 
     # 2. 綜合損益表 (季報)
-    stmt_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_financial_stmt.csv")
+    stmt_path = os.path.join(RAW_FINANCIAL_DIR,f"{stock_id}_financial_stmt.csv")
     df_stmt = _read_csv(stmt_path)
     if not df_stmt.empty:
         df_stmt["date"]  = pd.to_datetime(df_stmt["date"]).apply(lambda x: _shift_finmind_date(x, "stmt"))
@@ -432,7 +441,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
         merge_dfs.append(piv[keep_cols])
 
     # 3. 資產負債表 (季報)
-    bal_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_balance_sheet.csv")
+    bal_path = os.path.join(RAW_FINANCIAL_DIR,f"{stock_id}_balance_sheet.csv")
     df_bal = _read_csv(bal_path)
     if not df_bal.empty:
         df_bal["date"]  = pd.to_datetime(df_bal["date"]).apply(lambda x: _shift_finmind_date(x, "stmt"))
@@ -445,7 +454,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
         merge_dfs.append(piv[keep_cols])
 
     # 4. 現金流量表 (季報)
-    cf_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_cashflow.csv")
+    cf_path = os.path.join(RAW_FINANCIAL_DIR,f"{stock_id}_cashflow.csv")
     df_cf = _read_csv(cf_path)
     if not df_cf.empty:
         df_cf["date"]  = pd.to_datetime(df_cf["date"]).apply(lambda x: _shift_finmind_date(x, "stmt"))
@@ -458,7 +467,7 @@ def _load_finmind_fundamentals(stock_id: str, all_dates: pd.DatetimeIndex) -> pd
         merge_dfs.append(piv[keep_cols])
 
     # 5. 股利政策 (年/季)
-    div_path = os.path.join(DATA_DIR, "raw_financial", f"{stock_id}_dividend.csv")
+    div_path = os.path.join(RAW_FINANCIAL_DIR,f"{stock_id}_dividend.csv")
     df_div = _read_csv(div_path)
     if not df_div.empty:
         # 注：股利(cash_dividend)通常來自宣告日或除權息日，FinMind 提供之 date 多為已知發布日
@@ -491,7 +500,7 @@ def _load_market_sentiment(date_str: str) -> dict:
     result = {}
     
     # 1. 讀取期交所外資台指期未平倉淨額
-    taifex_path = os.path.join(DATA_DIR, "raw_taifex", f"{date_str}_taifex_inst.csv")
+    taifex_path = os.path.join(RAW_TAIFEX_DIR,f"{date_str}_taifex_inst.csv")
     df_tf = _read_csv(taifex_path)
     if not df_tf.empty and "商品名稱" in df_tf.columns and "身份別" in df_tf.columns and "多空未平倉口數淨額" in df_tf.columns:
         # 尋找 商品名稱='TXF' 且 身份別包含'外資'
@@ -507,7 +516,7 @@ def _load_market_sentiment(date_str: str) -> dict:
 # 主建置函式
 # ══════════════════════════════════════════════════════
 def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
-    df_p = _read_csv(os.path.join(DATA_DIR, "raw_price", f"{date_str}_price.csv"))
+    df_p = _read_csv(os.path.join(RAW_PRICE_DIR,f"{date_str}_price.csv"))
     if df_p.empty: return None
     df_p["證券代號"] = df_p["證券代號"].astype(str).str.strip()
     df_p = df_p[df_p["證券代號"].isin(target_stocks)].copy()
@@ -528,7 +537,7 @@ def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
             merged = pd.merge(merged, df_c.drop(columns=["date"], errors="ignore"), on="stock_id", how="left")
             
         # 讀取當沖
-        df_dt = _read_csv(os.path.join(DATA_DIR, "raw_chips", f"{date_str}_daytrading.csv"))
+        df_dt = _read_csv(os.path.join(RAW_CHIPS_DIR,f"{date_str}_daytrading.csv"))
         if not df_dt.empty:
             df_dt["證券代號"] = df_dt["證券代號"].astype(str).str.strip()
             if "當日沖銷交易成交股數" not in df_dt.columns:
@@ -542,7 +551,7 @@ def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
                     merged["daytrading_pct"] = merged["daytrading_vol"] / (merged["volume"] + 1e-9)
 
         # 讀取外資持股
-        df_fh = _read_csv(os.path.join(DATA_DIR, "raw_chips", f"{date_str}_fini_holding.csv"))
+        df_fh = _read_csv(os.path.join(RAW_CHIPS_DIR,f"{date_str}_fini_holding.csv"))
         if not df_fh.empty:
             df_fh["證券代號"] = df_fh["證券代號"].astype(str).str.strip()
             
@@ -566,7 +575,7 @@ def build_features(date_str: str, target_stocks: list) -> pd.DataFrame:
             merged = pd.merge(merged, df_m.drop(columns=["date"], errors="ignore"), on="stock_id", how="left")
 
     # TWSE 官方版 PER/PBR
-    df_per = _read_csv(os.path.join(DATA_DIR, "raw_twse_per", f"{date_str}_twse_per.csv"))
+    df_per = _read_csv(os.path.join(RAW_TWSE_PER_DIR,f"{date_str}_twse_per.csv"))
     if not df_per.empty:
         df_per["證券代號"] = df_per["證券代號"].astype(str).str.strip()
         required_cols = ["本益比", "股價淨值比", "殖利率(%)"]
@@ -629,7 +638,7 @@ def process_all_history_features(start_date_obj: datetime.date, end_date_obj: da
         if not _is_weekend(curr):
             date_str = curr.strftime("%Y%m%d")
             # 判斷當天是否有收盤價日報 CSV，若無則代表是國定假日或無開市交易，直接跳過以提升效率
-            price_path = os.path.join(DATA_DIR, "raw_price", f"{date_str}_price.csv")
+            price_path = os.path.join(RAW_PRICE_DIR,f"{date_str}_price.csv")
             if os.path.exists(price_path):
                 dates_to_process.append(date_str)
         curr += delta

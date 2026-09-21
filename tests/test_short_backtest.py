@@ -64,7 +64,11 @@ try:
 except Exception:
     pass
 
-PROD_PARQUET   = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
+try:
+    from config import FEATURES_PARQUET as PROD_PARQUET   # 資料路徑唯一來源：config.py § 0
+except ImportError:
+    # ↓ fallback 必須與 config.py § 0 一致（本檔下方的 config 常數區也留有脫離 config 的 fallback）
+    PROD_PARQUET = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
 MODEL_DIR      = os.path.join(ROOT_DIR, "models")
 FEAT_COLS_PATH = os.path.join(MODEL_DIR, "feature_cols.json")
 

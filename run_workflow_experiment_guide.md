@@ -127,6 +127,7 @@ flowchart TD
 
 ### 📂 步驟 4：自動還原與異常回復 (Exception Safety)
 *   在 `run_workflow_experiment.py` 中，不論實驗因為鍵盤中斷 (Ctrl+C) 還是內部錯誤 (Exception) 中止，最後的 `finally` 區塊保證會自動將 [config.py](config.py)、`configs/best_factors.json` 和 `configs/best_trading_params.json` 還原為最初備份，避免對每日生產自動化排程造成任何設定污染。
+*   `models/` 與特徵檔也會還原為執行前狀態（快照於 `models/_workflow_pre_run/`，強制中止後下次執行開頭自動還原）。實驗訓練出的 Model B 只保留在 `models/*.mode_b`，**不會自動上線**；B8 的實驗預測移至 `reports/workflow_mode_b_prediction_*.txt`，不覆蓋 `predictions/` 的生產預測（避免被紙上交易記錄器與 Drive 同步當成正式掛單）。
 
 ---
 
@@ -233,7 +234,11 @@ flowchart TD
    * 因子調參產出的最佳因子配置已自動儲存於 [configs/best_factors.json](configs/best_factors.json)，系統進行特徵計算時會直接加載，無需手動複製。
 
 3. **日常自動化運行**：
-   * 部署完畢後，即可恢復日常生產流程，執行 `python Auto_RUN.py`。系統每天收盤後便會自動加載您最新優化出來的特徵結構與最佳風控參數進行 T+1 / T+2 的限價下單掛單建議與備份。
+   * 部署完畢後，即可恢復日常生產流程，執行 `python Auto_RUN.py`。系統每天收盤後會以 `best_trading_params.json` 與現有 `models/` 產生 T+1 / T+2 的限價下單掛單建議並備份。
+
+4. **模型不會自動上線**：
+   * `Auto_RUN.py` 不重訓模型（[.claude/CLAUDE.md](.claude/CLAUDE.md) §4.5 #9），實驗結束時 `models/` 也已還原為執行前狀態。
+   * 若要讓 Model B 上線：把 [config.py](config.py) 的訓練設定改成與 Model B 相同（`BACKTEST_DATE`、`DEFAULT_DECAY_LAMBDA` 等），手動 `python auto_pipeline.py -s train`，並先走模型×參數把關（`scripts/EXPERIMENTS_PENDING.md` 鐵律 #7／#8）。只複製 `models/*.mode_b` 會與特徵檔／設定不一致。
 
 ---
 
@@ -284,7 +289,7 @@ python run_workflow_experiment.py --skip_factor_opt
    印出 `regime_bull_buy / regime_sideways_buy / ...` ＝正確的 `--regime` 模式。
 
 ### E. 判斷 OK → 實盤套用
-依 §8 部署：將 `best_trading_params_mode_b.json` 複製覆蓋為 `best_trading_params.json`，再恢復每日 `python Auto_RUN.py`。
+依 §8 部署：將 `best_trading_params_mode_b.json` 複製覆蓋為 `best_trading_params.json`，再恢復每日 `python Auto_RUN.py`。模型不會隨之更換（見 §8 第 4 點）；參數是對某個模型調的，換參數前先確認它與生產 `models/` 一起驗證過（鐵律 #7）。
 
 ---
 

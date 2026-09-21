@@ -427,7 +427,7 @@ def train_variant(tag, parquet_path, seed=42, cutoff=None):
     T.FEATURE_COLS_PATH = os.path.join(mdl, "feature_cols.json")
     if cutoff is not None:
         T.BACKTEST_DATE = cutoff        # 模組全域，main() 呼叫時才讀 → monkeypatch 有效
-    T.LGBM_SEED_BASE = seed             # 見 0.2：train.py:106 的 42 需提為模組變數
+    T.LGBM_SEED_BASE = seed             # 見 0.2：train.py:111 的 42 需提為模組變數
     _quiet(T.main)
     return mdl
 
@@ -756,7 +756,7 @@ Step −1  修復（半天）  ── ✅ 已完成 2026-08-14（程式修復；
 
 Step 0  把關框架（1 天）
   0.1   tests/test_multiwindow_gate.py 骨架 + Candidate 抽象
-  0.2   train.py:106 的 random_state=42+days_ahead → LGBM_SEED_BASE+days_ahead（供 --seeds）
+  0.2   train.py:111 的 random_state=42+days_ahead → LGBM_SEED_BASE+days_ahead（供 --seeds）
   0.3   用「現行 vs 現行」空跑一次驗證框架本身（兩邊數字必須完全相同）
   ✅ 檢查點：空跑對照零差異；報告格式可讀；全程未寫入生產目錄
 

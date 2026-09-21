@@ -9,8 +9,8 @@ test_d3_entry_gate.py — 進場 D3 門檻 潔淨 OOS 部署把關（完全隔�
   （僅停損能提前出場）。
 
   查證兩處進場邏輯，D3 **完全不參與篩選或排序**，只在報表上印出來給人看：
-    trading_sim.py:531      —— 只用 day1_score < current_buy_threshold
-    scripts/inference.py:569 —— buy_cond 只有 Day1_net >= eff_buy_threshold
+    trading_sim.py:535      —— 只用 day1_score < current_buy_threshold
+    scripts/inference.py:592 —— buy_cond 只有 Day1_net >= eff_buy_threshold
 
 候選改造（唯一變因）：
   進場時額外要求「訊號日 Day3_net >= D3_MIN」，不足者不得進場。
@@ -24,13 +24,13 @@ test_d3_entry_gate.py — 進場 D3 門檻 潔淨 OOS 部署把關（完全隔�
   以 monkeypatch 包裝 day-1 模型，在其 predict 內部**同時**用未包裝的 day-3
   模型對同一份 X 推論出 D3，對 D3 < 門檻的列把 (prob_weak, prob_mid, prob_strong)
   壓成 (1,0,0) → Day1_net = -100，遠低於任何 buy_threshold。
-  等價於在 trading_sim.py:531 買進迴圈加一行 `continue`，但不改生產程式碼。
+  等價於在 trading_sim.py:535 買進迴圈加一行 `continue`，但不改生產程式碼。
 
   ※ 過濾條件由 X 自身推論而得，不依賴任何外部 index 對齊 —— 這是本測試
     相對流動性把關的結構性優勢。
   ※ models[3] 本身不包裝，trading_sim 後續獨立呼叫它算 Day3_net 供出場判定
     （D3 轉弱／移動止盈／停損）行為與現行 100% 一致。
-  ※ 已知副作用（不影響判定）：trading_sim.py:699 的 bottom-5% 對照組
+  ※ 已知副作用（不影響判定）：trading_sim.py:702 的 bottom-5% 對照組
     （portfolio_spread 診斷欄）會被壓低分數污染；該欄不參與交易決策。
 
 方法論（對齊 CLAUDE.md §4.5 #4 與 #7）：
@@ -72,7 +72,7 @@ test_d3_entry_gate.py — 進場 D3 門檻 潔淨 OOS 部署把關（完全隔�
 
   **為何必然失敗（這才是重點）**：D3 負值不是「別買」的訊號，而是
   「進場後準備要跑」的訊號。本系統的分工是**進場吃 D1 動能、出場靠 D3
-  轉弱＋移動止盈＋ATR 停損**（`inference.py:481` 的 D3 轉弱判定即為此）。
+  轉弱＋移動止盈＋ATR 停損**（`inference.py:504` 的 D3 轉弱判定即為此）。
   把 D3 搬到進場端當篩選條件，等於把出場端的工具挪去做它不該做的事，
   同時砍掉 §4.5 #1 所說的肥尾贏家來源 —— D1 強／D3 弱的標的正是那些
   「短線爆發、隨後回落」的部位，系統本來就靠出場端在它們衝高時鎖利。
@@ -113,8 +113,7 @@ except Exception:
 import trading_sim
 from trading_sim import run_simulation
 from config import BACKTEST_DATE, MAX_POSITIONS, SIM_DEFAULT_CAPITAL, BUY_THRESHOLD
-
-DATA_PATH = os.path.join(ROOT_DIR, "data", "features", "features_combined.parquet")
+from config import FEATURES_PARQUET as DATA_PATH   # 資料路徑唯一來源：config.py § 0
 FEATURE_COLS_PATH = os.path.join(ROOT_DIR, "models", "feature_cols.json")
 
 DISABLED = -999.0                    # 代表「不過濾」的哨兵值
@@ -372,8 +371,8 @@ def main():
     if passed:
         print(f"  結論：D3 門檻 {passed} 在潔淨 OOS 通過雙贏＋多數起點穩健。")
         print("  ⚠ 移植前須確認通過的門檻不是只由少數起點驅動；若移植，")
-        print("    應在 config.py 新增 ENTRY_D3_MIN 常數，並於 trading_sim.py:531")
-        print("    買進迴圈與 scripts/inference.py:569 的 buy_cond 共用。")
+        print("    應在 config.py 新增 ENTRY_D3_MIN 常數，並於 trading_sim.py:535")
+        print("    買進迴圈與 scripts/inference.py:592 的 buy_cond 共用。")
     else:
         print("  結論：無門檻能同時滿足全 OOS 雙贏與多數起點穩健 → 不移植，維持現行。")
         print("  這將是 §4.5 #1「收緊進場必砍肥尾贏家」的又一個實證案例。")
