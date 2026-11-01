@@ -6,3 +6,4 @@ requests
 scikit-learn
 taiwan-holidays
 pyarrow
+openpyxl

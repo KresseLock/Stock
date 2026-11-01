@@ -39,7 +39,7 @@ try:
         ATR_STOP_ENABLED, ATR_STOP_MULTIPLIER, ATR_STOP_FLOOR_PCT, ATR_STOP_CEILING_PCT,
         REGIME_EXIT_PARAMS, TS_ACTIVATION_PCT, TS_PULLBACK_PCT, MIN_HOLD_DAYS,
         MKT_PANIC_MA5, MKT_PANIC_BREADTH, ENTRY_BULL_CONFIRM_DAYS,
-        INFERENCE_NA_WARN_PCT, INFERENCE_NA_WATCH_COLS,
+        INFERENCE_NA_WARN_PCT, INFERENCE_NA_WATCH_COLS, EXIT_REGIME_LAG,
     )
 except ImportError:
     BUY_THRESHOLD   = 10.0
@@ -61,6 +61,7 @@ except ImportError:
     REGIME_EXIT_PARAMS = {}; TS_ACTIVATION_PCT = 10.0; TS_PULLBACK_PCT = -6.0; MIN_HOLD_DAYS = 1
     MKT_PANIC_MA5 = -0.010; MKT_PANIC_BREADTH = 0.30
     ENTRY_BULL_CONFIRM_DAYS = None
+    EXIT_REGIME_LAG = 1
 
 
 def compute_stop_pct(atr_pct) -> float:
@@ -241,6 +242,7 @@ def main(target_date_str=None):
     eff_buy_threshold = BUY_THRESHOLD
     current_regime = "靜態"
     entry_regime = current_regime
+    exit_regime = current_regime
     consecutive_bull_days = 0
     momentum_active = False
     try:
@@ -257,13 +259,29 @@ def main(target_date_str=None):
         current_regime = get_regime_label(t20, REGIME_BULL_TREND, REGIME_BEAR_TREND)
 
         # Hysteresis：往回數連續 Bull 天數（stateless，每日從資料重算，無需跨日持久化）
-        _trend_clean = _trend.dropna()
+        # 截至訊號日 D：以 -d 補跑歷史日期時，不可把 D 之後的 regime 算進連續天數
+        _trend_clean = _trend.loc[:latest_date].dropna()
         for _t in reversed(_trend_clean.values):
             if get_regime_label(float(_t), REGIME_BULL_TREND, REGIME_BEAR_TREND) == 'Bull':
                 consecutive_bull_days += 1
             else:
                 break
         momentum_active = (current_regime == 'Bull' and consecutive_bull_days >= MOMENTUM_BULL_CONFIRM_DAYS)
+
+        # 出場 regime 遲滯（與 trading_sim.py 的 _exit_regime 同一套狀態機）：切入 Bull 立即生效，
+        # 切出需連續 EXIT_REGIME_LAG 天非 Bull 才換。從歷史逐日重放至訊號日 D（stateless）。
+        _exit_lag = int(EXIT_REGIME_LAG) if EXIT_REGIME_LAG else 1
+        _non_bull_streak = 0
+        exit_regime = 'Sideways'
+        for _t in _trend_clean.loc[:latest_date].values:
+            _lbl = get_regime_label(float(_t), REGIME_BULL_TREND, REGIME_BEAR_TREND)
+            if _lbl == 'Bull':
+                _non_bull_streak = 0
+                exit_regime = 'Bull'
+            else:
+                _non_bull_streak += 1
+                if _non_bull_streak >= _exit_lag:
+                    exit_regime = _lbl
 
         # 進場端 Bull 確認（config.ENTRY_BULL_CONFIRM_DAYS，與 trading_sim.py 對齊）：
         # Bull 未連續滿 N 天前，進場端（買入門檻／檔數上限／breadth 紅燈豁免）視同 Sideways；
@@ -296,7 +314,9 @@ def main(target_date_str=None):
         )
         _confirm_note = (f" | 進場端視同 Sideways (Bull 確認 {consecutive_bull_days}/{ENTRY_BULL_CONFIRM_DAYS} 天)"
                          if entry_regime != current_regime else "")
-        print(f"  [市況過濾器] regime={current_regime} (t20={t20:+.4f}) | 買入門檻={eff_buy_threshold:.1f}%{_confirm_note} | 動能混合: {_momentum_status}")
+        _exit_note = (f" | 出場參數沿用 {exit_regime}（遲滯 {_non_bull_streak}/{_exit_lag} 天）"
+                      if exit_regime != current_regime else "")
+        print(f"  [市況過濾器] regime={current_regime} (t20={t20:+.4f}) | 買入門檻={eff_buy_threshold:.1f}%{_confirm_note} | 動能混合: {_momentum_status}{_exit_note}")
 
     target_cols = ["next_ret_1", "next_ret_2", "next_ret_3"]
     ignore_cols = ["stock_id", "date"] + target_cols
@@ -323,6 +343,9 @@ def main(target_date_str=None):
     # 帶入 ATR 百分比供動態停損判定（與 trading_sim.py 同一套邏輯）
     results_market["atr_pct"] = (df_latest_market[_atr_col].values
                                  if (_atr_col and _atr_col in df_latest_market.columns) else np.nan)
+    # 動能混合排序需要 RS_20d（與 trading_sim 的 buy_candidates 同源）；少了它動能混合會永遠不生效
+    results_market["RS_20d"] = (df_latest_market["RS_20d"].values
+                                if "RS_20d" in df_latest_market.columns else np.nan)
 
     for days in [1, 2, 3]:
         model_path = os.path.join(MODEL_DIR, f"lgbm_model_{days}.txt")
@@ -472,8 +495,8 @@ def main(target_date_str=None):
         output_lines.append("   [提示] 目前為全市場掃描。可在 Stocks.txt 中填寫「代號,買入價,股數」啟用損益追蹤。")
         output_lines.append("=" * 90)
 
-    # 出場用 regime 參數（與 trading_sim 對齊；inference 以最新日 regime 取代 trading_sim 的遲滯 regime）
-    _exit_re = REGIME_EXIT_PARAMS.get(current_regime, {})
+    # 出場用 regime 參數（與 trading_sim 對齊：採遲滯後的 exit_regime）
+    _exit_re = REGIME_EXIT_PARAMS.get(exit_regime, {})
     _exit_sell_thr = _exit_re.get('sell_threshold', SELL_THRESHOLD)
     _exit_ts_act   = _exit_re.get('ts_activation',  TS_ACTIVATION_PCT)
     _exit_ts_pull  = _exit_re.get('ts_pullback',    TS_PULLBACK_PCT)
@@ -505,13 +528,15 @@ def main(target_date_str=None):
                 _prior = [d for d in all_dates_sorted if d <= _bd_ts]
                 if _prior:
                     buy_ts_aligned = _prior[-1]
-                    held_days = _latest_idx - all_dates_sorted.index(buy_ts_aligned)
+                    # 以「明日（賣出執行日）」計，與 trading_sim 的 idx_today - buy_idx 同義；
+                    # 訊號日 D 本身比執行日早一天，故 +1，否則 D3／移動止盈出場會比回測晚一天
+                    held_days = _latest_idx + 1 - all_dates_sorted.index(buy_ts_aligned)
             except Exception:
                 held_days = None
 
         # D3 轉弱：有買入日 → 須滿 MIN_HOLD_DAYS 才建議賣（對齊 trading_sim）；未填 → 維持原本無視天數
         if d3 < _exit_sell_thr and (held_days is None or held_days >= _exit_min_hold):
-            _hold_note = f"，持股{held_days}天" if held_days is not None else ""
+            _hold_note = f"，明日持股滿{held_days}天" if held_days is not None else ""
             reasons.append(f"D3轉弱({d3:+.1f}%{_hold_note})")
 
         # 移動止盈：僅在有買入日且滿 MIN_HOLD_DAYS 時判定（需買入日後最高收盤）
@@ -604,8 +629,11 @@ def main(target_date_str=None):
         (~results_market["stock_id"].astype(str).isin(etf_set))
     )
     # Hysteresis 動能混合：連續 Bull 確認後才用 RS_20d 重排序（與 trading_sim 邏輯一致）
-    if momentum_active and "RS_20d" in results_market.columns:
-        _rs_rank = results_market["RS_20d"].rank(pct=True, na_option='bottom') * 100
+    if momentum_active and results_market["RS_20d"].notna().any():
+        # 百分位排名的母體＝「開盤後仍持有」以外的全部股票，且在門檻過濾之前計算，
+        # 與 trading_sim 對 prev_data[~持倉] 排名一致
+        _pool = ~results_market["stock_id"].isin(remaining_hold_sids)
+        _rs_rank = results_market.loc[_pool, "RS_20d"].rank(pct=True, na_option='bottom') * 100
         results_market = results_market.copy()
         results_market["_sort_score"] = 0.30 * results_market["Day1_net"] + 0.70 * _rs_rank
         buy_candidates = results_market[buy_cond].sort_values("_sort_score", ascending=False).head(5)
